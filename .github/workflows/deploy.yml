@@ -7,6 +7,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - '.github/workflows/deploy.yml'
+  workflow_dispatch: # <--- 이게 '정석' 버튼입니다. (수동 배포 가능)
 
 jobs:
   # 1. 변경된 사항 체크
