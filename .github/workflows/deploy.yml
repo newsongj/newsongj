@@ -2,38 +2,63 @@ name: Deploy to Lightsail
 
 on:
   push:
-    branches: [ main ] # main 브랜치에 코드가 push되면 자동 시작
+    branches: [ main ]
+    # 아래 설정이 추가되면 해당 폴더 파일이 변할 때만 이 액션이 감지합니다.
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
+  # 1. 변경된 사항이 있는지 체크하는 Job
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  # 2. 빌드 및 푸시 (병렬 실행 가능)
   build-and-push:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      # 1. 도커 허브 로그인
+      
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 2. 백엔드 이미지 빌드 및 푸시
+      # 백엔드가 변경되었을 때만 실행
       - name: Build and Push Backend
+        if: needs.changes.outputs.backend == 'true'
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back ./backend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
 
-      # 3. 프론트엔드 이미지 빌드 및 푸시
+      # 프론트엔드가 변경되었을 때만 실행
       - name: Build and Push Frontend
+        if: needs.changes.outputs.frontend == 'true'
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front ./frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
 
+  # 3. 배포 (변경된 것만 새로 올림)
   deploy:
-    needs: build-and-push
+    needs: [changes, build-and-push]
     runs-on: ubuntu-latest
     steps:
-      # 4. AWS 라이트세일 접속 후 실행
       - name: SSH into Lightsail and Deploy
         uses: appleboy/ssh-action@master
         with:
@@ -41,18 +66,20 @@ jobs:
           username: ec2-user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            # 도커 허브에서 새 이미지 가져오기
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+            # 백엔드 변경 시에만 재배포
+            if [ "${{ needs.changes.outputs.backend }}" == "true" ]; then
+              docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+              docker stop backend || true
+              docker rm backend || true
+              docker run -d --name backend -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+            fi
+
+            # 프론트엔드 변경 시에만 재배포
+            if [ "${{ needs.changes.outputs.frontend }}" == "true" ]; then
+              docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+              docker stop frontend || true
+              docker rm frontend || true
+              docker run -d --name frontend -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+            fi
             
-            # 기존 컨테이너가 있다면 중지 및 삭제 (에러 무시)
-            docker stop backend frontend || true
-            docker rm backend frontend || true
-            
-            # 새 컨테이너 실행
-            # 백엔드는 8000번, 프론트엔드는 80번(기본웹)으로 실행
-            docker run -d --name backend -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
-            docker run -d --name frontend -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
-            
-            # 사용하지 않는 오래된 이미지 정리 (용량 확보)
             docker image prune -f
