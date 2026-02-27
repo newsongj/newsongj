@@ -5,4 +5,4 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "CI/CD 자동 배포 테스트"}
+    return {"message": "deploy 효율화 test"}
