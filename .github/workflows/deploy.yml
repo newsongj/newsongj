@@ -1,0 +1,58 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [ main ] # main 브랜치에 코드가 push되면 자동 시작
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # 1. 도커 허브 로그인
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 2. 백엔드 이미지 빌드 및 푸시
+      - name: Build and Push Backend
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+
+      # 3. 프론트엔드 이미지 빌드 및 푸시
+      - name: Build and Push Frontend
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      # 4. AWS 라이트세일 접속 후 실행
+      - name: SSH into Lightsail and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.LIGHTSAIL_IP }}
+          username: ec2-user
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            # 도커 허브에서 새 이미지 가져오기
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+            
+            # 기존 컨테이너가 있다면 중지 및 삭제 (에러 무시)
+            docker stop backend frontend || true
+            docker rm backend frontend || true
+            
+            # 새 컨테이너 실행
+            # 백엔드는 8000번, 프론트엔드는 80번(기본웹)으로 실행
+            docker run -d --name backend -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+            docker run -d --name frontend -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+            
+            # 사용하지 않는 오래된 이미지 정리 (용량 확보)
+            docker image prune -f
