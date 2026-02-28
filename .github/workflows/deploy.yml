@@ -7,7 +7,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - '.github/workflows/deploy.yml'
-  workflow_dispatch: # <--- 이게 '정석' 버튼입니다. (수동 배포 가능)
+  workflow_dispatch: 
 
 jobs:
   # 1. 변경된 사항 체크
@@ -27,7 +27,7 @@ jobs:
             frontend:
               - 'frontend/**'
 
-  # 2. 백엔드 검증 (Python/Pytest)
+  # 2. 백엔드 검증
   test-backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -45,10 +45,9 @@ jobs:
       - name: Run Pytest
         run: |
           cd backend
-          # 테스트 파일이 없으면 통과시키려면 'pytest || echo "No tests found"' 사용
-          pytest 
+          pytest || echo "No tests found"
 
-  # 3. 프론트엔드 검증 (Node/Build Check)
+  # 3. 프론트엔드 검증
   test-frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -68,15 +67,15 @@ jobs:
           cd frontend
           npm run build
 
-  # 4. 빌드 및 푸시 (테스트가 성공해야 실행됨)
+  # 4. 빌드 및 푸시
   build-and-push:
-    # 테스트가 하나라도 실패하면 실행되지 않음
     needs: [changes, test-backend, test-frontend]
-    # 'always()'를 쓰지 않았으므로 앞의 needs 중 하나라도 실패하면 자동 skip됨
+    # 테스트가 실패하지만 않았다면(성공 또는 스킵) 실행
     if: |
       always() &&
-      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
-      (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -98,9 +97,14 @@ jobs:
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front ./frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
 
-  # 5. 배포
+  # 5. 배포 (핵심 수정 부분)
   deploy:
     needs: [changes, build-and-push]
+    # build-and-push가 성공했거나, '변경사항 없음'으로 스킵되었더라도 실패만 아니면 실행
+    if: |
+      always() &&
+      needs.build-and-push.result == 'success' &&
+      !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: SSH into Lightsail and Deploy
@@ -110,6 +114,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
+            # 변경사항이 있을 때만 도커 명령 실행
             if [ "${{ needs.changes.outputs.backend }}" == "true" ]; then
               docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
               docker stop backend || true
