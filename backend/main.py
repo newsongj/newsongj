@@ -5,4 +5,4 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "deploy 효율화 testㅁㅁㅁㅁㅂ"}
+    return {"message": "deploy skip 오류 수정 test"}
