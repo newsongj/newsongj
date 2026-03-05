@@ -196,5 +196,8 @@ jobs:
             docker-compose pull
             docker-compose up -d
 
+            # MariaDB가 완전히 뜰 때까지 대기 후 마이그레이션 실행
+            docker-compose exec -T backend alembic upgrade head
+
             # 사용하지 않는 이전 이미지 정리
             docker image prune -f
