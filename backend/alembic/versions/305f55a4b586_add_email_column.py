@@ -16,8 +16,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 이미 DB에 적용된 상태이므로 pass
-    pass
+    op.add_column('user', sa.Column('email', sa.String(length=200), nullable=True))
 
 
 def downgrade() -> None:
