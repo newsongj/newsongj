@@ -6,11 +6,16 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'docker-compose.yml'           # docker-compose 변경도 배포 트리거
       - '.github/workflows/deploy.yml'
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
-  # 1. 변경된 사항 체크
+
+  # ──────────────────────────────────────────
+  # 1. 어떤 폴더가 변경됐는지 감지
+  #    backend / frontend 각각 true/false 출력
+  # ──────────────────────────────────────────
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -27,50 +32,45 @@ jobs:
             frontend:
               - 'frontend/**'
 
-  # 2. 백엔드 검증
+  # ──────────────────────────────────────────
+  # 2. backend 변경 시 pytest 실행
+  #    변경 없으면 이 job 자체를 스킵
+  # ──────────────────────────────────────────
   test-backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'       # Dockerfile과 버전 통일 (기존 3.10은 오타)
       - name: Install dependencies
-        run: |
-          pip install pytest httpx
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
-      - name: Run Pytest
-        run: |
-          cd backend
-          pytest || echo "No tests found"
+        run: pip install -r backend/requirements.txt pytest
+      - name: Run tests
+        run: cd backend && pytest || echo "No tests found"
 
-  # 3. 프론트엔드 검증
+  # ──────────────────────────────────────────
+  # 3. frontend 변경 시 빌드 성공 여부 확인
+  #    변경 없으면 이 job 자체를 스킵
+  # ──────────────────────────────────────────
   test-frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: |
-          cd frontend
-          npm install
-      - name: Build check
-        run: |
-          cd frontend
-          npm run build
+      - run: cd frontend && npm install && npm run build
 
-  # 4. 빌드 및 푸시
+  # ──────────────────────────────────────────
+  # 4. 변경된 서비스만 Docker 이미지 빌드 → Docker Hub 푸시
+  #    테스트가 실패하지 않은 경우(성공 or 스킵)에만 실행
+  # ──────────────────────────────────────────
   build-and-push:
     needs: [changes, test-backend, test-frontend]
-    # 테스트가 실패하지만 않았다면(성공 또는 스킵) 실행
     if: |
       always() &&
       !contains(needs.*.result, 'failure') &&
@@ -79,8 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
+      - uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -97,35 +96,103 @@ jobs:
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front ./frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
 
-  # 5. 배포 (핵심 수정 부분)
+  # ──────────────────────────────────────────
+  # 5. 서버 배포
+  #
+  #    기존 방식 (제거):
+  #      docker run으로 컨테이너를 하나씩 수동 실행
+  #      → MariaDB를 따로 띄워야 하고, .env 전달도 없었음
+  #
+  #    변경 방식:
+  #      서버에 docker-compose.yml + .env 를 만들고
+  #      docker-compose up -d 한 번으로 전체 스택 실행
+  #      → 로컬이랑 완전히 동일한 환경
+  #
+  #    필요한 GitHub Secrets (기존 항목 + 신규 3개):
+  #      기존: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, LIGHTSAIL_IP, LIGHTSAIL_SSH_KEY
+  #      신규: DB_ROOT_PASSWORD, DB_USER, DB_PASSWORD
+  # ──────────────────────────────────────────
   deploy:
     needs: [changes, build-and-push]
-    # build-and-push가 성공했거나, '변경사항 없음'으로 스킵되었더라도 실패만 아니면 실행
     if: |
       always() &&
       needs.build-and-push.result == 'success' &&
       !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into Lightsail and Deploy
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.LIGHTSAIL_IP }}
           username: ec2-user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            # 변경사항이 있을 때만 도커 명령 실행
-            if [ "${{ needs.changes.outputs.backend }}" == "true" ]; then
-              docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
-              docker stop backend || true
-              docker rm backend || true
-              docker run -d --name backend -p 8000:8000 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+            # 작업 디렉토리 생성
+            mkdir -p ~/newsongj
+
+            # docker-compose 설치 확인 (Amazon Linux는 기본 미설치)
+            if ! command -v docker-compose &> /dev/null; then
+              sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+                -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            if [ "${{ needs.changes.outputs.frontend }}" == "true" ]; then
-              docker pull ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
-              docker stop frontend || true
-              docker rm frontend || true
-              docker run -d --name frontend -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
-            fi
+            # .env 파일 생성 - DB 접속 정보를 GitHub Secrets에서 주입
+            cat > ~/newsongj/.env << EOF
+            DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_HOST=mariadb
+            DB_NAME=newsongj
+            EOF
+
+            # docker-compose.yml 생성
+            # 로컬과 다른 점: build 대신 Docker Hub 이미지를 직접 사용
+            # 로컬에서는 소스를 빌드해서 쓰고, 서버에서는 이미 빌드된 이미지를 pull해서 씀
+            cat > ~/newsongj/docker-compose.yml << 'COMPOSEOF'
+            services:
+              mariadb:
+                image: mariadb:10.11
+                environment:
+                  MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+                  MYSQL_DATABASE: newsongj
+                  MYSQL_USER: ${DB_USER}
+                  MYSQL_PASSWORD: ${DB_PASSWORD}
+                volumes:
+                  - db_data:/var/lib/mysql
+                healthcheck:
+                  test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+                  interval: 5s
+                  timeout: 5s
+                  retries: 10
+
+              backend:
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+                ports:
+                  - "8000:8000"
+                env_file:
+                  - .env
+                depends_on:
+                  mariadb:
+                    condition: service_healthy
+
+              frontend:
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+                ports:
+                  - "80:80"
+
+            volumes:
+              db_data:
+            COMPOSEOF
+
+            # 기존에 docker run으로 띄운 컨테이너가 있다면 포트 충돌 방지를 위해 제거
+            docker stop backend frontend || true
+            docker rm backend frontend || true
+
+            # 최신 이미지 pull 후 전체 스택 재시작
+            cd ~/newsongj
+            docker-compose pull
+            docker-compose up -d
+
+            # 사용하지 않는 이전 이미지 정리
             docker image prune -f

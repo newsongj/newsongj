@@ -19,6 +19,12 @@ frontend/*.local
 frontend/.env
 frontend/.env.*.local
 
+# --- Docs ---
+CLAUDE.md
+
+# --- Root ---
+.env
+
 # --- Global Ignore ---
 *.log
 npm-debug.log*
