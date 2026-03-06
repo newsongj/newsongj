@@ -6,7 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
-      - 'docker-compose.yml'           # docker-compose 변경도 배포 트리거
+      - 'docker-compose.yml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -14,7 +14,6 @@ jobs:
 
   # ──────────────────────────────────────────
   # 1. 어떤 폴더가 변경됐는지 감지
-  #    backend / frontend 각각 true/false 출력
   # ──────────────────────────────────────────
   changes:
     runs-on: ubuntu-latest
@@ -33,49 +32,12 @@ jobs:
               - 'frontend/**'
 
   # ──────────────────────────────────────────
-  # 2. backend 변경 시 pytest 실행
-  #    변경 없으면 이 job 자체를 스킵
-  # ──────────────────────────────────────────
-  test-backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'       # Dockerfile과 버전 통일 (기존 3.10은 오타)
-      - name: Install dependencies
-        run: pip install -r backend/requirements.txt pytest
-      - name: Run tests
-        run: cd backend && pytest || echo "No tests found"
-
-  # ──────────────────────────────────────────
-  # 3. frontend 변경 시 빌드 성공 여부 확인
-  #    변경 없으면 이 job 자체를 스킵
-  # ──────────────────────────────────────────
-  test-frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '22'
-      - run: cd frontend && npm install && npm run build
-
-  # ──────────────────────────────────────────
-  # 4. 변경된 서비스만 Docker 이미지 빌드 → Docker Hub 푸시
-  #    테스트가 실패하지 않은 경우(성공 or 스킵)에만 실행
+  # 2. 변경된 서비스만 Docker 이미지 빌드 → Docker Hub 푸시
   # ──────────────────────────────────────────
   build-and-push:
-    needs: [changes, test-backend, test-frontend]
+    needs: changes
     if: |
-      always() &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled') &&
-      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true')
+      needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -97,20 +59,7 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
 
   # ──────────────────────────────────────────
-  # 5. 서버 배포
-  #
-  #    기존 방식 (제거):
-  #      docker run으로 컨테이너를 하나씩 수동 실행
-  #      → MariaDB를 따로 띄워야 하고, .env 전달도 없었음
-  #
-  #    변경 방식:
-  #      서버에 docker-compose.yml + .env 를 만들고
-  #      docker-compose up -d 한 번으로 전체 스택 실행
-  #      → 로컬이랑 완전히 동일한 환경
-  #
-  #    필요한 GitHub Secrets (기존 항목 + 신규 3개):
-  #      기존: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, LIGHTSAIL_IP, LIGHTSAIL_SSH_KEY
-  #      신규: DB_ROOT_PASSWORD, DB_USER, DB_PASSWORD
+  # 3. 서버 배포
   # ──────────────────────────────────────────
   deploy:
     needs: [changes, build-and-push]
@@ -127,17 +76,14 @@ jobs:
           username: ec2-user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            # 작업 디렉토리 생성
             mkdir -p ~/newsongj
 
-            # docker-compose 설치 확인 (Amazon Linux는 기본 미설치)
             if ! command -v docker-compose &> /dev/null; then
               sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
                 -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            # .env 파일 생성 - DB 접속 정보를 GitHub Secrets에서 주입
             cat > ~/newsongj/.env << EOF
             DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
             DB_USER=${{ secrets.DB_USER }}
@@ -146,9 +92,6 @@ jobs:
             DB_NAME=newsongj
             EOF
 
-            # docker-compose.yml 생성
-            # 로컬과 다른 점: build 대신 Docker Hub 이미지를 직접 사용
-            # 로컬에서는 소스를 빌드해서 쓰고, 서버에서는 이미 빌드된 이미지를 pull해서 씀
             cat > ~/newsongj/docker-compose.yml << 'COMPOSEOF'
             services:
               mariadb:
@@ -161,7 +104,7 @@ jobs:
                 volumes:
                   - db_data:/var/lib/mysql
                 ports:
-                  - "3307:3306"          # 외부(DBeaver 등)에서 접속 시 3307 사용
+                  - "3307:3306"
                 healthcheck:
                   test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
                   interval: 5s
@@ -187,17 +130,13 @@ jobs:
               db_data:
             COMPOSEOF
 
-            # 기존에 docker run으로 띄운 컨테이너가 있다면 포트 충돌 방지를 위해 제거
             docker stop backend frontend || true
             docker rm backend frontend || true
 
-            # 최신 이미지 pull 후 전체 스택 재시작
             cd ~/newsongj
             docker-compose pull
             docker-compose up -d
 
-            # MariaDB가 완전히 뜰 때까지 대기 후 마이그레이션 실행
             docker-compose exec -T backend alembic upgrade head
 
-            # 사용하지 않는 이전 이미지 정리
             docker image prune -f
