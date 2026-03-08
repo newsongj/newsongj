@@ -12,7 +12,7 @@ import AuthInitializer from './components/common/AuthInitializer';
 import { GlobalStyle } from './styles/GlobalStyle';
 import { lightTheme, darkTheme } from '@styles/theme';
 import { makeUnifiedTheme } from '@styles/makeTheme';
-import { queryClient } from './utils/queryClient';
+import { queryClient } from './utils/queryClient'; 
 
 const ThemedApp: React.FC = () => {
     const [mode,] = useState<'light' | 'dark'>('light');
