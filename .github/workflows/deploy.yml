@@ -75,6 +75,7 @@ jobs:
           host: ${{ secrets.LIGHTSAIL_IP }}
           username: ec2-user
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          command_timeout: 30m
           script: |
             mkdir -p ~/newsongj
 
@@ -137,6 +138,6 @@ jobs:
             docker-compose pull
             docker-compose up -d
 
-            docker-compose exec -T backend alembic upgrade head
+            docker-compose exec -T backend sh -c "until alembic upgrade head; do echo 'Waiting for DB...'; sleep 3; done"
 
             docker image prune -f
