@@ -12,6 +12,8 @@ engine = create_engine(DB_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+
+
 class Base(DeclarativeBase):
     pass
 
