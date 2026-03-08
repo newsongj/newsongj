@@ -1,7 +1,81 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+    "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": [
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "allowJs": false,
+        "skipLibCheck": true,
+        "esModuleInterop": false,
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "typeRoots": [
+            "./node_modules/@types",
+            "./src/types"
+        ],
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ],
+            "@components/*": [
+                "src/components/*"
+            ],
+            "@layout/*": [
+                "src/apps/layout/*"
+            ],
+            "@hooks/*": [
+                "src/hooks/*"
+            ],
+            "@utils/*": [
+                "src/utils/*"
+            ],
+            "@styles/*": [
+                "src/styles/*"
+            ],
+            "@types/*": [
+                "src/types/*"
+            ],
+            "@constants/*": [
+                "src/constants/*"
+            ],
+            "@assets/*": [
+                "src/assets/*"
+            ],
+            "@models/*": [
+                "src/models/*"
+            ],
+            "@api/*": [
+                "src/api/*"
+            ],
+            "@recoil/*": [
+                "src/recoil/*"
+            ]
+        }
+    },
+    "include": [
+        "src",
+        "src/types/svg.d.ts",
+        "src/types/globals.d.ts",
+        "src/styles/styles.d.ts"
+    ],
+    "references": [
+        {
+            "path": "./tsconfig.node.json"
+        }
+    ]
 }
