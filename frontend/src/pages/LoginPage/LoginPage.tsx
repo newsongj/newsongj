@@ -6,7 +6,7 @@ import { Divider } from '@components/common/Divider';
 import { PasswordChangeModal } from '@components/user/PasswordChangeModal';
 import { useAuth } from '@/hooks/auth/useAuth';
 import * as S from './LoginPage.styles';
-import akLogo from '@assets/ak_logo.png';
+import newsongjLogo from '@assets/J_logo.png';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -104,7 +104,7 @@ const LoginPage: React.FC = () => {
           variant="outlined"
           onClick={handleDWPLogin}
           fullWidth
-          startIcon={<img src={akLogo} alt="DWP Logo" width="20" height="20" />}>
+          startIcon={<img src={newsongjLogo} alt="newsongJ Logo" width="20" height="20" />}>
           DWP 계정으로 로그인
         </Button>
         <Divider> 또는 직접 입력하기 </Divider>

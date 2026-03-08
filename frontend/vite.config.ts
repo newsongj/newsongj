@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
         },
 
         server: {
-            port: 5173,       // 서버 포트 고정
+            port: 3001,       // 개발 서버 포트 고정
             strictPort: true, // 포트가 사용 중이면 에러로 중단 (기본은 false → 다음 가용 포트로 이동)
             host: '0.0.0.0',  // 외부에서 접속 가능하게 하려면 설정
             proxy: {

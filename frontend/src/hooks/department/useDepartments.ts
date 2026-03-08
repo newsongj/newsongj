@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRecoilValue } from 'recoil';
 import { userPermissionsState } from '@/recoil/auth/atoms';
-import { fetchDepartments, fetchDepartmentsByDept } from '@/api/department';
+import { fetchDepartments, fetchDepartmentsByDept } from '@/api/department.ts';
 import { shouldUseDepartmentAPI } from '@/constants/permissions';
 import { DepartmentTreeNode } from '@/models/department.types';
 

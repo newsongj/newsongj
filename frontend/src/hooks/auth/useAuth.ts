@@ -5,7 +5,7 @@ import { authState, userPermissionsState } from '@/recoil/auth/atoms';
 import { checkAuth, exchangeTicket, getMe, localLogin, changePassword as changePasswordApi, logout as logoutApi } from '@/api/auth.ts';
 import { LoginRequest, LoginResponse, PasswordChangeRequest, MeResponse } from '@/models/auth.types';
 import { CommonResponse } from '@/models/common.types';
-import { APP_CONFIG } from '@/constants/config';
+import { APP_CONFIG } from '@/constants/config.ts';
 import { MENU_CODES } from '@/constants/permissions';
 
 export const useAuth = () => {
