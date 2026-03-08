@@ -3,11 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   DashboardOutlined,
   PeopleOutlined,
-  DescriptionOutlined,
-  AttachMoneyOutlined,
-  FeedbackOutlined,
-  SettingsOutlined,
-  BookOutlined,
+  DescriptionOutlined
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
 import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
