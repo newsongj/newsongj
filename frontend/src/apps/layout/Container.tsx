@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   DashboardOutlined,
   PeopleOutlined,
-  DescriptionOutlined
+  DescriptionOutlined,
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
 import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
@@ -33,6 +33,8 @@ const getPageInfo = (path: string) => {
     '/deleteduser': { title: '삭제 명단', breadcrumb: '교적관리 > 삭제 명단' },
     '/permission/management': { title: '권한 관리', breadcrumb: '권한관리 > 권한 관리' },
     '/permission/users': { title: '사용자 관리', breadcrumb: '권한관리 > 사용자 관리' },
+    '/attendance': { title: '출석 관리', breadcrumb: '교적관리 > 출석 관리' },
+    '/attendance-dashboard': { title: '출석 대시보드', breadcrumb: '교적관리 > 출석 대시보드' },
   };
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
 };
@@ -62,7 +64,10 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
       id: 'student-management',
       label: '교적관리',
       icon: <DescriptionOutlined />,
+      path: '/attendance-dashboard',
       subItems: [
+        { id: 'student-attendance-dashboard', label: '출석 대시보드', path: '/attendance-dashboard' },
+        { id: 'student-attendance', label: '출석 관리', path: '/attendance' },
         { id: 'student-userlist', label: '사용자 목록', path: '/userlist' },
         { id: 'student-deleteduser', label: '삭제 명단', path: '/deleteduser' },
       ],
