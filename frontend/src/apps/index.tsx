@@ -10,6 +10,8 @@ const UserListPage = React.lazy(() => import('./pages/UserListPage'));
 const DeletedUserPage = React.lazy(() => import('./pages/DeletedUserPage'));
 const PermissionManagementPage = React.lazy(() => import('./pages/PermissionManagementPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
+const AttendancePage = React.lazy(() => import('./pages/AttendancePage'));
+const AttendanceDashboard = React.lazy(() => import('./pages/AttendanceDashboard'));
 
 const Orchestrator: React.FC = () => {
   return (
@@ -21,6 +23,8 @@ const Orchestrator: React.FC = () => {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/userlist" element={<UserListPage />} />
           <Route path="/deleteduser" element={<DeletedUserPage />} />
+          <Route path="/attendance" element={<AttendancePage />} />
+          <Route path="/attendance-dashboard" element={<AttendanceDashboard />} />
 
           <Route
             path="/permission/management"

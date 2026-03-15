@@ -34,6 +34,10 @@ const Sidebar: React.FC<SidebarProps> = ({ menuItems, selectedPath, onMenuClick 
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
             case 'student-deleteduser':
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
+            case 'student-attendance':
+              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
+            case 'student-attendance-dashboard':
+              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
             default:
               return false; // 정의되지 않은 subItem은 일단 표시
           }
@@ -103,9 +107,13 @@ const Sidebar: React.FC<SidebarProps> = ({ menuItems, selectedPath, onMenuClick 
         setIsCollapsed(false);
         setExpandedMenus([item.id]);
       } else {
-        // 이미 펼쳐진 상태면 → 기존처럼 토글
+        // 이미 펼쳐진 상태면 → 토글
         const isCurrentlyExpanded = expandedMenus.includes(item.id);
         setExpandedMenus(isCurrentlyExpanded ? [] : [item.id]);
+      }
+      // 부모 메뉴에 path가 있으면 해당 경로로 이동
+      if (item.path) {
+        onMenuClick(item.path);
       }
       return;
     }
