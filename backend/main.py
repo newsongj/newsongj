@@ -1,16 +1,15 @@
-from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
-from database import engine, get_db, Base
+from fastapi import FastAPI
+from database import engine, Base
+
+# models import: create_all()이 테이블 자동 생성하지 않도록 models는 참조만
 import models
 
+# DB에 models.py 기준 테이블 자동 생성 (없는 테이블만 생성, 기존 테이블 건드리지 않음)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+
 @app.get("/")
 def read_root():
-    return {"message": "deploy skip 오류 수정 test"}
-
-@app.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(models.User).all()
+    return {"message": "ok"}
