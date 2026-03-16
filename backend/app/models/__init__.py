@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum, UniqueConstraint
-from database import Base
+from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum
+from app.core.database import Base
 
 
 class Member(Base):
