@@ -131,13 +131,10 @@ jobs:
               db_data:
             COMPOSEOF
 
-            docker stop backend frontend || true
-            docker rm backend frontend || true
-
             cd ~/newsongj
             docker-compose pull
             docker-compose up -d
 
-            docker-compose exec -T backend sh -c "until alembic upgrade head; do echo 'Waiting for DB...'; sleep 3; done"
+            # docker-compose exec -T backend sh -c "until alembic upgrade head; do echo 'Waiting for DB...'; sleep 3; done"
 
             docker image prune -f

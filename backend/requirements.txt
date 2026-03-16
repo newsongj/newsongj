@@ -4,4 +4,4 @@ sqlalchemy
 pymysql  # mysqlclient 대신 이거!
 pydantic
 python-dotenv
-alembic
+# alembic
