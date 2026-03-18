@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
@@ -10,6 +10,7 @@ import { SearchOption, ActionButton } from '@components/common/SearchToolbar/Sea
 import { UserListCreatePage, UserListManagementPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { UserListFormValue } from '@components/user/userListForm.types';
+import { fetchMembers, MemberApiRow } from '@/api/교적';
 
 interface StudentRow {
   id: number;
@@ -40,48 +41,26 @@ interface FilterState {
   generation: string;
 }
 
-const initialRows: StudentRow[] = [
-  {
-    id: 1,
-    year: '2026년',
-    parish: '1교구',
-    team: '1팀',
-    group: '1그룹',
-    name: '김민서',
-    gender: '여',
-    generation: '37기',
-    phone: '010-1234-5678',
-    birthDate: '1998-01-01',
-    role: '그룹장',
-    createdAt: '2026-02-10',
-    memberType: '토요예배',
-    attendanceGrade: 'A',
-    pltCompleted: '수료',
-    schoolWork: '연세대학교',
-    major: '경영학',
-    pid: '10021',
-  },
-  {
-    id: 2,
-    year: '2026년',
-    parish: '2교구',
-    team: '2팀',
-    group: '2그룹',
-    name: '박지훈',
-    gender: '남',
-    generation: '46기',
-    phone: '010-7777-2222',
-    birthDate: '2007-08-11',
-    role: '새가족 리더',
-    createdAt: '2026-01-29',
-    memberType: '주일예배',
-    attendanceGrade: 'B',
-    pltCompleted: '1학기 수료',
-    schoolWork: '삼성전자',
-    major: '컴퓨터공학',
-    pid: '09873',
-  },
-];
+const mapToStudentRow = (item: MemberApiRow): StudentRow => ({
+  id: item.member_id,
+  year: item.year ? `${item.year.slice(0, 4)}년` : '-',
+  parish: item.gyogu ? `${item.gyogu}교구` : '-',
+  team: item.team ? `${item.team}팀` : '-',
+  group: item.group_no ? `${item.group_no}그룹` : '-',
+  name: item.name,
+  gender: item.gender,
+  generation: `${item.generation}기`,
+  phone: item.phone_number || '-',
+  birthDate: item.birthdate || '-',
+  role: item.leader || '-',
+  createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
+  memberType: item.member_type || '-',
+  attendanceGrade: item.attendance_grade || '-',
+  pltCompleted: item.plt_status || '-',
+  schoolWork: '-',
+  major: '-',
+  pid: item.v8pid || '-',
+});
 
 const searchOptions: SearchOption[] = [
   { value: 'name', label: '이름' },
@@ -181,7 +160,8 @@ const toFormFromRow = (row: StudentRow): UserListFormValue => ({
 });
 
 const UserListPage: React.FC = () => {
-  const [rows, setRows] = useState<StudentRow[]>(initialRows);
+  const [rows, setRows] = useState<StudentRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -191,7 +171,7 @@ const UserListPage: React.FC = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    year: '',
+    year: `${new Date().getFullYear()}년`,
     parish: '',
     team: '',
     group: '',
@@ -200,6 +180,26 @@ const UserListPage: React.FC = () => {
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
+  const loadMembers = async () => {
+    const params: Parameters<typeof fetchMembers>[0] = {
+      page: page + 1,
+      page_size: rowsPerPage,
+    };
+    if (filters.year) params.year = `${parseInt(filters.year)}-01-01`;
+    if (filters.parish) params.gyogu = parseInt(filters.parish);
+    if (filters.team) params.team = parseInt(filters.team);
+    if (filters.group) params.group_no = parseInt(filters.group);
+    if (filters.generation) params.generation = parseInt(filters.generation);
+
+    const res = await fetchMembers(params);
+    setRows(res.items.map(mapToStudentRow));
+    setTotalCount(res.meta.total_items);
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, [page, rowsPerPage, filters]);
+
   const selectedRow = useMemo(
     () => rows.find((row) => String(row.id) === selectedIds[0]) ?? null,
     [rows, selectedIds]
@@ -207,26 +207,12 @@ const UserListPage: React.FC = () => {
 
   const filteredRows = useMemo(() => {
     const keyword = search.keyword.trim().toLowerCase();
-    const searched = !keyword
-      ? rows
-      : rows.filter((row) => {
-          const value = String(row[search.attribute as keyof StudentRow] ?? '').toLowerCase();
-          return value.includes(keyword);
-        });
-
-    return searched.filter((row) => (
-      (!filters.year || row.year === filters.year) &&
-      (!filters.parish || row.parish === filters.parish) &&
-      (!filters.team || row.team === filters.team) &&
-      (!filters.group || row.group === filters.group) &&
-      (!filters.generation || row.generation === filters.generation)
-    ));
-  }, [filters, rows, search]);
-
-  const pagedRows = useMemo(() => {
-    const start = page * rowsPerPage;
-    return filteredRows.slice(start, start + rowsPerPage);
-  }, [filteredRows, page, rowsPerPage]);
+    if (!keyword) return rows;
+    return rows.filter((row) => {
+      const value = String(row[search.attribute as keyof StudentRow] ?? '').toLowerCase();
+      return value.includes(keyword);
+    });
+  }, [rows, search]);
 
   const toolbarActions: ActionButton[] = [
     {
@@ -329,7 +315,7 @@ const UserListPage: React.FC = () => {
 
       <DataTable
         columns={columns}
-        data={pagedRows}
+        data={filteredRows}
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
@@ -347,7 +333,7 @@ const UserListPage: React.FC = () => {
         pagination={{
           page,
           rowsPerPage,
-          totalCount: filteredRows.length,
+          totalCount,
           onPageChange: setPage,
           onRowsPerPageChange: (newRowsPerPage) => {
             setRowsPerPage(newRowsPerPage);

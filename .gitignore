@@ -17,11 +17,11 @@ frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
 frontend/*.local
-frontend/.env
 frontend/.env.*.local
 
 # --- Docs ---
 CLAUDE.md
+todo.md
 
 # --- Root ---
 .env

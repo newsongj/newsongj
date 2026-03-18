@@ -29,7 +29,7 @@ class MemberProfile(Base):
     gyogu            = Column(SmallInteger, nullable=False)
     team             = Column(SmallInteger, nullable=False)
     group_no         = Column(SmallInteger, nullable=False)
-    leader           = Column(String(100), nullable=True)
+    leader           = Column(String(100), nullable=True)  # leader_id 콤마 구분 (예: "1,3")
     plt_status       = Column(Enum('수료', '1학기 수료'), nullable=True)
 
 
