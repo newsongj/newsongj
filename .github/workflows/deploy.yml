@@ -20,6 +20,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -30,6 +31,8 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+            workflows:
+              - '.github/workflows/**'
 
   # ──────────────────────────────────────────
   # 2. 변경된 서비스만 Docker 이미지 빌드 → Docker Hub 푸시
@@ -37,7 +40,7 @@ jobs:
   build-and-push:
     needs: changes
     if: |
-      needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+      needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
