@@ -126,9 +126,15 @@ jobs:
                 image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
                 ports:
                   - "80:80"
+                depends_on:
+                  - backend
 
             volumes:
               db_data:
+
+            networks:
+              default:
+                name: newsongj-network
             COMPOSEOF
 
             cd ~/newsongj
