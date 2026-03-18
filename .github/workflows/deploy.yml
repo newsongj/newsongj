@@ -65,7 +65,7 @@ jobs:
     needs: [changes, build-and-push]
     if: |
       always() &&
-      needs.build-and-push.result == 'success' &&
+      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') &&
       !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
