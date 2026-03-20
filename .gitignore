@@ -24,6 +24,7 @@ mds/
 
 # --- Root ---
 .env
+!frontend/.env
 
 # --- Global Ignore ---
 *.log
