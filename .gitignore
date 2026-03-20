@@ -20,8 +20,7 @@ frontend/*.local
 frontend/.env.*.local
 
 # --- Docs ---
-CLAUDE.md
-todo.md
+mds/
 
 # --- Root ---
 .env

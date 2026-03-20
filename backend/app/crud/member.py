@@ -2,18 +2,18 @@ from sqlalchemy.orm import Session
 from app.models import Member, MemberProfile, Leader
 
 
-def get_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None):
-    # Member와 MemberProfile을 member_id로 연결 (LEFT JOIN)
+def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=None, group_no=None, generation=None):
+    # Member와 MemberProfile을 member_id로 연결
+    # year는 필수: MemberProfile이 연도별 행이므로 year 조건 없이 조인하면 중복 반환됨
     query = db.query(Member, MemberProfile).outerjoin(
-        MemberProfile, Member.member_id == MemberProfile.member_id
+        MemberProfile,
+        (Member.member_id == MemberProfile.member_id) & (MemberProfile.year == year),
     )
 
     # 삭제된 멤버 제외 (필수)
     query = query.filter(Member.deleted_at == None)
 
-    # 필터 파라미터가 있을 때만 조건 추가
-    if year:
-        query = query.filter(MemberProfile.year == year)
+    # 선택 필터
     if gyogu:
         query = query.filter(MemberProfile.gyogu == gyogu)
     if team:
