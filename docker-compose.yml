@@ -1,21 +1,21 @@
 services:
   # 로컬 개발 시 mariadb 불필요 (서버 DB에 직접 접속) — 프로덕션 복구 시 아래 주석 해제
-  # mariadb:
-  #   image: mariadb:10.11
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-  #     MYSQL_DATABASE: newsongj
-  #     MYSQL_USER: ${DB_USER}
-  #     MYSQL_PASSWORD: ${DB_PASSWORD}
-  #   ports:
-  #     - "3307:3306"
-  #   volumes:
-  #     - db_data:/var/lib/mysql
-  #   healthcheck:
-  #     test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: newsongj
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
@@ -28,14 +28,14 @@ services:
     volumes:
       - ./backend:/app   # 로컬 backend 폴더와 컨테이너 동기화
     # depends_on 제거: mariadb 서비스 비활성화에 따라 주석 처리
-    # depends_on:
-    #   mariadb:
-    #     condition: service_healthy
+    depends_on:
+      mariadb:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     ports:
       - "80:80"
 
-# volumes:
-#   db_data:
+volumes:
+  db_data:

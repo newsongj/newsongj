@@ -10,7 +10,7 @@ import { SearchOption, ActionButton } from '@components/common/SearchToolbar/Sea
 import { UserListCreatePage, UserListManagementPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { UserListFormValue } from '@components/user/userListForm.types';
-import { fetchMembers, MemberApiRow } from '@/api/교적';
+import { fetchMembers, addMember, updateMember, deleteMember, MemberApiRow } from '@/api/교적';
 
 interface StudentRow {
   id: number;
@@ -159,6 +159,13 @@ const toFormFromRow = (row: StudentRow): UserListFormValue => ({
   pid: row.pid === '-' ? '' : row.pid,
 });
 
+const parseNum = (val: string): number | undefined => {
+  const n = parseInt(val, 10);
+  return isNaN(n) ? undefined : n;
+};
+
+const currentYear = () => `${new Date().getFullYear()}-01-01`;
+
 const UserListPage: React.FC = () => {
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -240,11 +247,27 @@ const UserListPage: React.FC = () => {
   const handleCreate = async (form: UserListFormValue) => {
     setIsSubmitting(true);
     try {
-      const nextId = rows.length > 0 ? Math.max(...rows.map((row) => row.id)) + 1 : 1;
-      setRows((prev) => [createRowFromForm(form, nextId), ...prev]);
+      await addMember({
+        name: form.name,
+        gender: form.gender,
+        generation: parseInt(form.generation, 10),
+        year: currentYear(),
+        gyogu: parseNum(form.parish),
+        team: parseNum(form.team),
+        group_no: parseNum(form.group),
+        phone_number: form.phone || undefined,
+        birthdate: form.birthDate || undefined,
+        member_type: form.memberType || form.memberTypeText || undefined,
+        attendance_grade: form.attendanceGrade || undefined,
+        plt_status: form.pltCompleted || undefined,
+        leader: form.roles.length > 0 ? form.roles.join(', ') : undefined,
+        v8pid: form.pid || undefined,
+      });
       setCreateOpen(false);
-      setPage(0);
+      await loadMembers();
       showSnackbar('교적이 추가되었습니다.', 'success');
+    } catch {
+      showSnackbar('교적 추가에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -254,27 +277,51 @@ const UserListPage: React.FC = () => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      setRows((prev) => prev.map((row) => (row.id === selectedRow.id ? createRowFromForm(form, row.id) : row)));
+      await updateMember(selectedRow.id, {
+        name: form.name,
+        gender: form.gender,
+        generation: parseInt(form.generation, 10),
+        gyogu: parseNum(form.parish),
+        team: parseNum(form.team),
+        group_no: parseNum(form.group),
+        phone_number: form.phone || undefined,
+        birthdate: form.birthDate || undefined,
+        member_type: form.memberType || form.memberTypeText || undefined,
+        attendance_grade: form.attendanceGrade || undefined,
+        plt_status: form.pltCompleted || undefined,
+        leader: form.roles.length > 0 ? form.roles.join(', ') : undefined,
+        v8pid: form.pid || undefined,
+      });
       setEditOpen(false);
+      await loadMembers();
       showSnackbar('교적이 수정되었습니다.', 'success');
+    } catch {
+      showSnackbar('교적 수정에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (deleteReason?: string) => {
+    if (!deleteReason?.trim()) return;
     setIsSubmitting(true);
     try {
+      const deletedAt = new Date().toISOString();
+      await Promise.all(
+        selectedIds.map((id) =>
+          deleteMember(parseInt(id, 10), {
+            deleted_at: deletedAt,
+            deleted_reason: deleteReason.trim(),
+          })
+        )
+      );
       const deletedCount = selectedIds.length;
-      setRows((prev) => prev.filter((row) => !selectedIds.includes(String(row.id))));
       setSelectedIds([]);
       setDeleteOpen(false);
-      showSnackbar(
-        deleteReason?.trim()
-          ? `${deletedCount}건의 교적이 삭제되었습니다. (사유: ${deleteReason.trim()})`
-          : `${deletedCount}건의 교적이 삭제되었습니다.`,
-        'success'
-      );
+      await loadMembers();
+      showSnackbar(`${deletedCount}건의 교적이 삭제되었습니다.`, 'success');
+    } catch {
+      showSnackbar('교적 삭제에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
