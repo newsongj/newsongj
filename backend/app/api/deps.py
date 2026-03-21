@@ -1,10 +1,3 @@
-from app.core.database import SessionLocal
-
-
-def get_db():
-    """FastAPI 의존성 주입용 DB 세션 생성기"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# 의존성 주입 함수 모음
+# get_db는 app.core.database로 이동
+# 인증 의존성(get_current_user 등) 추가 시 이 파일 사용 예정
