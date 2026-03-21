@@ -12,6 +12,7 @@ export const useAuth = () => {
   const [auth, setAuth] = useRecoilState(authState);
   const [permissions, setPermissions] = useRecoilState(userPermissionsState);
   const isBackendEnabled = APP_CONFIG.backend.enabled;
+  const isBypassAuth = APP_CONFIG.backend.bypassAuth;
 
   const applyOfflineAuth = useCallback((): MeResponse => {
     const offlinePermissions = [
@@ -113,6 +114,8 @@ export const useAuth = () => {
     }
 
     const accessToken = getAccessToken();
+    // TODO: 인증 API 구현 후 아래 두 줄 제거
+    if (!accessToken && isBypassAuth) return applyOfflineAuth();
     if (!accessToken) return null;
 
     try {

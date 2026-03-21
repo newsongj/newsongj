@@ -10,7 +10,8 @@ import { SearchOption, ActionButton } from '@components/common/SearchToolbar/Sea
 import { UserListCreatePage, UserListManagementPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { UserListFormValue } from '@components/user/userListForm.types';
-import { fetchMembers, addMember, updateMember, deleteMember, MemberApiRow } from '@/api/교적';
+import { useMembers } from '@/hooks/교적';
+import { MemberRow } from '@/models/교적.types';
 
 interface StudentRow {
   id: number;
@@ -33,15 +34,7 @@ interface StudentRow {
   pid: string;
 }
 
-interface FilterState {
-  year: string;
-  parish: string;
-  team: string;
-  group: string;
-  generation: string;
-}
-
-const mapToStudentRow = (item: MemberApiRow): StudentRow => ({
+const mapToStudentRow = (item: MemberRow): StudentRow => ({
   id: item.member_id,
   year: item.year ? `${item.year.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
@@ -119,27 +112,6 @@ const FilterGrid = styled('div')(({ theme }) => ({
   gap: theme.custom.spacing.sm,
 }));
 
-const createRowFromForm = (form: UserListFormValue, id: number): StudentRow => ({
-  id,
-  year: '2026년',
-  parish: form.parish,
-  team: form.team,
-  group: form.group,
-  name: form.name,
-  gender: form.gender,
-  generation: `${form.generation}기`,
-  phone: form.phone || '-',
-  birthDate: form.birthDate || '-',
-  role: form.roles.join(', ') || '-',
-  createdAt: new Date().toISOString().slice(0, 10),
-  memberType: form.memberType || form.memberTypeText || '-',
-  attendanceGrade: form.attendanceGrade || '-',
-  pltCompleted: form.pltCompleted || '-',
-  schoolWork: form.schoolWork || '-',
-  major: form.major || '-',
-  pid: `V8-${10000 + id}`,
-});
-
 const toFormFromRow = (row: StudentRow): UserListFormValue => ({
   name: row.name,
   generation: row.generation.replace('기', ''),
@@ -159,53 +131,34 @@ const toFormFromRow = (row: StudentRow): UserListFormValue => ({
   pid: row.pid === '-' ? '' : row.pid,
 });
 
-const parseNum = (val: string): number | undefined => {
-  const n = parseInt(val, 10);
-  return isNaN(n) ? undefined : n;
-};
-
-const currentYear = () => `${new Date().getFullYear()}-01-01`;
-
 const UserListPage: React.FC = () => {
-  const [rows, setRows] = useState<StudentRow[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const {
+    members,
+    pagination,
+    selectedIds,
+    page,
+    rowsPerPage,
+    filters,
+    loadMembers,
+    handlePageChange,
+    handleRowsPerPageChange,
+    handleFilterChange,
+    setSelectedIds,
+  } = useMembers();
+
   const [search, setSearch] = useState<{ keyword: string; attribute: string }>({ keyword: '', attribute: 'name' });
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    year: `${new Date().getFullYear()}년`,
-    parish: '',
-    team: '',
-    group: '',
-    generation: '',
-  });
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
-  const loadMembers = async () => {
-    const params: Parameters<typeof fetchMembers>[0] = {
-      page: page + 1,
-      page_size: rowsPerPage,
-    };
-    if (filters.year) params.year = `${parseInt(filters.year)}-01-01`;
-    if (filters.parish) params.gyogu = parseInt(filters.parish);
-    if (filters.team) params.team = parseInt(filters.team);
-    if (filters.group) params.group_no = parseInt(filters.group);
-    if (filters.generation) params.generation = parseInt(filters.generation);
-
-    const res = await fetchMembers(params);
-    setRows(res.items.map(mapToStudentRow));
-    setTotalCount(res.meta.total_items);
-  };
-
   useEffect(() => {
-    loadMembers();
-  }, [page, rowsPerPage, filters]);
+    loadMembers(page, rowsPerPage, filters);
+  }, []);
+
+  const rows = useMemo(() => members.map(mapToStudentRow), [members]);
 
   const selectedRow = useMemo(
     () => rows.find((row) => String(row.id) === selectedIds[0]) ?? null,
@@ -244,84 +197,42 @@ const UserListPage: React.FC = () => {
     },
   ];
 
-  const handleCreate = async (form: UserListFormValue) => {
+  const handleCreate = async (_form: UserListFormValue) => {
     setIsSubmitting(true);
     try {
-      await addMember({
-        name: form.name,
-        gender: form.gender,
-        generation: parseInt(form.generation, 10),
-        year: currentYear(),
-        gyogu: parseNum(form.parish),
-        team: parseNum(form.team),
-        group_no: parseNum(form.group),
-        phone_number: form.phone || undefined,
-        birthdate: form.birthDate || undefined,
-        member_type: form.memberType || form.memberTypeText || undefined,
-        attendance_grade: form.attendanceGrade || undefined,
-        plt_status: form.pltCompleted || undefined,
-        leader: form.roles.length > 0 ? form.roles.join(', ') : undefined,
-        v8pid: form.pid || undefined,
-      });
-      setCreateOpen(false);
-      await loadMembers();
+      // TODO: 백엔드 POST API 연결 후 교체
       showSnackbar('교적이 추가되었습니다.', 'success');
-    } catch {
-      showSnackbar('교적 추가에 실패했습니다.', 'error');
+      setCreateOpen(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = async (form: UserListFormValue) => {
+  const handleEdit = async (_form: UserListFormValue) => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      await updateMember(selectedRow.id, {
-        name: form.name,
-        gender: form.gender,
-        generation: parseInt(form.generation, 10),
-        gyogu: parseNum(form.parish),
-        team: parseNum(form.team),
-        group_no: parseNum(form.group),
-        phone_number: form.phone || undefined,
-        birthdate: form.birthDate || undefined,
-        member_type: form.memberType || form.memberTypeText || undefined,
-        attendance_grade: form.attendanceGrade || undefined,
-        plt_status: form.pltCompleted || undefined,
-        leader: form.roles.length > 0 ? form.roles.join(', ') : undefined,
-        v8pid: form.pid || undefined,
-      });
-      setEditOpen(false);
-      await loadMembers();
+      // TODO: 백엔드 PUT API 연결 후 교체
       showSnackbar('교적이 수정되었습니다.', 'success');
-    } catch {
-      showSnackbar('교적 수정에 실패했습니다.', 'error');
+      setEditOpen(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (deleteReason?: string) => {
-    if (!deleteReason?.trim()) return;
     setIsSubmitting(true);
     try {
-      const deletedAt = new Date().toISOString();
-      await Promise.all(
-        selectedIds.map((id) =>
-          deleteMember(parseInt(id, 10), {
-            deleted_at: deletedAt,
-            deleted_reason: deleteReason.trim(),
-          })
-        )
-      );
       const deletedCount = selectedIds.length;
+      // TODO: 백엔드 DELETE API 연결 후 교체
       setSelectedIds([]);
       setDeleteOpen(false);
-      await loadMembers();
-      showSnackbar(`${deletedCount}건의 교적이 삭제되었습니다.`, 'success');
-    } catch {
-      showSnackbar('교적 삭제에 실패했습니다.', 'error');
+      showSnackbar(
+        deleteReason?.trim()
+          ? `${deletedCount}건의 교적이 삭제되었습니다. (사유: ${deleteReason.trim()})`
+          : `${deletedCount}건의 교적이 삭제되었습니다.`,
+        'success'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -334,27 +245,27 @@ const UserListPage: React.FC = () => {
         <FilterGrid>
           <Select
             value={filters.year}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, year: String(value) })); setPage(0); }}
+            onChange={(value) => handleFilterChange('year', String(value))}
             options={[{ value: '', label: '년도' }, { value: '2026년', label: '2026년' }]}
           />
           <Select
-            value={filters.parish}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, parish: String(value) })); setPage(0); }}
+            value={filters.gyogu}
+            onChange={(value) => handleFilterChange('gyogu', String(value))}
             options={[{ value: '', label: '교구' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
           />
           <Select
             value={filters.team}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, team: String(value) })); setPage(0); }}
+            onChange={(value) => handleFilterChange('team', String(value))}
             options={[{ value: '', label: '팀' }, ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}팀`, label: `${idx + 1}팀` }))]}
           />
           <Select
-            value={filters.group}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, group: String(value) })); setPage(0); }}
+            value={filters.group_no}
+            onChange={(value) => handleFilterChange('group_no', String(value))}
             options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}그룹`, label: `${idx + 1}그룹` }))]}
           />
           <Select
             value={filters.generation}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, generation: String(value) })); setPage(0); }}
+            onChange={(value) => handleFilterChange('generation', String(value))}
             options={[{ value: '', label: '기수' }, ...Array.from({ length: 15 }, (_, idx) => ({ value: `${idx + 35}기`, label: `${idx + 35}기` }))]}
           />
         </FilterGrid>
@@ -372,7 +283,6 @@ const UserListPage: React.FC = () => {
         searchOptions={searchOptions}
         onSearch={(value, attribute) => {
           setSearch({ keyword: value, attribute: attribute || 'name' });
-          setPage(0);
         }}
         toolbarActions={toolbarActions}
         selectedActions={() => setDeleteOpen(true)}
@@ -380,12 +290,9 @@ const UserListPage: React.FC = () => {
         pagination={{
           page,
           rowsPerPage,
-          totalCount,
-          onPageChange: setPage,
-          onRowsPerPageChange: (newRowsPerPage) => {
-            setRowsPerPage(newRowsPerPage);
-            setPage(0);
-          },
+          totalCount: pagination.total_items,
+          onPageChange: handlePageChange,
+          onRowsPerPageChange: handleRowsPerPageChange,
         }}
       />
 

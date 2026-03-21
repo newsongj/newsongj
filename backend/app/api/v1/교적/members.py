@@ -11,9 +11,9 @@ router = APIRouter()
 
 @router.get("/members", response_model=MemberListResponse)
 def list_members(
+    year: datetime.date = Query(...),  # 필수: MemberProfile이 연도별 행이므로 반드시 지정
     page: int = Query(1),
     page_size: int = Query(10),
-    year: Optional[datetime.date] = Query(None),
     gyogu: Optional[int] = Query(None),
     team: Optional[int] = Query(None),
     group_no: Optional[int] = Query(None),

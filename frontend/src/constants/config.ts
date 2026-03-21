@@ -3,6 +3,7 @@ export const APP_CONFIG = {
     version: '1.0.0',
     backend: {
         enabled: import.meta.env.VITE_ENABLE_BACKEND === 'true',
+        bypassAuth: import.meta.env.VITE_BYPASS_AUTH === 'true',
     },
     api: {
         url: import.meta.env.VITE_API_URL || '',  // 프록시 사용시 빈 값 허용
@@ -23,7 +24,4 @@ export const APP_CONFIG = {
     },
 } as const; 
 
-// 운영 환경 배포 전 필수 환경변수가 설정되었는지 확인
-if (import.meta.env && APP_CONFIG.backend.enabled && !APP_CONFIG.api.url) {
-  throw new Error('VITE_API_URL environment variable is not set. Please check your .env file.');
-}
+// VITE_API_URL 미설정 시 Nginx 프록시 모드(상대경로)로 동작 — 에러 불필요
