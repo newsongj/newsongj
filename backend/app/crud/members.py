@@ -1,12 +1,13 @@
+"""교적 멤버 CRUD — 순수 DB 조작만 담당"""
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from app.models import Member, MemberProfile, Leader
-from app.schemas.member import MemberDeleteState, MemberRow, AddMember
+from app.models import Member, MemberProfile
+from app.schemas.members import MemberDeleteRequest, MemberCreate
 from fastapi import HTTPException
 
 
 def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=None, group_no=None, generation=None):
-    # Member와 MemberProfile을 member_id로 연결
+    """활성 멤버 목록 조회 (deleted_at IS NULL)"""
     # year는 필수: MemberProfile이 연도별 행이므로 year 조건 없이 조인하면 중복 반환됨
     query = db.query(Member, MemberProfile).outerjoin(
         MemberProfile,
@@ -26,31 +27,22 @@ def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=N
     if generation:
         query = query.filter(Member.generation == generation)
 
-    # 전체 건수 조회
     total = query.count()
-
-    # 페이징 처리
     offset = (page - 1) * page_size
     rows = query.offset(offset).limit(page_size).all()
 
-    # Leader 전체를 한번에 조회해서 id → name 맵 생성
-    leaders = db.query(Leader).all()
-    leader_map = {str(l.leader_id): l.leader_name for l in leaders}
-
-    return rows, total, leader_map
+    return rows, total
 
 
-# 삭제된 멤버 목록 조회 (deleted_at IS NOT NULL)
 def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None):
-    # Member와 MemberProfile을 member_id로 연결 (LEFT JOIN)
+    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL)"""
     query = db.query(Member, MemberProfile).outerjoin(
         MemberProfile, Member.member_id == MemberProfile.member_id
     )
 
-    # 삭제되지 않은 멤버 제외 (필수)
+    # 삭제된 멤버만
     query = query.filter(Member.deleted_at != None)
 
-    # 필터 파라미터가 있을 때만 조건 추가
     if year:
         query = query.filter(MemberProfile.year == year)
     if gyogu:
@@ -62,22 +54,15 @@ def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu
     if generation:
         query = query.filter(Member.generation == generation)
 
-    # 전체 건수 조회
     total = query.count()
-
-    # 페이징 처리
     offset = (page - 1) * page_size
     rows = query.offset(offset).limit(page_size).all()
 
-    # Leader 전체를 한번에 조회해서 id → name 맵 생성
-    leaders = db.query(Leader).all()
-    leader_map = {str(l.leader_id): l.leader_name for l in leaders}
-
-    return rows, total, leader_map
+    return rows, total
 
 
-# 멤버 생성 (Member + MemberProfile)
-def create_member(db: Session, data: MemberRow) -> tuple[Member, MemberProfile | None]:
+def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfile | None]:
+    """멤버 생성 (Member + MemberProfile)"""
     member = Member(
         name=data.name,
         gender=data.gender,
@@ -85,6 +70,8 @@ def create_member(db: Session, data: MemberRow) -> tuple[Member, MemberProfile |
         phone_number=data.phone_number,
         v8pid=data.v8pid,
         birthdate=data.birthdate,
+        school_work=data.school_work,
+        major=data.major,
         enrolled_at=data.enrolled_at,
     )
     db.add(member)
@@ -92,15 +79,14 @@ def create_member(db: Session, data: MemberRow) -> tuple[Member, MemberProfile |
 
     profile = None
     # 프로필 필수 필드가 모두 있을 때만 생성
-    if all(v is not None for v in [data.year, data.member_type, data.gyogu, data.team, data.group_no]):
+    if all(v is not None for v in [data.member_type, data.gyogu, data.team, data.group_no]):
         profile = MemberProfile(
             member_id=member.member_id,
-            year=data.year,
             member_type=data.member_type,
             gyogu=data.gyogu,
             team=data.team,
             group_no=data.group_no,
-            leader=data.leader,
+            leader_ids=data.leader_ids,
             plt_status=data.plt_status,
         )
         db.add(profile)
@@ -113,32 +99,8 @@ def create_member(db: Session, data: MemberRow) -> tuple[Member, MemberProfile |
     return member, profile
 
 
-# Member + Profile → MemberRow 응답 변환 헬퍼
-def build_member_row(member, profile, db) -> MemberRow:
-    leaders = db.query(Leader).all()
-    leader_map = {str(l.leader_id): l.leader_name for l in leaders}
-    return MemberRow(
-        member_id=member.member_id,
-        name=member.name,
-        gender=member.gender,
-        generation=member.generation,
-        gyogu=profile.gyogu if profile else None,
-        team=profile.team if profile else None,
-        group_no=profile.group_no if profile else None,
-        phone_number=member.phone_number,
-        birthdate=member.birthdate,
-        member_type=profile.member_type if profile else None,
-        attendance_grade=profile.attendance_grade if profile else None,
-        plt_status=profile.plt_status if profile else None,
-        leader=resolve_leader_names(profile.leader, leader_map) if profile else None,
-        v8pid=member.v8pid,
-        year=profile.year if profile else None,
-        enrolled_at=member.enrolled_at,
-    )
-
-
-# 멤버 정보 수정 (Member + 최신 MemberProfile)
-def modify_member(db: Session, member_id: int, data: AddMember) -> int:
+def update_member(db: Session, member_id: int, data: MemberCreate) -> int:
+    """멤버 정보 수정 (Member + 최신 MemberProfile)"""
     member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at == None).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
@@ -150,6 +112,8 @@ def modify_member(db: Session, member_id: int, data: AddMember) -> int:
     member.phone_number = data.phone_number
     member.v8pid = data.v8pid
     member.birthdate = data.birthdate
+    member.school_work = data.school_work
+    member.major = data.major
     member.enrolled_at = data.enrolled_at
 
     # 가장 최근 연도의 프로필을 찾아서 업데이트
@@ -164,14 +128,14 @@ def modify_member(db: Session, member_id: int, data: AddMember) -> int:
         profile.member_type = data.member_type
         profile.attendance_grade = data.attendance_grade
         profile.plt_status = data.plt_status
-        profile.leader = data.leader
+        profile.leader_ids = data.leader_ids
 
     db.commit()
     return member_id
 
 
-# 멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)
-def delete_member(db: Session, member_id: int, data: MemberDeleteState) -> Member:
+def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Member:
+    """멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)"""
     member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at == None).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
@@ -183,8 +147,8 @@ def delete_member(db: Session, member_id: int, data: MemberDeleteState) -> Membe
     return member
 
 
-# 삭제된 멤버 복원 (deleted_at, deleted_reason 초기화)
 def restore_member(db: Session, member_id: int) -> Member:
+    """삭제된 멤버 복원 (deleted_at, deleted_reason 초기화)"""
     member = db.query(Member).filter(Member.member_id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
@@ -196,12 +160,3 @@ def restore_member(db: Session, member_id: int) -> Member:
     db.commit()
     db.refresh(member)
     return member
-
-
-def resolve_leader_names(leader_str: str | None, leader_map: dict) -> str | None:
-    """'1,3' 같은 문자열을 '팀장, 그룹장' 형태로 변환"""
-    if not leader_str:
-        return None
-    ids = [id.strip() for id in leader_str.split(',')]
-    names = [leader_map[id] for id in ids if id in leader_map]
-    return ', '.join(names) if names else None

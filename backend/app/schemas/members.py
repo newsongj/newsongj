@@ -3,7 +3,7 @@ from typing import Optional
 import datetime
 
 
-class MemberRow(BaseModel):
+class MemberResponse(BaseModel):
     member_id: int
     name: str
     gender: str
@@ -16,8 +16,10 @@ class MemberRow(BaseModel):
     member_type: Optional[str]
     attendance_grade: Optional[str]
     plt_status: Optional[str]
-    leader: Optional[str]
+    leader_ids: Optional[str]       # JSON 배열 문자열 또는 resolve된 이름 문자열
     v8pid: Optional[str]
+    school_work: Optional[str]      # 학교 및 직장
+    major: Optional[str]            # 전공
     year: Optional[datetime.date]
     enrolled_at: Optional[datetime.datetime]
 
@@ -32,12 +34,12 @@ class PageMeta(BaseModel):
 
 
 class MemberListResponse(BaseModel):
-    items: list[MemberRow]
+    items: list[MemberResponse]
     meta: PageMeta
 
 
 # 멤버 생성/수정 요청 스키마
-class AddMember(BaseModel):
+class MemberCreate(BaseModel):
     name: str
     gender: str
     generation: int
@@ -46,11 +48,13 @@ class AddMember(BaseModel):
     gyogu: Optional[int] = None
     team: Optional[int] = None
     group_no: Optional[int] = None
-    leader: Optional[str] = None
+    leader_ids: Optional[str] = None   # JSON 배열 문자열 (예: ["1", "3"])
     member_type: Optional[str] = None
     attendance_grade: Optional[str] = None
     plt_status: Optional[str] = None
     v8pid: Optional[str] = None
+    school_work: Optional[str] = None  # 학교 및 직장
+    major: Optional[str] = None        # 전공
     enrolled_at: Optional[datetime.datetime] = None
 
 
@@ -60,13 +64,13 @@ class MemberIdResponse(BaseModel):
 
 
 # 멤버 삭제 요청 스키마 (삭제 시각 + 사유)
-class MemberDeleteState(BaseModel):
+class MemberDeleteRequest(BaseModel):
     deleted_at: datetime.datetime
     deleted_reason: str
 
 
-# 삭제된 멤버 응답 (MemberRow 확장)
-class DeletedMember(MemberRow):
+# 삭제된 멤버 응답 (MemberResponse 확장)
+class DeletedMember(MemberResponse):
     deleted_at: datetime.datetime
     deleted_reason: str
 

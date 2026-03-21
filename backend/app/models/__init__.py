@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum
+from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum, Text
 from app.core.database import Base
 
 
@@ -13,6 +13,8 @@ class Member(Base):
     v8pid          = Column(String(64), unique=True, nullable=True)
     birthdate      = Column(Date, nullable=True)
     enrolled_at    = Column(DateTime, nullable=True)
+    school_work    = Column(String(255), nullable=True)   # 학교 및 직장
+    major          = Column(String(255), nullable=True)   # 전공
     deleted_at     = Column(DateTime, nullable=True)
     deleted_reason = Column(String(255), nullable=True)
 
@@ -29,7 +31,7 @@ class MemberProfile(Base):
     gyogu            = Column(SmallInteger, nullable=False)
     team             = Column(SmallInteger, nullable=False)
     group_no         = Column(SmallInteger, nullable=False)
-    leader           = Column(String(100), nullable=True)  # leader_id 콤마 구분 (예: "1,3")
+    leader_ids       = Column(Text, nullable=True)  # JSON 배열 (예: ["1", "3"]), leader 테이블 leader_id 참조
     plt_status       = Column(Enum('수료', '1학기 수료'), nullable=True)
 
 
