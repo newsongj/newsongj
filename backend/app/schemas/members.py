@@ -55,7 +55,7 @@ class MemberCreate(BaseModel):
     v8pid: Optional[str] = None
     school_work: Optional[str] = None  # 학교 및 직장
     major: Optional[str] = None        # 전공
-    enrolled_at: Optional[datetime.datetime] = None
+    # enrolled_at: 서버에서 자동 생성 (crud/members.py create_member에서 datetime.now())
 
 
 # 멤버 생성/수정 응답 (member_id만 반환)
@@ -63,9 +63,8 @@ class MemberIdResponse(BaseModel):
     member_id: int
 
 
-# 멤버 삭제 요청 스키마 (삭제 시각 + 사유)
+# 멤버 삭제 요청 스키마 (삭제 사유만, 삭제 시각은 서버에서 자동)
 class MemberDeleteRequest(BaseModel):
-    deleted_at: datetime.datetime
     deleted_reason: str
 
 

@@ -1,9 +1,10 @@
 """교적 멤버 CRUD — 순수 DB 조작만 담당"""
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from app.models import Member, MemberProfile
 from app.schemas.members import MemberDeleteRequest, MemberCreate
 from fastapi import HTTPException
+import datetime
 
 
 def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=None, group_no=None, generation=None):
@@ -35,9 +36,19 @@ def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=N
 
 
 def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None):
-    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL)"""
+    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL, 최신 프로필만 조인)"""
+    # 각 멤버의 최신 연도 프로필만 가져오기 위한 서브쿼리
+    latest_year = db.query(
+        MemberProfile.member_id,
+        func.max(MemberProfile.year).label("max_year"),
+    ).group_by(MemberProfile.member_id).subquery()
+
     query = db.query(Member, MemberProfile).outerjoin(
-        MemberProfile, Member.member_id == MemberProfile.member_id
+        latest_year, Member.member_id == latest_year.c.member_id
+    ).outerjoin(
+        MemberProfile,
+        (Member.member_id == MemberProfile.member_id)
+        & (MemberProfile.year == latest_year.c.max_year),
     )
 
     # 삭제된 멤버만
@@ -72,7 +83,7 @@ def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfil
         birthdate=data.birthdate,
         school_work=data.school_work,
         major=data.major,
-        enrolled_at=data.enrolled_at,
+        enrolled_at=datetime.datetime.now(),  # 등록일시는 서버 기준 자동
     )
     db.add(member)
     db.flush()  # member_id 확보
@@ -80,8 +91,11 @@ def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfil
     profile = None
     # 프로필 필수 필드가 모두 있을 때만 생성
     if all(v is not None for v in [data.member_type, data.gyogu, data.team, data.group_no]):
+        # year는 서버에서 현재 연도를 자동으로 넣음
+        current_year = datetime.date(datetime.date.today().year, 1, 1)
         profile = MemberProfile(
             member_id=member.member_id,
+            year=current_year,
             member_type=data.member_type,
             gyogu=data.gyogu,
             team=data.team,
@@ -114,21 +128,23 @@ def update_member(db: Session, member_id: int, data: MemberCreate) -> int:
     member.birthdate = data.birthdate
     member.school_work = data.school_work
     member.major = data.major
-    member.enrolled_at = data.enrolled_at
+    # enrolled_at은 등록일자이므로 수정하지 않음
 
     # 가장 최근 연도의 프로필을 찾아서 업데이트
     profile = db.query(MemberProfile).filter(
         MemberProfile.member_id == member_id,
     ).order_by(desc(MemberProfile.year)).first()
 
-    if profile:
-        profile.gyogu = data.gyogu
-        profile.team = data.team
-        profile.group_no = data.group_no
-        profile.member_type = data.member_type
-        profile.attendance_grade = data.attendance_grade
-        profile.plt_status = data.plt_status
-        profile.leader_ids = data.leader_ids
+    if not profile:
+        raise HTTPException(status_code=404, detail="해당 멤버의 프로필이 존재하지 않습니다.")
+
+    profile.gyogu = data.gyogu
+    profile.team = data.team
+    profile.group_no = data.group_no
+    profile.member_type = data.member_type
+    # attendance_grade는 동적 계산 필드이므로 수정하지 않음
+    profile.plt_status = data.plt_status
+    profile.leader_ids = data.leader_ids
 
     db.commit()
     return member_id
@@ -140,7 +156,7 @@ def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Mem
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
 
-    member.deleted_at = data.deleted_at
+    member.deleted_at = datetime.datetime.now()  # 삭제 시각은 서버 기준 자동
     member.deleted_reason = data.deleted_reason
     db.commit()
     db.refresh(member)
