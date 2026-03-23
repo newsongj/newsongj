@@ -47,6 +47,16 @@ def _to_member_response(member, profile, leader_map) -> MemberResponse:
     )
 
 
+def _to_deleted_member(member, profile, leader_map) -> DeletedMember:
+    """Member + MemberProfile → DeletedMember 스키마 변환 (공용)"""
+    row = _to_member_response(member, profile, leader_map)
+    return DeletedMember(
+        **row.model_dump(),
+        deleted_at=member.deleted_at,
+        deleted_reason=member.deleted_reason,
+    )
+
+
 def build_member_response(member, profile, db: Session) -> MemberResponse:
     """단건 변환 (CUD 응답용)"""
     leader_map = _get_leader_map(db)
@@ -63,17 +73,16 @@ def build_member_list(rows, total: int, page: int, page_size: int, db: Session) 
     )
 
 
+def build_deleted_member_response(member, profile, db: Session) -> DeletedMember:
+    """삭제된 멤버 단건 변환"""
+    leader_map = _get_leader_map(db)
+    return _to_deleted_member(member, profile, leader_map)
+
+
 def build_deleted_member_list(rows, total: int, page: int, page_size: int, db: Session) -> DeletedMemberListResponse:
     """삭제된 멤버 목록 → DeletedMemberListResponse 변환"""
     leader_map = _get_leader_map(db)
-    items = []
-    for member, profile in rows:
-        row = _to_member_response(member, profile, leader_map)
-        items.append(DeletedMember(
-            **row.model_dump(),
-            deleted_at=member.deleted_at,
-            deleted_reason=member.deleted_reason,
-        ))
+    items = [_to_deleted_member(member, profile, leader_map) for member, profile in rows]
     return DeletedMemberListResponse(
         items=items,
         meta=PageMeta(current_page=page, page_size=page_size, total_items=total),
