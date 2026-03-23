@@ -3,15 +3,15 @@ from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.crud.members import (
-    get_members, get_deleted_members,
+    get_members, get_deleted_members, get_deleted_member as crud_get_deleted_member,
     create_member as crud_create_member,
     update_member as crud_update_member,
     delete_member as crud_delete_member,
     restore_member as crud_restore_member,
 )
-from app.services.members import build_member_list, build_deleted_member_list, build_member_response
+from app.services.members import build_member_list, build_deleted_member_list, build_member_response, build_deleted_member_response
 from app.schemas.members import (
-    MemberListResponse, DeletedMemberListResponse,
+    MemberListResponse, DeletedMemberListResponse, DeletedMember,
     MemberResponse, MemberDeleteRequest, MemberCreate, MemberIdResponse,
 )
 from typing import Optional
@@ -46,10 +46,22 @@ def list_deleted_members(
     team: Optional[int] = Query(None),
     group_no: Optional[int] = Query(None),
     generation: Optional[int] = Query(None),
+    deleted_from: Optional[datetime.date] = Query(None),  # 삭제일 범위 시작
+    deleted_to: Optional[datetime.date] = Query(None),    # 삭제일 범위 종료
     db: Session = Depends(get_db),
 ):
-    rows, total = get_deleted_members(db, page, page_size, year, gyogu, team, group_no, generation)
+    rows, total = get_deleted_members(db, page, page_size, year, gyogu, team, group_no, generation, deleted_from, deleted_to)
     return build_deleted_member_list(rows, total, page, page_size, db)
+
+
+# 삭제된 멤버 상세 조회
+@router.get("/members/deleted/{member_id}", response_model=DeletedMember)
+def get_deleted_member_detail(
+    member_id: int = Path(...),
+    db: Session = Depends(get_db),
+):
+    member, profile = crud_get_deleted_member(db, member_id)
+    return build_deleted_member_response(member, profile, db)
 
 
 # 멤버 추가
@@ -85,10 +97,10 @@ def delete_member(
 
 
 # 삭제된 멤버 복원
-@router.post("/members/restore/{member_id}", response_model=MemberResponse)
+@router.post("/members/restore/{member_id}", response_model=MemberIdResponse)
 def restore_member(
     member_id: int = Path(...),
     db: Session = Depends(get_db),
 ):
-    member = crud_restore_member(db, member_id)
-    return build_member_response(member, None, db)
+    crud_restore_member(db, member_id)
+    return MemberIdResponse(member_id=member_id)

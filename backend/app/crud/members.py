@@ -7,6 +7,27 @@ from fastapi import HTTPException
 import datetime
 
 
+def _apply_filters(query, gyogu=None, team=None, group_no=None, generation=None):
+    """공통 필터 적용 (활성/삭제 목록 공용)"""
+    if gyogu is not None:
+        query = query.filter(MemberProfile.gyogu == gyogu)
+    if team is not None:
+        query = query.filter(MemberProfile.team == team)
+    if group_no is not None:
+        query = query.filter(MemberProfile.group_no == group_no)
+    if generation is not None:
+        query = query.filter(Member.generation == generation)
+    return query
+
+
+def _paginate(query, page: int, page_size: int):
+    """공통 페이징 처리"""
+    total = query.count()
+    offset = (page - 1) * page_size
+    rows = query.offset(offset).limit(page_size).all()
+    return rows, total
+
+
 def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=None, group_no=None, generation=None):
     """활성 멤버 목록 조회 (deleted_at IS NULL)"""
     # year는 필수: MemberProfile이 연도별 행이므로 year 조건 없이 조인하면 중복 반환됨
@@ -18,58 +39,58 @@ def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=N
     # 삭제된 멤버 제외 (필수)
     query = query.filter(Member.deleted_at == None)
 
-    # 선택 필터
-    if gyogu:
-        query = query.filter(MemberProfile.gyogu == gyogu)
-    if team:
-        query = query.filter(MemberProfile.team == team)
-    if group_no:
-        query = query.filter(MemberProfile.group_no == group_no)
-    if generation:
-        query = query.filter(Member.generation == generation)
+    # 공통 필터 적용
+    query = _apply_filters(query, gyogu, team, group_no, generation)
 
-    total = query.count()
-    offset = (page - 1) * page_size
-    rows = query.offset(offset).limit(page_size).all()
-
-    return rows, total
+    return _paginate(query, page, page_size)
 
 
-def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None):
-    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL, 최신 프로필만 조인)"""
-    # 각 멤버의 최신 연도 프로필만 가져오기 위한 서브쿼리
+def _deleted_base_query(db: Session):
+    """삭제된 멤버 조회용 기본 쿼리 (최신 프로필 조인, 공용)"""
     latest_year = db.query(
         MemberProfile.member_id,
         func.max(MemberProfile.year).label("max_year"),
     ).group_by(MemberProfile.member_id).subquery()
 
-    query = db.query(Member, MemberProfile).outerjoin(
+    return db.query(Member, MemberProfile).outerjoin(
         latest_year, Member.member_id == latest_year.c.member_id
     ).outerjoin(
         MemberProfile,
         (Member.member_id == MemberProfile.member_id)
         & (MemberProfile.year == latest_year.c.max_year),
-    )
+    ).filter(Member.deleted_at != None)
 
-    # 삭제된 멤버만
-    query = query.filter(Member.deleted_at != None)
 
-    if year:
+def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None, deleted_from=None, deleted_to=None):
+    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL, 최신 프로필만 조인)"""
+    query = _deleted_base_query(db)
+
+    # 삭제일 범위 필터
+    if deleted_from is not None:
+        query = query.filter(Member.deleted_at >= deleted_from)
+    if deleted_to is not None:
+        query = query.filter(Member.deleted_at <= deleted_to)
+
+    # year 필터 (삭제 목록에서는 선택)
+    if year is not None:
         query = query.filter(MemberProfile.year == year)
-    if gyogu:
-        query = query.filter(MemberProfile.gyogu == gyogu)
-    if team:
-        query = query.filter(MemberProfile.team == team)
-    if group_no:
-        query = query.filter(MemberProfile.group_no == group_no)
-    if generation:
-        query = query.filter(Member.generation == generation)
 
-    total = query.count()
-    offset = (page - 1) * page_size
-    rows = query.offset(offset).limit(page_size).all()
+    # 공통 필터 적용
+    query = _apply_filters(query, gyogu, team, group_no, generation)
 
-    return rows, total
+    return _paginate(query, page, page_size)
+
+
+def get_deleted_member(db: Session, member_id: int):
+    """삭제된 멤버 단건 상세 조회 (최신 프로필 조인)"""
+    row = _deleted_base_query(db).filter(
+        Member.member_id == member_id,
+    ).first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="삭제된 멤버를 찾을 수 없습니다.")
+
+    return row  # (Member, MemberProfile) 튜플
 
 
 def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfile | None]:
