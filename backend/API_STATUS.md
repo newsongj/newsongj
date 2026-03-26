@@ -1,8 +1,8 @@
-# 교적 API 현황
+# gyojeok API 현황
 
 > 백엔드 API 진행 상황 및 사용법 정리 (프론트 참고용)
 >
-> Base URL: `/api/v1/교적`
+> Base URL: `/api/v1/gyojeok`
 
 ---
 
@@ -29,7 +29,7 @@
 ### 1. 멤버 목록 조회
 
 ```
-GET /api/v1/교적/members
+GET /api/v1/gyojeok/members
 ```
 
 **Query Parameters**
@@ -84,7 +84,7 @@ GET /api/v1/교적/members
 ### 2. 멤버 추가
 
 ```
-POST /api/v1/교적/members
+POST /api/v1/gyojeok/members
 ```
 
 **Request Body**
@@ -135,7 +135,7 @@ POST /api/v1/교적/members
 ### 3. 멤버 수정
 
 ```
-PUT /api/v1/교적/members/{member_id}
+PUT /api/v1/gyojeok/members/{member_id}
 ```
 
 **Path Parameter**
@@ -158,7 +158,7 @@ PUT /api/v1/교적/members/{member_id}
 ### 4. 멤버 삭제 (Soft Delete)
 
 ```
-DELETE /api/v1/교적/members/{member_id}
+DELETE /api/v1/gyojeok/members/{member_id}
 ```
 
 **Path Parameter**
@@ -187,7 +187,7 @@ DELETE /api/v1/교적/members/{member_id}
 ### 5. 삭제된 멤버 목록 조회
 
 ```
-GET /api/v1/교적/members/deleted
+GET /api/v1/gyojeok/members/deleted
 ```
 
 **Query Parameters** — 멤버 목록 조회와 동일 (단, `year`는 선택)
@@ -234,7 +234,7 @@ GET /api/v1/교적/members/deleted
 ### 6. 삭제된 멤버 복원
 
 ```
-POST /api/v1/교적/members/restore/{member_id}
+POST /api/v1/gyojeok/members/restore/{member_id}
 ```
 
 **Path Parameter**

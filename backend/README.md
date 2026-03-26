@@ -14,7 +14,7 @@ backend/
 │   ├── api/                ← 클라이언트(프론트)와 통신하는 창구
 │   │   ├── deps.py         ← 공통으로 쓰는 의존성 모음 (DB 세션 등)
 │   │   └── v1/             ← API 버전 1 (URL: /api/v1/...)
-│   │       ├── 교적/       ← 교적 관련 API 엔드포인트
+│   │       ├── gyojeok/       ← gyojeok 관련 API 엔드포인트
 │   │       ├── retreat/    ← 수련회 관련 API 엔드포인트
 │   │       └── authority/  ← 권한 관련 API 엔드포인트
 │   │
@@ -43,7 +43,7 @@ backend/
 ```
 프론트에서 API 요청
        ↓
-  api/v1/교적/     ← 1. 어떤 URL인지 여기서 받음
+  api/v1/gyojeok/     ← 1. 어떤 URL인지 여기서 받음
        ↓
   api/deps.py      ← 2. DB 세션 등 공통 준비
        ↓

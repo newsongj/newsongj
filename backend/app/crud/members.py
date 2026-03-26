@@ -1,4 +1,4 @@
-"""교적 멤버 CRUD — 순수 DB 조작만 담당"""
+"""gyojeok 멤버 CRUD — 순수 DB 조작만 담당"""
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from app.models import Member, MemberProfile
