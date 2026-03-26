@@ -1,4 +1,4 @@
-"""교적 멤버 비즈니스 로직 — DB 조회 결과를 응답 스키마로 변환"""
+"""gyojeok 멤버 비즈니스 로직 — DB 조회 결과를 응답 스키마로 변환"""
 from sqlalchemy.orm import Session
 from app.models import Leader
 from app.schemas.members import MemberResponse, DeletedMember, PageMeta, MemberListResponse, DeletedMemberListResponse
