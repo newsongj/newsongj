@@ -21,7 +21,8 @@
 | PUT | `/members/deleted/{member_id}` | 삭제 명단 수정 | 🔴 미구현 |
 | GET | `/members/deleted/filters` | 삭제 명단 필터링 조건 | 🔴 미구현 |
 | GET | `/members/deleted/search` | 삭제 명단 검색 | 🔴 미구현 |
-
+| GET | `/api/attendance/dashboard/kpi` | KPI 4종 집계 | 🔴 미구현 |
+| GET | `/api/attendance/dashboard/trend` | 출석 인원 추이 | 🔴 미구현 |
 ---
 
 ## 완료 API 상세
@@ -248,6 +249,45 @@ POST /api/v1/교적/members/restore/{member_id}
 > `deleted_at`, `deleted_reason`을 NULL로 초기화
 
 **Response (200)** — `MemberResponse` 객체
+
+---
+
+### 2-1. KPI 카드 집계
+
+```
+GET /api/attendance/dashboard/kpi
+```
+
+| 항목 | 내용 |
+|------|------|
+| 설명 | 기간 평균 출석 인원, 45기/46기 출석 인원 |
+| 사용 화면 | 출석 대시보드 > KPI 카드 3개 |
+
+**Query Params**
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| start_date | string (YYYY-MM-DD) | O | 기간 시작일 |
+| end_date | string (YYYY-MM-DD) | O | 기간 종료일 |
+| gyogu_no | number | - | 교구 번호 (없으면 전체) |
+| team_no | number | - | 팀 번호 (없으면 전체, gyogu_no 필요) |
+| is_imwondan | boolean | - | true 이면 임원단 필터 적용; 어떻게 할지 논의 필요 |
+
+**Response**
+```json
+{
+  "avg_present": 75,
+  "total_members": 109,
+  "gen45": {
+    "present": 22,
+    "total": 26
+  },
+  "gen46": {
+    "present": 18,
+    "total": 23
+  }
+}
+```
 
 ---
 
