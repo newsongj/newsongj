@@ -22,16 +22,18 @@ router = APIRouter()
 
 @router.get("/members", response_model=MemberListResponse, tags=["교적 조회"], summary="활성 멤버 목록 조회")
 def list_members(
-    year: datetime.date = Query(...),  # 필수: MemberProfile이 연도별 행이므로 반드시 지정
+    year: int = Query(..., description="조회 연도 (예: 2026)"),
     page: int = Query(1),
     page_size: int = Query(10),
     gyogu: Optional[int] = Query(None),
     team: Optional[int] = Query(None),
     group_no: Optional[int] = Query(None),
     generation: Optional[int] = Query(None),
+    field: Optional[str] = Query(None, description="검색 유형: name|generation|phone_number|birthdate|leader|enrolled_at|school_work|major|v8pid|member_type"),
+    keyword: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    rows, total = get_members(db, page, page_size, year, gyogu, team, group_no, generation)
+    rows, total = get_members(db, page, page_size, year, gyogu, team, group_no, generation, field, keyword)
     return build_member_list(rows, total, page, page_size, db)
 
 
@@ -39,16 +41,18 @@ def list_members(
 def list_deleted_members(
     page: int = Query(1),
     page_size: int = Query(10),
-    year: Optional[datetime.date] = Query(None),
+    year: Optional[int] = Query(None, description="조회 연도 (예: 2026) — 최종 profile 연도 기준"),
     gyogu: Optional[int] = Query(None),
     team: Optional[int] = Query(None),
     group_no: Optional[int] = Query(None),
     generation: Optional[int] = Query(None),
-    deleted_from: Optional[datetime.date] = Query(None),  # 삭제일 범위 시작
-    deleted_to: Optional[datetime.date] = Query(None),    # 삭제일 범위 종료
+    deleted_from: Optional[datetime.date] = Query(None),
+    deleted_to: Optional[datetime.date] = Query(None),
+    field: Optional[str] = Query(None, description="검색 유형: name|generation|phone_number|birthdate|leader|enrolled_at|school_work|major|v8pid|member_type"),
+    keyword: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    rows, total = get_deleted_members(db, page, page_size, year, gyogu, team, group_no, generation, deleted_from, deleted_to)
+    rows, total = get_deleted_members(db, page, page_size, year, gyogu, team, group_no, generation, deleted_from, deleted_to, field, keyword)
     return build_deleted_member_list(rows, total, page, page_size, db)
 
 
