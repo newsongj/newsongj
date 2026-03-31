@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { SettingsBackupRestore as RestoreIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
@@ -11,6 +11,8 @@ import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
+import { useDeletedMembers } from '@/hooks/member';
+import { DeletedMemberRow } from '@/models/member.types';
 
 interface DisplayRow {
   id: number;
@@ -35,60 +37,28 @@ interface DisplayRow {
   deletedReason: string;
 }
 
-interface FilterState {
-  year: string;
-  gyogu: string;
-  team: string;
-  group_no: string;
-  generation: string;
-}
-
-const initialRows: DisplayRow[] = [
-  {
-    id: 101,
-    year: '2026년',
-    parish: '1교구',
-    team: '1팀',
-    group: '1그룹',
-    name: '김민서',
-    gender: '여',
-    generation: '37기',
-    phone: '010-1234-5678',
-    birthDate: '1998-01-01',
-    role: '그룹장',
-    createdAt: '2026-02-10',
-    memberType: '토요예배',
-    attendanceGrade: 'A',
-    pltCompleted: '수료',
-    schoolWork: '연세대학교',
-    major: '경영학',
-    pid: '10021',
-    deletedAt: '2026-03-01 10:12:33',
-    deletedReason: '본인 요청',
-  },
-  {
-    id: 102,
-    year: '2026년',
-    parish: '2교구',
-    team: '2팀',
-    group: '2그룹',
-    name: '박지훈',
-    gender: '남',
-    generation: '46기',
-    phone: '010-7777-2222',
-    birthDate: '2007-08-11',
-    role: '새가족 리더',
-    createdAt: '2026-01-29',
-    memberType: '주일예배',
-    attendanceGrade: 'B',
-    pltCompleted: '1학기 수료',
-    schoolWork: '삼성전자',
-    major: '컴퓨터공학',
-    pid: '09873',
-    deletedAt: '2026-03-02 16:45:10',
-    deletedReason: '타교회로 인한 삭제',
-  },
-];
+const mapToDisplayRow = (item: DeletedMemberRow): DisplayRow => ({
+  id: item.member_id,
+  year: item.year ? `${item.year.slice(0, 4)}년` : '-',
+  parish: item.gyogu ? `${item.gyogu}교구` : '-',
+  team: item.team ? `${item.team}팀` : '-',
+  group: item.group_no ? `${item.group_no}그룹` : '-',
+  name: item.name,
+  gender: item.gender,
+  generation: `${item.generation}기`,
+  phone: item.phone_number || '-',
+  birthDate: item.birthdate || '-',
+  role: item.leader_ids || '-',
+  createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
+  memberType: item.member_type || '-',
+  attendanceGrade: item.attendance_grade || '-',
+  pltCompleted: item.plt_status || '-',
+  schoolWork: item.school_work || '-',
+  major: item.major || '-',
+  pid: item.v8pid || '-',
+  deletedAt: item.deleted_at ? item.deleted_at.replace('T', ' ').slice(0, 16) : '-',
+  deletedReason: item.deleted_reason || '-',
+});
 
 const searchOptions: SearchOption[] = [
   { value: 'name', label: '이름' },
@@ -167,24 +137,34 @@ const HighlightField = styled('div')(({ theme }) => ({
 
 
 const DeletedMemberPage: React.FC = () => {
-  const [rows, setRows] = useState<DisplayRow[]>(initialRows);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [search, setSearch] = useState<{ keyword: string; field: string }>({ keyword: '', field: 'name' });
+  const {
+    items,
+    pagination,
+    selectedIds,
+    page,
+    rowsPerPage,
+    filters,
+    loadDeletedMembers,
+    handlePageChange,
+    handleRowsPerPageChange,
+    handleFilterChange,
+    handleSearch,
+    handleRestore,
+    setSelectedIds,
+  } = useDeletedMembers();
+
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DisplayRow | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    year: '',
-    gyogu: '',
-    team: '',
-    group_no: '',
-    generation: '',
-  });
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
+
+  useEffect(() => {
+    loadDeletedMembers(page, rowsPerPage, filters);
+  }, []);
+
+  const rows = useMemo(() => items.map(mapToDisplayRow), [items]);
 
   const columns: Column<DisplayRow>[] = [
     { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
@@ -220,41 +200,15 @@ const DeletedMemberPage: React.FC = () => {
     },
   ];
 
-  const filteredRows = useMemo(() => {
-    const keyword = search.keyword.trim().toLowerCase();
-    const searched = !keyword
-      ? rows
-      : rows.filter((row) => {
-          const value = String(row[search.field as keyof DisplayRow] ?? '').toLowerCase();
-          return value.includes(keyword);
-        });
-
-    return searched.filter((row) => (
-      (!filters.year || row.year === filters.year) &&
-      (!filters.gyogu || row.parish === filters.gyogu) &&
-      (!filters.team || row.team === filters.team) &&
-      (!filters.group_no || row.group === filters.group_no) &&
-      (!filters.generation || row.generation === filters.generation)
-    ));
-  }, [filters, rows, search]);
-
-  const pagedRows = useMemo(() => {
-    const start = page * rowsPerPage;
-    return filteredRows.slice(start, start + rowsPerPage);
-  }, [filteredRows, page, rowsPerPage]);
-
-  const restoreByIds = (targetIds: string[]) => {
-    const restoreCount = targetIds.length;
-    setRows((prev) => prev.filter((row) => !targetIds.includes(String(row.id))));
-    setSelectedIds((prev) => prev.filter((id) => !targetIds.includes(id)));
-    showSnackbar(`${restoreCount}명의 멤버를 복원했습니다.`, 'success');
-  };
-
-  const handleRestore = async () => {
+  const handleRestoreSelected = async () => {
     setIsSubmitting(true);
     try {
-      restoreByIds(selectedIds);
+      const count = selectedIds.length;
+      await handleRestore(selectedIds.map(Number));
       setRestoreOpen(false);
+      showSnackbar(`${count}명의 멤버를 복원했습니다.`, 'success');
+    } catch (err: any) {
+      showSnackbar(err?.message || '복원에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -264,9 +218,12 @@ const DeletedMemberPage: React.FC = () => {
     if (!detailTarget) return;
     setIsSubmitting(true);
     try {
-      restoreByIds([String(detailTarget.id)]);
+      await handleRestore([detailTarget.id]);
       setDetailOpen(false);
       setDetailTarget(null);
+      showSnackbar('멤버를 복원했습니다.', 'success');
+    } catch (err: any) {
+      showSnackbar(err?.message || '복원에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -291,35 +248,35 @@ const DeletedMemberPage: React.FC = () => {
         <FilterGrid>
           <Select
             value={filters.year}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, year: String(value) })); setPage(0); }}
-            options={[{ value: '', label: '년도' }, { value: '2026년', label: '2026년' }]}
+            onChange={(value) => handleFilterChange('year', String(value))}
+            options={[{ value: '', label: '년도' }, { value: '2026', label: '2026년' }]}
           />
           <Select
             value={filters.gyogu}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, gyogu: String(value) })); setPage(0); }}
-            options={[{ value: '', label: '교구' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
+            onChange={(value) => handleFilterChange('gyogu', String(value))}
+            options={[{ value: '', label: '교구' }, { value: '1', label: '1교구' }, { value: '2', label: '2교구' }, { value: '3', label: '3교구' }]}
           />
           <Select
             value={filters.team}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, team: String(value) })); setPage(0); }}
-            options={[{ value: '', label: '팀' }, ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}팀`, label: `${idx + 1}팀` }))]}
+            onChange={(value) => handleFilterChange('team', String(value))}
+            options={[{ value: '', label: '팀' }, ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}`, label: `${idx + 1}팀` }))]}
           />
           <Select
             value={filters.group_no}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, group_no: String(value) })); setPage(0); }}
-            options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}그룹`, label: `${idx + 1}그룹` }))]}
+            onChange={(value) => handleFilterChange('group_no', String(value))}
+            options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}`, label: `${idx + 1}그룹` }))]}
           />
           <Select
             value={filters.generation}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, generation: String(value) })); setPage(0); }}
-            options={[{ value: '', label: '기수' }, ...Array.from({ length: 15 }, (_, idx) => ({ value: `${idx + 35}기`, label: `${idx + 35}기` }))]}
+            onChange={(value) => handleFilterChange('generation', String(value))}
+            options={[{ value: '', label: '기수' }, ...Array.from({ length: 15 }, (_, idx) => ({ value: `${idx + 35}`, label: `${idx + 35}기` }))]}
           />
         </FilterGrid>
       </FilterPanel>
 
       <DataTable
         columns={columns}
-        data={pagedRows}
+        data={rows}
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
@@ -327,10 +284,7 @@ const DeletedMemberPage: React.FC = () => {
         useSearchToolbar
         searchPlaceholder="검색어를 입력하세요"
         searchOptions={searchOptions}
-        onSearch={(keyword, field) => {
-          setSearch({ keyword, field: field || 'name' });
-          setPage(0);
-        }}
+        onSearch={(keyword, field) => handleSearch(field || 'name', keyword)}
         onRowClick={(row) => {
           setDetailTarget(row);
           setDetailOpen(true);
@@ -338,12 +292,9 @@ const DeletedMemberPage: React.FC = () => {
         pagination={{
           page,
           rowsPerPage,
-          totalCount: filteredRows.length,
-          onPageChange: setPage,
-          onRowsPerPageChange: (newRowsPerPage) => {
-            setRowsPerPage(newRowsPerPage);
-            setPage(0);
-          },
+          totalCount: pagination.total_items,
+          onPageChange: handlePageChange,
+          onRowsPerPageChange: handleRowsPerPageChange,
         }}
       />
 
@@ -413,7 +364,7 @@ const DeletedMemberPage: React.FC = () => {
           title="교적 복원"
           description={`선택한 ${selectedIds.length}명의 멤버를 정말 복원하시겠습니까?`}
           onCancel={() => setRestoreOpen(false)}
-          onConfirm={handleRestore}
+          onConfirm={handleRestoreSelected}
           cancelButtonText="취소"
           confirmButtonText={isSubmitting ? '복원 중...' : '복원'}
           disabled={isSubmitting}

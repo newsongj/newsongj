@@ -13,6 +13,7 @@ import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { MemberFormValue } from '@components/user/memberForm.types';
 import { useMembers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
+import { createMember, updateMember, deleteMember, MemberCreateBody } from '@/api/member';
 
 interface DisplayRow {
   id: number;
@@ -129,9 +130,9 @@ const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   generation: row.generation.replace('기', ''),
   phone: row.phone === '-' ? '' : row.phone,
   birthDate: row.birthDate === '-' ? '' : row.birthDate,
-  parish: row.parish,
-  team: row.team,
-  group: row.group,
+  parish: row.parish === '-' ? '' : row.parish,
+  team: row.team === '-' ? '' : row.team,
+  group: row.group === '-' ? '' : row.group,
   gender: row.gender,
   roles: row.role === '-' ? [] : row.role.split(',').map((item) => item.trim()),
   memberType: row.memberType === '-' ? '' : row.memberType,
@@ -141,6 +142,29 @@ const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   schoolWork: row.schoolWork === '-' ? '' : row.schoolWork,
   major: row.major === '-' ? '' : row.major,
   pid: row.pid === '-' ? '' : row.pid,
+});
+
+const parseIntField = (val: string): number | undefined => {
+  const n = parseInt(val);
+  return isNaN(n) ? undefined : n;
+};
+
+const toApiBody = (form: MemberFormValue): MemberCreateBody => ({
+  name: form.name,
+  gender: form.gender,
+  generation: parseInt(form.generation),
+  phone_number: form.phone || undefined,
+  birthdate: form.birthDate || undefined,
+  gyogu: parseIntField(form.parish),
+  team: parseIntField(form.team),
+  group_no: parseIntField(form.group),
+  leader_ids: form.roles.length > 0 ? JSON.stringify(form.roles) : undefined,
+  member_type: form.memberType || undefined,
+  attendance_grade: form.attendanceGrade || undefined,
+  plt_status: form.pltCompleted || undefined,
+  v8pid: form.pid || undefined,
+  school_work: form.schoolWork || undefined,
+  major: form.major || undefined,
 });
 
 const MemberListPage: React.FC = () => {
@@ -177,24 +201,30 @@ const MemberListPage: React.FC = () => {
     [rows, selectedIds]
   );
 
-  const handleCreate = async (_form: MemberFormValue) => {
+  const handleCreate = async (form: MemberFormValue) => {
     setIsSubmitting(true);
     try {
-      // TODO: 백엔드 POST API 연결 후 교체
+      await createMember(toApiBody(form));
       showSnackbar('교적이 추가되었습니다.', 'success');
       setCreateOpen(false);
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 추가에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = async (_form: MemberFormValue) => {
+  const handleEdit = async (form: MemberFormValue) => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      // TODO: 백엔드 PUT API 연결 후 교체
+      await updateMember(selectedRow.id, toApiBody(form));
       showSnackbar('교적이 수정되었습니다.', 'success');
       setEditOpen(false);
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 수정에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -204,7 +234,9 @@ const MemberListPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const deletedCount = selectedIds.length;
-      // TODO: 백엔드 DELETE API 연결 후 교체
+      await Promise.all(
+        selectedIds.map((id) => deleteMember(parseInt(id), deleteReason?.trim() || ''))
+      );
       setSelectedIds([]);
       setDeleteOpen(false);
       showSnackbar(
@@ -213,6 +245,9 @@ const MemberListPage: React.FC = () => {
           : `${deletedCount}건의 교적이 삭제되었습니다.`,
         'success'
       );
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 삭제에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }

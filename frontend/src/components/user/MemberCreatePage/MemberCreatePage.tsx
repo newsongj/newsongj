@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { BaseCreateModal } from '@components/common/BaseCreateModal';
 import { TextField } from '@components/common/TextField';
@@ -9,9 +9,9 @@ import {
   MEMBER_ATTENDANCE_OPTIONS,
   MEMBER_MEMBER_TYPE_OPTIONS,
   MEMBER_PLT_OPTIONS,
-  MEMBER_ROLE_OPTIONS,
 } from '../memberForm.types';
 import { MemberCreatePageProps } from './MemberCreatePage.types';
+import { fetchLeaders, LeaderOption } from '@/api/meta';
 
 const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group'];
 
@@ -99,13 +99,23 @@ const getPhoneDigits = (value: string) => value.replace(/\D/g, '');
 const isBirthDateFormat = (value: string) => {
   if (!value) return true;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(year, month - 1, day);
+  return (
+    parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day
+  );
 };
 
 const MemberCreatePage: React.FC<MemberCreatePageProps> = ({ open, onClose, onSubmit, isSubmitting = false }) => {
   const [form, setForm] = useState<MemberFormValue>(INITIAL_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
+  const [leaderOptions, setLeaderOptions] = useState<LeaderOption[]>([]);
+
+  useEffect(() => {
+    fetchLeaders().then(setLeaderOptions).catch(() => {});
+  }, []);
 
   const errors = useMemo(() => {
     const next: Partial<Record<keyof MemberFormValue, string>> = {};
@@ -135,7 +145,7 @@ const MemberCreatePage: React.FC<MemberCreatePageProps> = ({ open, onClose, onSu
     setBirthDateTouched(false);
   };
 
-  const roleOptions = MEMBER_ROLE_OPTIONS.map((role) => ({ id: role, label: role, value: role }));
+  const roleOptions = leaderOptions.map((l) => ({ id: String(l.leader_id), label: l.leader_name, value: String(l.leader_id) }));
 
   return (
     <BaseCreateModal
