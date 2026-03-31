@@ -1,21 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { BaseCreateModal } from '@components/common/BaseCreateModal';
+import { BaseDetailModal } from '@components/common/BaseDetailModal';
 import { TextField } from '@components/common/TextField';
 import { Select } from '@components/common/Select';
 import { SearchableSelect } from '@components/common/SearchableSelect';
 import {
-  UserListFormValue,
-  USER_LIST_ATTENDANCE_OPTIONS,
-  USER_LIST_MEMBER_TYPE_OPTIONS,
-  USER_LIST_PLT_OPTIONS,
-  USER_LIST_ROLE_OPTIONS,
-} from '../userListForm.types';
-import { UserListCreatePageProps } from './UserListCreatePage.types';
+  MemberFormValue,
+  MEMBER_ATTENDANCE_OPTIONS,
+  MEMBER_MEMBER_TYPE_OPTIONS,
+  MEMBER_PLT_OPTIONS,
+  MEMBER_ROLE_OPTIONS,
+} from '../memberForm.types';
+import { MemberEditPageProps } from './MemberEditPage.types';
 
-const REQUIRED_KEYS: Array<keyof UserListFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group'];
+const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group'];
 
-const INITIAL_FORM: UserListFormValue = {
+const EMPTY_FORM: MemberFormValue = {
   name: '',
   generation: '',
   phone: '',
@@ -103,12 +103,19 @@ const isBirthDateFormat = (value: string) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
-const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, onSubmit, isSubmitting = false }) => {
-  const [form, setForm] = useState<UserListFormValue>(INITIAL_FORM);
+const MemberEditPage: React.FC<MemberEditPageProps> = ({ open, value, onClose, onSubmit, isSubmitting = false }) => {
+  const [form, setForm] = useState<MemberFormValue>(EMPTY_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setForm(value ?? EMPTY_FORM);
+      setBirthDateTouched(false);
+    }
+  }, [open, value]);
+
   const errors = useMemo(() => {
-    const next: Partial<Record<keyof UserListFormValue, string>> = {};
+    const next: Partial<Record<keyof MemberFormValue, string>> = {};
     REQUIRED_KEYS.forEach((key) => {
       const value = form[key];
       if (typeof value === 'string' && !value.trim()) next[key] = '필수 입력 항목입니다.';
@@ -120,34 +127,25 @@ const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, 
   }, [form]);
 
   const canSubmit = Object.keys(errors).length === 0;
-
-  const handleClose = () => {
-    setForm(INITIAL_FORM);
-    setBirthDateTouched(false);
-    onClose();
-  };
-
-  const handleSubmit = async () => {
-    setBirthDateTouched(true);
-    if (!canSubmit) return;
-    await onSubmit(form);
-    setForm(INITIAL_FORM);
-    setBirthDateTouched(false);
-  };
-
-  const roleOptions = USER_LIST_ROLE_OPTIONS.map((role) => ({ id: role, label: role, value: role }));
+  const roleOptions = MEMBER_ROLE_OPTIONS.map((role) => ({ id: role, label: role, value: role }));
 
   return (
-    <BaseCreateModal
+    <BaseDetailModal
       open={open}
-      title="교적 추가"
-      onClose={handleClose}
-      onSubmit={handleSubmit}
-      isSubmitting={isSubmitting}
-      submitDisabled={!canSubmit || isSubmitting}
-      submitText="추가"
-      cancelText="취소"
+      title="교적 수정"
+      onClose={onClose}
       size="xlarge"
+      isEditing
+      onSave={async () => {
+        setBirthDateTouched(true);
+        if (!canSubmit) return;
+        await onSubmit(form);
+      }}
+      onCancel={onClose}
+      isSaving={isSubmitting}
+      hasChanges={canSubmit}
+      saveText="저장"
+      cancelText="취소"
     >
       <FormGrid>
         <FieldBlock>
@@ -296,7 +294,7 @@ const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, 
           <Select
             value={form.memberType}
             onChange={(value) => setForm((prev) => ({ ...prev, memberType: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...USER_LIST_MEMBER_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))]}
+            options={[{ value: '', label: '선택' }, ...MEMBER_MEMBER_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))]}
             fullWidth
           />
         </FieldBlock>
@@ -306,7 +304,7 @@ const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, 
           <Select
             value={form.attendanceGrade}
             onChange={(value) => setForm((prev) => ({ ...prev, attendanceGrade: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...USER_LIST_ATTENDANCE_OPTIONS.map((option) => ({ value: option, label: option }))]}
+            options={[{ value: '', label: '선택' }, ...MEMBER_ATTENDANCE_OPTIONS.map((option) => ({ value: option, label: option }))]}
             fullWidth
           />
         </FieldBlock>
@@ -316,7 +314,7 @@ const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, 
           <Select
             value={form.pltCompleted}
             onChange={(value) => setForm((prev) => ({ ...prev, pltCompleted: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...USER_LIST_PLT_OPTIONS.map((option) => ({ value: option, label: option }))]}
+            options={[{ value: '', label: '선택' }, ...MEMBER_PLT_OPTIONS.map((option) => ({ value: option, label: option }))]}
             fullWidth
           />
         </FieldBlock>
@@ -349,9 +347,8 @@ const UserListCreatePage: React.FC<UserListCreatePageProps> = ({ open, onClose, 
         </FieldBlock>
 
       </FormGrid>
-    </BaseCreateModal>
+    </BaseDetailModal>
   );
 };
 
-export default UserListCreatePage;
-
+export default MemberEditPage;

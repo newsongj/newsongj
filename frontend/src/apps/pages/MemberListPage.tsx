@@ -8,13 +8,13 @@ import { Snackbar } from '@components/common/Snackbar';
 import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
-import { UserListCreatePage, UserListManagementPage } from '@components/user';
+import { MemberCreatePage, MemberEditPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
-import { UserListFormValue } from '@components/user/userListForm.types';
-import { useMembers } from '@/hooks/교적';
-import { MemberRow } from '@/models/교적.types';
+import { MemberFormValue } from '@components/user/memberForm.types';
+import { useMembers } from '@/hooks/member';
+import { MemberRow } from '@/models/member.types';
 
-interface StudentRow {
+interface DisplayRow {
   id: number;
   year: string;
   parish: string;
@@ -35,7 +35,7 @@ interface StudentRow {
   pid: string;
 }
 
-const mapToStudentRow = (item: MemberRow): StudentRow => ({
+const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   id: item.member_id,
   year: item.year ? `${item.year.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
@@ -46,30 +46,30 @@ const mapToStudentRow = (item: MemberRow): StudentRow => ({
   generation: `${item.generation}기`,
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
-  role: item.leader || '-',
+  role: item.leader_ids || '-',
   createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
   pltCompleted: item.plt_status || '-',
-  schoolWork: '-',
-  major: '-',
+  schoolWork: item.school_work || '-',
+  major: item.major || '-',
   pid: item.v8pid || '-',
 });
 
 const searchOptions: SearchOption[] = [
   { value: 'name', label: '이름' },
   { value: 'generation', label: '기수' },
-  { value: 'phone', label: '연락처' },
-  { value: 'birthDate', label: '생년월일' },
-  { value: 'role', label: '직분' },
-  { value: 'createdAt', label: '등반일자' },
-  { value: 'memberType', label: '교인구분' },
-  { value: 'schoolWork', label: '학교 및 직장' },
+  { value: 'phone_number', label: '연락처' },
+  { value: 'birthdate', label: '생년월일' },
+  { value: 'leader', label: '직분' },
+  { value: 'enrolled_at', label: '등반일자' },
+  { value: 'member_type', label: '교인구분' },
+  { value: 'school_work', label: '학교 및 직장' },
   { value: 'major', label: '전공' },
-  { value: 'pid', label: 'V8 PID' },
+  { value: 'v8pid', label: 'V8 PID' },
 ];
 
-const columns: Column<StudentRow>[] = [
+const columns: Column<DisplayRow>[] = [
   { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
   { id: 'parish', label: '교구', minWidth: 100, align: 'center' },
   { id: 'team', label: '팀', minWidth: 88, align: 'center' },
@@ -124,7 +124,7 @@ const FilterGrid = styled('div')(({ theme }) => ({
   gap: theme.custom.spacing.sm,
 }));
 
-const toFormFromRow = (row: StudentRow): UserListFormValue => ({
+const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   name: row.name,
   generation: row.generation.replace('기', ''),
   phone: row.phone === '-' ? '' : row.phone,
@@ -143,7 +143,7 @@ const toFormFromRow = (row: StudentRow): UserListFormValue => ({
   pid: row.pid === '-' ? '' : row.pid,
 });
 
-const UserListPage: React.FC = () => {
+const MemberListPage: React.FC = () => {
   const {
     members,
     pagination,
@@ -155,10 +155,10 @@ const UserListPage: React.FC = () => {
     handlePageChange,
     handleRowsPerPageChange,
     handleFilterChange,
+    handleSearch,
     setSelectedIds,
   } = useMembers();
 
-  const [search, setSearch] = useState<{ keyword: string; attribute: string }>({ keyword: '', attribute: 'name' });
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -170,23 +170,14 @@ const UserListPage: React.FC = () => {
     loadMembers(page, rowsPerPage, filters);
   }, []);
 
-  const rows = useMemo(() => members.map(mapToStudentRow), [members]);
+  const rows = useMemo(() => members.map(mapToDisplayRow), [members]);
 
   const selectedRow = useMemo(
     () => rows.find((row) => String(row.id) === selectedIds[0]) ?? null,
     [rows, selectedIds]
   );
 
-  const filteredRows = useMemo(() => {
-    const keyword = search.keyword.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((row) => {
-      const value = String(row[search.attribute as keyof StudentRow] ?? '').toLowerCase();
-      return value.includes(keyword);
-    });
-  }, [rows, search]);
-
-  const handleCreate = async (_form: UserListFormValue) => {
+  const handleCreate = async (_form: MemberFormValue) => {
     setIsSubmitting(true);
     try {
       // TODO: 백엔드 POST API 연결 후 교체
@@ -197,7 +188,7 @@ const UserListPage: React.FC = () => {
     }
   };
 
-  const handleEdit = async (_form: UserListFormValue) => {
+  const handleEdit = async (_form: MemberFormValue) => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
@@ -289,7 +280,7 @@ const UserListPage: React.FC = () => {
 
       <DataTable
         columns={columns}
-        data={filteredRows}
+        data={rows}
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
@@ -297,9 +288,7 @@ const UserListPage: React.FC = () => {
         useSearchToolbar
         searchPlaceholder="검색어를 입력하세요"
         searchOptions={searchOptions}
-        onSearch={(value, attribute) => {
-          setSearch({ keyword: value, attribute: attribute || 'name' });
-        }}
+        onSearch={(keyword, field) => handleSearch(field || 'name', keyword)}
         selectedActions={() => setDeleteOpen(true)}
         pagination={{
           page,
@@ -310,14 +299,14 @@ const UserListPage: React.FC = () => {
         }}
       />
 
-      <UserListCreatePage
+      <MemberCreatePage
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
         isSubmitting={isSubmitting}
       />
 
-      <UserListManagementPage
+      <MemberEditPage
         open={editOpen}
         value={selectedRow ? toFormFromRow(selectedRow) : null}
         onClose={() => setEditOpen(false)}
@@ -351,4 +340,4 @@ const UserListPage: React.FC = () => {
   );
 };
 
-export default UserListPage;
+export default MemberListPage;

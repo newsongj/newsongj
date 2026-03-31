@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { SettingsBackupRestore as RestoreIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
@@ -12,7 +12,7 @@ import { Column } from '@components/common/DataTable/DataTable.types';
 import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 
-interface StudentRow {
+interface DisplayRow {
   id: number;
   year: string;
   parish: string;
@@ -37,13 +37,13 @@ interface StudentRow {
 
 interface FilterState {
   year: string;
-  parish: string;
+  gyogu: string;
   team: string;
-  group: string;
+  group_no: string;
   generation: string;
 }
 
-const initialRows: StudentRow[] = [
+const initialRows: DisplayRow[] = [
   {
     id: 101,
     year: '2026년',
@@ -93,16 +93,14 @@ const initialRows: StudentRow[] = [
 const searchOptions: SearchOption[] = [
   { value: 'name', label: '이름' },
   { value: 'generation', label: '기수' },
-  { value: 'phone', label: '연락처' },
-  { value: 'birthDate', label: '생년월일' },
-  { value: 'role', label: '직분' },
-  { value: 'createdAt', label: '등반일자' },
-  { value: 'memberType', label: '교인구분' },
-  { value: 'schoolWork', label: '학교 및 직장' },
+  { value: 'phone_number', label: '연락처' },
+  { value: 'birthdate', label: '생년월일' },
+  { value: 'leader', label: '직분' },
+  { value: 'enrolled_at', label: '등반일자' },
+  { value: 'member_type', label: '교인구분' },
+  { value: 'school_work', label: '학교 및 직장' },
   { value: 'major', label: '전공' },
-  { value: 'pid', label: 'V8 PID' },
-  { value: 'deletedAt', label: '삭제일시' },
-  { value: 'deletedReason', label: '삭제사유' },
+  { value: 'v8pid', label: 'V8 PID' },
 ];
 
 const FilterPanel = styled('section')(({ theme }) => ({
@@ -168,27 +166,27 @@ const HighlightField = styled('div')(({ theme }) => ({
 }));
 
 
-const DeletedUserPage: React.FC = () => {
-  const [rows, setRows] = useState<StudentRow[]>(initialRows);
+const DeletedMemberPage: React.FC = () => {
+  const [rows, setRows] = useState<DisplayRow[]>(initialRows);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [search, setSearch] = useState<{ keyword: string; attribute: string }>({ keyword: '', attribute: 'name' });
+  const [search, setSearch] = useState<{ keyword: string; field: string }>({ keyword: '', field: 'name' });
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<StudentRow | null>(null);
+  const [detailTarget, setDetailTarget] = useState<DisplayRow | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     year: '',
-    parish: '',
+    gyogu: '',
     team: '',
-    group: '',
+    group_no: '',
     generation: '',
   });
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
-  const columns: Column<StudentRow>[] = [
+  const columns: Column<DisplayRow>[] = [
     { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
     { id: 'parish', label: '교구', minWidth: 100, align: 'center' },
     { id: 'team', label: '팀', minWidth: 88, align: 'center' },
@@ -227,15 +225,15 @@ const DeletedUserPage: React.FC = () => {
     const searched = !keyword
       ? rows
       : rows.filter((row) => {
-          const value = String(row[search.attribute as keyof StudentRow] ?? '').toLowerCase();
+          const value = String(row[search.field as keyof DisplayRow] ?? '').toLowerCase();
           return value.includes(keyword);
         });
 
     return searched.filter((row) => (
       (!filters.year || row.year === filters.year) &&
-      (!filters.parish || row.parish === filters.parish) &&
+      (!filters.gyogu || row.parish === filters.gyogu) &&
       (!filters.team || row.team === filters.team) &&
-      (!filters.group || row.group === filters.group) &&
+      (!filters.group_no || row.group === filters.group_no) &&
       (!filters.generation || row.generation === filters.generation)
     ));
   }, [filters, rows, search]);
@@ -249,7 +247,7 @@ const DeletedUserPage: React.FC = () => {
     const restoreCount = targetIds.length;
     setRows((prev) => prev.filter((row) => !targetIds.includes(String(row.id))));
     setSelectedIds((prev) => prev.filter((id) => !targetIds.includes(id)));
-    showSnackbar(`${restoreCount}명의 사용자를 복원했습니다.`, 'success');
+    showSnackbar(`${restoreCount}명의 멤버를 복원했습니다.`, 'success');
   };
 
   const handleRestore = async () => {
@@ -297,8 +295,8 @@ const DeletedUserPage: React.FC = () => {
             options={[{ value: '', label: '년도' }, { value: '2026년', label: '2026년' }]}
           />
           <Select
-            value={filters.parish}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, parish: String(value) })); setPage(0); }}
+            value={filters.gyogu}
+            onChange={(value) => { setFilters((prev) => ({ ...prev, gyogu: String(value) })); setPage(0); }}
             options={[{ value: '', label: '교구' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
           />
           <Select
@@ -307,8 +305,8 @@ const DeletedUserPage: React.FC = () => {
             options={[{ value: '', label: '팀' }, ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}팀`, label: `${idx + 1}팀` }))]}
           />
           <Select
-            value={filters.group}
-            onChange={(value) => { setFilters((prev) => ({ ...prev, group: String(value) })); setPage(0); }}
+            value={filters.group_no}
+            onChange={(value) => { setFilters((prev) => ({ ...prev, group_no: String(value) })); setPage(0); }}
             options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}그룹`, label: `${idx + 1}그룹` }))]}
           />
           <Select
@@ -329,8 +327,8 @@ const DeletedUserPage: React.FC = () => {
         useSearchToolbar
         searchPlaceholder="검색어를 입력하세요"
         searchOptions={searchOptions}
-        onSearch={(value, attribute) => {
-          setSearch({ keyword: value, attribute: attribute || 'name' });
+        onSearch={(keyword, field) => {
+          setSearch({ keyword, field: field || 'name' });
           setPage(0);
         }}
         onRowClick={(row) => {
@@ -351,7 +349,7 @@ const DeletedUserPage: React.FC = () => {
 
       <BaseDetailModal
         open={detailOpen}
-        title="삭제 사용자 상세"
+        title="삭제 멤버 상세"
         onClose={() => {
           setDetailOpen(false);
           setDetailTarget(null);
@@ -413,7 +411,7 @@ const DeletedUserPage: React.FC = () => {
       {restoreOpen && (
         <Popup
           title="교적 복원"
-          description={`선택한 ${selectedIds.length}명의 사용자를 정말 복원하시겠습니까?`}
+          description={`선택한 ${selectedIds.length}명의 멤버를 정말 복원하시겠습니까?`}
           onCancel={() => setRestoreOpen(false)}
           onConfirm={handleRestore}
           cancelButtonText="취소"
@@ -432,4 +430,4 @@ const DeletedUserPage: React.FC = () => {
   );
 };
 
-export default DeletedUserPage;
+export default DeletedMemberPage;
