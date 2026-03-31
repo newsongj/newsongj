@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
+import { Button } from '@components/common/Button';
 import { Select } from '@components/common/Select';
 import { Snackbar } from '@components/common/Snackbar';
 import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
-import { SearchOption, ActionButton } from '@components/common/SearchToolbar/SearchToolbar.types';
+import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
 import { UserListCreatePage, UserListManagementPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { UserListFormValue } from '@components/user/userListForm.types';
@@ -106,6 +107,17 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
+const FilterHeader = styled('div')({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+});
+
+const FilterActions = styled('div')(({ theme }) => ({
+  display: 'flex',
+  gap: theme.custom.spacing.sm,
+}));
+
 const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -174,29 +186,6 @@ const UserListPage: React.FC = () => {
     });
   }, [rows, search]);
 
-  const toolbarActions: ActionButton[] = [
-    {
-      label: '교적 추가',
-      variant: 'filled',
-      startIcon: <AddIcon />,
-      onClick: () => setCreateOpen(true),
-    },
-    {
-      label: '교적 수정',
-      variant: 'outlined',
-      startIcon: <EditIcon />,
-      disabled: selectedIds.length !== 1,
-      onClick: () => setEditOpen(true),
-    },
-    {
-      label: '교적 삭제',
-      variant: 'destructive',
-      startIcon: <DeleteIcon />,
-      disabled: selectedIds.length === 0,
-      onClick: () => setDeleteOpen(true),
-    },
-  ];
-
   const handleCreate = async (_form: UserListFormValue) => {
     setIsSubmitting(true);
     try {
@@ -241,7 +230,34 @@ const UserListPage: React.FC = () => {
   return (
     <>
       <FilterPanel>
-        <FilterTitle>필터링 조건</FilterTitle>
+        <FilterHeader>
+          <FilterTitle>필터링 조건</FilterTitle>
+          <FilterActions>
+            <Button
+              variant="filled"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateOpen(true)}
+            >
+              교적 추가
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              disabled={selectedIds.length !== 1}
+              onClick={() => setEditOpen(true)}
+            >
+              교적 수정
+            </Button>
+            <Button
+              variant="destructive"
+              startIcon={<DeleteIcon />}
+              disabled={selectedIds.length === 0}
+              onClick={() => setDeleteOpen(true)}
+            >
+              교적 삭제
+            </Button>
+          </FilterActions>
+        </FilterHeader>
         <FilterGrid>
           <Select
             value={filters.year}
@@ -284,9 +300,7 @@ const UserListPage: React.FC = () => {
         onSearch={(value, attribute) => {
           setSearch({ keyword: value, attribute: attribute || 'name' });
         }}
-        toolbarActions={toolbarActions}
         selectedActions={() => setDeleteOpen(true)}
-        showToolbarActionsWhenSelected
         pagination={{
           page,
           rowsPerPage,

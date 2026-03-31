@@ -9,7 +9,7 @@ import { TextField } from '@components/common/TextField';
 import { Button } from '@components/common/Button';
 import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
-import { SearchOption, ActionButton } from '@components/common/SearchToolbar/SearchToolbar.types';
+import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 
 interface StudentRow {
@@ -123,6 +123,17 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
+const FilterHeader = styled('div')({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+});
+
+const FilterActions = styled('div')(({ theme }) => ({
+  display: 'flex',
+  gap: theme.custom.spacing.sm,
+}));
+
 const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -234,16 +245,6 @@ const DeletedUserPage: React.FC = () => {
     return filteredRows.slice(start, start + rowsPerPage);
   }, [filteredRows, page, rowsPerPage]);
 
-  const toolbarActions: ActionButton[] = [
-    {
-      label: '교적 복원',
-      variant: 'filled',
-      startIcon: <RestoreIcon />,
-      disabled: selectedIds.length === 0,
-      onClick: () => setRestoreOpen(true),
-    },
-  ];
-
   const restoreByIds = (targetIds: string[]) => {
     const restoreCount = targetIds.length;
     setRows((prev) => prev.filter((row) => !targetIds.includes(String(row.id))));
@@ -276,7 +277,19 @@ const DeletedUserPage: React.FC = () => {
   return (
     <>
       <FilterPanel>
-        <FilterTitle>필터링 조건</FilterTitle>
+        <FilterHeader>
+          <FilterTitle>필터링 조건</FilterTitle>
+          <FilterActions>
+            <Button
+              variant="filled"
+              startIcon={<RestoreIcon />}
+              disabled={selectedIds.length === 0}
+              onClick={() => setRestoreOpen(true)}
+            >
+              교적 복원
+            </Button>
+          </FilterActions>
+        </FilterHeader>
         <FilterGrid>
           <Select
             value={filters.year}
@@ -324,8 +337,6 @@ const DeletedUserPage: React.FC = () => {
           setDetailTarget(row);
           setDetailOpen(true);
         }}
-        toolbarActions={toolbarActions}
-        showToolbarActionsWhenSelected
         pagination={{
           page,
           rowsPerPage,

@@ -148,7 +148,7 @@ const DataTable = <T extends Record<string, any>>({
   const isIndeterminate = selectedIds.length > 0 && selectedIds.length < sortedData.length;
 
   return (
-    <S.StyledTableContainer>
+    <S.StyledWrapper>
       {/* SearchToolbar 또는 기본 헤더 */}
       {useSearchToolbar ? (
         <SearchToolbar
@@ -165,11 +165,9 @@ const DataTable = <T extends Record<string, any>>({
           onDeleteSelected={selectedIds.length > 0 && selectedActions ? selectedActions : undefined}
           showActionsWhenSelected={showToolbarActionsWhenSelected}
         />
-      ) : (
-        <>
-        </>
-      )}
+      ) : null}
 
+      <S.StyledTableContainer>
       {/* 테이블 */}
       <S.StyledTable stickyHeader>
         <S.StyledTableHead>
@@ -306,7 +304,8 @@ const DataTable = <T extends Record<string, any>>({
           </S.StyledTableFooter>
         )}
       </S.StyledTable>
-    </S.StyledTableContainer>
+      </S.StyledTableContainer>
+    </S.StyledWrapper>
   );
 };
 
