@@ -30,9 +30,9 @@ const Sidebar: React.FC<SidebarProps> = ({ menuItems, selectedPath, onMenuClick 
               return hasPermission(userPermissions, [MENU_CODES.COST_SETTINGS_MANAGEMENT]);
             case 'cost-monitoring':
               return hasPermission(userPermissions, [MENU_CODES.COST_MONITORING_MANAGEMENT]);
-            case 'student-userlist':
+            case 'student-members':
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'student-deleteduser':
+            case 'student-deleted-members':
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
             case 'student-attendance':
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
