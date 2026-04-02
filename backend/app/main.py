@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine, Base
 import app.models  # noqa: F401 - Base에 테이블 등록을 위해 import 필요
 from app.api.v1.교적 import members, dashboard
+from app.api.v1.attendance import attendanceRecord
+from app.tests import test as test_router
 
 # Alembic 현재 미사용. create_all은 개발 편의용으로만 유지
 Base.metadata.create_all(bind=engine)
@@ -18,6 +20,8 @@ app.add_middleware(
 
 app.include_router(members.router, prefix="/api/v1/교적")
 app.include_router(dashboard.router, prefix="/api/attendance")
+app.include_router(attendanceRecord.router, prefix="/api/attendance")
+app.include_router(test_router.router, prefix="/test")
 
 
 @app.get("/")

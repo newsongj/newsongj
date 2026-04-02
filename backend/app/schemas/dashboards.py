@@ -35,7 +35,3 @@ class DailyAttendance(BaseModel):
     """단위 기간의 출석 인원"""
     period: str
     present: int
-
-class TrendResponse(BaseModel):
-    """출석 인원 추이 응답"""
-    data: list[DailyAttendance]
