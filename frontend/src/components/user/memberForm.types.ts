@@ -1,4 +1,4 @@
-export interface UserListFormValue {
+export interface MemberFormValue {
   name: string;
   generation: string;
   phone: string;
@@ -17,7 +17,7 @@ export interface UserListFormValue {
   pid: string;
 }
 
-export const USER_LIST_ROLE_OPTIONS = [
+export const MEMBER_ROLE_OPTIONS = [
   '팀장',
   '그룹장',
   'PLT 리더',
@@ -26,7 +26,7 @@ export const USER_LIST_ROLE_OPTIONS = [
   '새가족 리더',
 ] as const;
 
-export const USER_LIST_MEMBER_TYPE_OPTIONS = [
+export const MEMBER_MEMBER_TYPE_OPTIONS = [
   '토요예배',
   '주일예배',
   '래사랑',
@@ -35,7 +35,6 @@ export const USER_LIST_MEMBER_TYPE_OPTIONS = [
   '새가족',
 ] as const;
 
-export const USER_LIST_ATTENDANCE_OPTIONS = ['A', 'B', 'C', 'D', 'E'] as const;
+export const MEMBER_ATTENDANCE_OPTIONS = ['A', 'B', 'C', 'D', 'E'] as const;
 
-export const USER_LIST_PLT_OPTIONS = ['수료', '1학기 수료'] as const;
-
+export const MEMBER_PLT_OPTIONS = ['수료', '1학기 수료'] as const;

@@ -6,8 +6,8 @@ import PermissionGuard from '@components/common/PermissionGuard';
 import { MENU_CODES } from '@/constants/permissions';
 
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
-const UserListPage = React.lazy(() => import('./pages/UserListPage'));
-const DeletedUserPage = React.lazy(() => import('./pages/DeletedUserPage'));
+const MemberListPage = React.lazy(() => import('./pages/MemberListPage'));
+const DeletedMemberPage = React.lazy(() => import('./pages/DeletedMemberPage'));
 const PermissionManagementPage = React.lazy(() => import('./pages/PermissionManagementPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 const AttendancePage = React.lazy(() => import('./pages/AttendancePage'));
@@ -21,8 +21,8 @@ const Orchestrator: React.FC = () => {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/userlist" element={<UserListPage />} />
-          <Route path="/deleteduser" element={<DeletedUserPage />} />
+          <Route path="/members" element={<MemberListPage />} />
+          <Route path="/deleted-members" element={<DeletedMemberPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance-dashboard" element={<AttendanceDashboard />} />
 

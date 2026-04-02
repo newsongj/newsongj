@@ -29,8 +29,8 @@ interface ContainerProps {
 const getPageInfo = (path: string) => {
   const menuMap: Record<string, { title: string; breadcrumb: string }> = {
     '/dashboard': { title: '대시보드', breadcrumb: '대시보드' },
-    '/userlist': { title: '사용자 목록', breadcrumb: '교적관리 > 사용자 목록' },
-    '/deleteduser': { title: '삭제 명단', breadcrumb: '교적관리 > 삭제 명단' },
+    '/members': { title: '사용자 목록', breadcrumb: '교적관리 > 사용자 목록' },
+    '/deleted-members': { title: '삭제 명단', breadcrumb: '교적관리 > 삭제 명단' },
     '/permission/management': { title: '권한 관리', breadcrumb: '권한관리 > 권한 관리' },
     '/permission/users': { title: '사용자 관리', breadcrumb: '권한관리 > 사용자 관리' },
     '/attendance': { title: '출석 관리', breadcrumb: '교적관리 > 출석 관리' },
@@ -68,8 +68,8 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
       subItems: [
         { id: 'student-attendance-dashboard', label: '출석 대시보드', path: '/attendance-dashboard' },
         { id: 'student-attendance', label: '출석 관리', path: '/attendance' },
-        { id: 'student-userlist', label: '사용자 목록', path: '/userlist' },
-        { id: 'student-deleteduser', label: '삭제 명단', path: '/deleteduser' },
+        { id: 'student-members', label: '사용자 목록', path: '/members' },
+        { id: 'student-deleted-members', label: '삭제 명단', path: '/deleted-members' },
       ],
     }
   ];

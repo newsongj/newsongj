@@ -13,18 +13,25 @@ export interface MemberRow {
   member_type: string | null;
   attendance_grade: string | null;
   plt_status: string | null;
-  leader: string | null;
+  leader_ids: string | null;
   v8pid: string | null;
+  school_work: string | null;
+  major: string | null;
   year: string | null;
   enrolled_at: string | null;
 }
 
+export interface DeletedMemberRow extends MemberRow {
+  deleted_at: string;
+  deleted_reason: string;
+}
+
 export interface MemberFilterState {
-  year: string;       // 표시 형식 "2026년" → API: "2026-01-01"
-  gyogu: string;      // 표시 형식 "1교구" → API: 1
-  team: string;       // 표시 형식 "1팀" → API: 1
-  group_no: string;   // 표시 형식 "1그룹" → API: 1
-  generation: string; // 표시 형식 "35기" → API: 35
+  year: string;       // 표시 형식 "2026년" → API: 2026 (int)
+  gyogu: string;      // 표시 형식 "1교구"  → API: 1
+  team: string;       // 표시 형식 "1팀"    → API: 1
+  group_no: string;   // 표시 형식 "1그룹"  → API: 1
+  generation: string; // 표시 형식 "35기"   → API: 35
 }
 
 export interface MembersState {

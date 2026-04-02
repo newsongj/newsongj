@@ -2,18 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
+import { Button } from '@components/common/Button';
 import { Select } from '@components/common/Select';
 import { Snackbar } from '@components/common/Snackbar';
 import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
-import { SearchOption, ActionButton } from '@components/common/SearchToolbar/SearchToolbar.types';
-import { UserListCreatePage, UserListManagementPage } from '@components/user';
+import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
+import { MemberCreatePage, MemberEditPage } from '@components/user';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
-import { UserListFormValue } from '@components/user/userListForm.types';
-import { useMembers } from '@/hooks/교적';
-import { MemberRow } from '@/models/교적.types';
+import { MemberFormValue } from '@components/user/memberForm.types';
+import { useMembers } from '@/hooks/member';
+import { MemberRow } from '@/models/member.types';
+import { createMember, updateMember, deleteMember, MemberCreateBody } from '@/api/member';
 
-interface StudentRow {
+interface DisplayRow {
   id: number;
   year: string;
   parish: string;
@@ -34,7 +36,7 @@ interface StudentRow {
   pid: string;
 }
 
-const mapToStudentRow = (item: MemberRow): StudentRow => ({
+const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   id: item.member_id,
   year: item.year ? `${item.year.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
@@ -45,30 +47,30 @@ const mapToStudentRow = (item: MemberRow): StudentRow => ({
   generation: `${item.generation}기`,
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
-  role: item.leader || '-',
+  role: item.leader_ids || '-',
   createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
   pltCompleted: item.plt_status || '-',
-  schoolWork: '-',
-  major: '-',
+  schoolWork: item.school_work || '-',
+  major: item.major || '-',
   pid: item.v8pid || '-',
 });
 
 const searchOptions: SearchOption[] = [
   { value: 'name', label: '이름' },
   { value: 'generation', label: '기수' },
-  { value: 'phone', label: '연락처' },
-  { value: 'birthDate', label: '생년월일' },
-  { value: 'role', label: '직분' },
-  { value: 'createdAt', label: '등반일자' },
-  { value: 'memberType', label: '교인구분' },
-  { value: 'schoolWork', label: '학교 및 직장' },
+  { value: 'phone_number', label: '연락처' },
+  { value: 'birthdate', label: '생년월일' },
+  { value: 'leader', label: '직분' },
+  { value: 'enrolled_at', label: '등반일자' },
+  { value: 'member_type', label: '교인구분' },
+  { value: 'school_work', label: '학교 및 직장' },
   { value: 'major', label: '전공' },
-  { value: 'pid', label: 'V8 PID' },
+  { value: 'v8pid', label: 'V8 PID' },
 ];
 
-const columns: Column<StudentRow>[] = [
+const columns: Column<DisplayRow>[] = [
   { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
   { id: 'parish', label: '교구', minWidth: 100, align: 'center' },
   { id: 'team', label: '팀', minWidth: 88, align: 'center' },
@@ -106,20 +108,31 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
+const FilterHeader = styled('div')({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+});
+
+const FilterActions = styled('div')(({ theme }) => ({
+  display: 'flex',
+  gap: theme.custom.spacing.sm,
+}));
+
 const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
   gap: theme.custom.spacing.sm,
 }));
 
-const toFormFromRow = (row: StudentRow): UserListFormValue => ({
+const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   name: row.name,
   generation: row.generation.replace('기', ''),
   phone: row.phone === '-' ? '' : row.phone,
   birthDate: row.birthDate === '-' ? '' : row.birthDate,
-  parish: row.parish,
-  team: row.team,
-  group: row.group,
+  parish: row.parish === '-' ? '' : row.parish,
+  team: row.team === '-' ? '' : row.team,
+  group: row.group === '-' ? '' : row.group,
   gender: row.gender,
   roles: row.role === '-' ? [] : row.role.split(',').map((item) => item.trim()),
   memberType: row.memberType === '-' ? '' : row.memberType,
@@ -131,7 +144,30 @@ const toFormFromRow = (row: StudentRow): UserListFormValue => ({
   pid: row.pid === '-' ? '' : row.pid,
 });
 
-const UserListPage: React.FC = () => {
+const parseIntField = (val: string): number | undefined => {
+  const n = parseInt(val);
+  return isNaN(n) ? undefined : n;
+};
+
+const toApiBody = (form: MemberFormValue): MemberCreateBody => ({
+  name: form.name,
+  gender: form.gender,
+  generation: parseInt(form.generation),
+  phone_number: form.phone || undefined,
+  birthdate: form.birthDate || undefined,
+  gyogu: parseIntField(form.parish),
+  team: parseIntField(form.team),
+  group_no: parseIntField(form.group),
+  leader_ids: form.roles.length > 0 ? JSON.stringify(form.roles) : undefined,
+  member_type: form.memberType || undefined,
+  attendance_grade: form.attendanceGrade || undefined,
+  plt_status: form.pltCompleted || undefined,
+  v8pid: form.pid || undefined,
+  school_work: form.schoolWork || undefined,
+  major: form.major || undefined,
+});
+
+const MemberListPage: React.FC = () => {
   const {
     members,
     pagination,
@@ -143,10 +179,10 @@ const UserListPage: React.FC = () => {
     handlePageChange,
     handleRowsPerPageChange,
     handleFilterChange,
+    handleSearch,
     setSelectedIds,
   } = useMembers();
 
-  const [search, setSearch] = useState<{ keyword: string; attribute: string }>({ keyword: '', attribute: 'name' });
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -158,63 +194,37 @@ const UserListPage: React.FC = () => {
     loadMembers(page, rowsPerPage, filters);
   }, []);
 
-  const rows = useMemo(() => members.map(mapToStudentRow), [members]);
+  const rows = useMemo(() => members.map(mapToDisplayRow), [members]);
 
   const selectedRow = useMemo(
     () => rows.find((row) => String(row.id) === selectedIds[0]) ?? null,
     [rows, selectedIds]
   );
 
-  const filteredRows = useMemo(() => {
-    const keyword = search.keyword.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((row) => {
-      const value = String(row[search.attribute as keyof StudentRow] ?? '').toLowerCase();
-      return value.includes(keyword);
-    });
-  }, [rows, search]);
-
-  const toolbarActions: ActionButton[] = [
-    {
-      label: '교적 추가',
-      variant: 'filled',
-      startIcon: <AddIcon />,
-      onClick: () => setCreateOpen(true),
-    },
-    {
-      label: '교적 수정',
-      variant: 'outlined',
-      startIcon: <EditIcon />,
-      disabled: selectedIds.length !== 1,
-      onClick: () => setEditOpen(true),
-    },
-    {
-      label: '교적 삭제',
-      variant: 'destructive',
-      startIcon: <DeleteIcon />,
-      disabled: selectedIds.length === 0,
-      onClick: () => setDeleteOpen(true),
-    },
-  ];
-
-  const handleCreate = async (_form: UserListFormValue) => {
+  const handleCreate = async (form: MemberFormValue) => {
     setIsSubmitting(true);
     try {
-      // TODO: 백엔드 POST API 연결 후 교체
+      await createMember(toApiBody(form));
       showSnackbar('교적이 추가되었습니다.', 'success');
       setCreateOpen(false);
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 추가에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = async (_form: UserListFormValue) => {
+  const handleEdit = async (form: MemberFormValue) => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      // TODO: 백엔드 PUT API 연결 후 교체
+      await updateMember(selectedRow.id, toApiBody(form));
       showSnackbar('교적이 수정되었습니다.', 'success');
       setEditOpen(false);
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 수정에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -224,7 +234,9 @@ const UserListPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const deletedCount = selectedIds.length;
-      // TODO: 백엔드 DELETE API 연결 후 교체
+      await Promise.all(
+        selectedIds.map((id) => deleteMember(parseInt(id), deleteReason?.trim() || ''))
+      );
       setSelectedIds([]);
       setDeleteOpen(false);
       showSnackbar(
@@ -233,6 +245,9 @@ const UserListPage: React.FC = () => {
           : `${deletedCount}건의 교적이 삭제되었습니다.`,
         'success'
       );
+      await loadMembers(page, rowsPerPage, filters);
+    } catch (err: any) {
+      showSnackbar(err?.message || '교적 삭제에 실패했습니다.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -241,7 +256,34 @@ const UserListPage: React.FC = () => {
   return (
     <>
       <FilterPanel>
-        <FilterTitle>필터링 조건</FilterTitle>
+        <FilterHeader>
+          <FilterTitle>필터링 조건</FilterTitle>
+          <FilterActions>
+            <Button
+              variant="filled"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateOpen(true)}
+            >
+              교적 추가
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              disabled={selectedIds.length !== 1}
+              onClick={() => setEditOpen(true)}
+            >
+              교적 수정
+            </Button>
+            <Button
+              variant="destructive"
+              startIcon={<DeleteIcon />}
+              disabled={selectedIds.length === 0}
+              onClick={() => setDeleteOpen(true)}
+            >
+              교적 삭제
+            </Button>
+          </FilterActions>
+        </FilterHeader>
         <FilterGrid>
           <Select
             value={filters.year}
@@ -273,7 +315,7 @@ const UserListPage: React.FC = () => {
 
       <DataTable
         columns={columns}
-        data={filteredRows}
+        data={rows}
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
@@ -281,12 +323,8 @@ const UserListPage: React.FC = () => {
         useSearchToolbar
         searchPlaceholder="검색어를 입력하세요"
         searchOptions={searchOptions}
-        onSearch={(value, attribute) => {
-          setSearch({ keyword: value, attribute: attribute || 'name' });
-        }}
-        toolbarActions={toolbarActions}
+        onSearch={(keyword, field) => handleSearch(field || 'name', keyword)}
         selectedActions={() => setDeleteOpen(true)}
-        showToolbarActionsWhenSelected
         pagination={{
           page,
           rowsPerPage,
@@ -296,14 +334,14 @@ const UserListPage: React.FC = () => {
         }}
       />
 
-      <UserListCreatePage
+      <MemberCreatePage
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
         isSubmitting={isSubmitting}
       />
 
-      <UserListManagementPage
+      <MemberEditPage
         open={editOpen}
         value={selectedRow ? toFormFromRow(selectedRow) : null}
         onClose={() => setEditOpen(false)}
@@ -337,4 +375,4 @@ const UserListPage: React.FC = () => {
   );
 };
 
-export default UserListPage;
+export default MemberListPage;
