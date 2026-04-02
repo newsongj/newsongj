@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -23,40 +24,47 @@ import { Select } from '@components/common/Select';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PeriodUnit = 'weekly' | 'monthly' | 'yearly' | 'custom';
+type PeriodUnit = 'weekly' | 'monthly' | 'yearly' | '3years' | 'custom';
 type DimensionKey = 'gyogu' | 'team' | 'generation' | 'gender';
 
 // ── Mock Data ──────────────────────────────────────────────────────────────
 
-// 출석 추이 — Y축: 인원 수
+// 출석 추이 — 전체(교구별 3선) / 교구 선택 시 단일선
 const TREND_WEEKLY = [
-  { period: '12/21', present: 68, absent: 25 },
-  { period: '12/28', present: 62, absent: 31 },
-  { period: '1/4',   present: 71, absent: 22 },
-  { period: '1/11',  present: 67, absent: 26 },
-  { period: '1/18',  present: 74, absent: 19 },
-  { period: '1/25',  present: 72, absent: 21 },
-  { period: '2/1',   present: 70, absent: 23 },
-  { period: '2/8',   present: 77, absent: 16 },
-  { period: '2/15',  present: 75, absent: 18 },
-  { period: '2/22',  present: 79, absent: 14 },
-  { period: '3/1',   present: 76, absent: 17 },
-  { period: '3/8',   present: 75, absent: 18 },
+  { period: '12/21', gyogu1: 25, gyogu2: 22, gyogu3: 21, present: 68 },
+  { period: '12/28', gyogu1: 22, gyogu2: 20, gyogu3: 20, present: 62 },
+  { period: '1/4',   gyogu1: 27, gyogu2: 23, gyogu3: 21, present: 71 },
+  { period: '1/11',  gyogu1: 25, gyogu2: 21, gyogu3: 21, present: 67 },
+  { period: '1/18',  gyogu1: 28, gyogu2: 25, gyogu3: 21, present: 74 },
+  { period: '1/25',  gyogu1: 27, gyogu2: 24, gyogu3: 21, present: 72 },
+  { period: '2/1',   gyogu1: 26, gyogu2: 23, gyogu3: 21, present: 70 },
+  { period: '2/8',   gyogu1: 29, gyogu2: 26, gyogu3: 22, present: 77 },
+  { period: '2/15',  gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
+  { period: '2/22',  gyogu1: 30, gyogu2: 27, gyogu3: 22, present: 79 },
+  { period: '3/1',   gyogu1: 29, gyogu2: 25, gyogu3: 22, present: 76 },
+  { period: '3/8',   gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
 ];
 
 const TREND_MONTHLY = [
-  { period: '1월', present: 70, absent: 23 },
-  { period: '2월', present: 74, absent: 19 },
-  { period: '3월', present: 75, absent: 18 },
+  { period: '1월', gyogu1: 26, gyogu2: 23, gyogu3: 21, present: 70 },
+  { period: '2월', gyogu1: 28, gyogu2: 25, gyogu3: 21, present: 74 },
+  { period: '3월', gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
 ];
 
+
 const TREND_YEARLY = [
-  { period: '2022년', present: 58, absent: 28 },
-  { period: '2023년', present: 63, absent: 25 },
-  { period: '2024년', present: 69, absent: 21 },
-  { period: '2025년', present: 73, absent: 20 },
-  { period: '2026년', present: 75, absent: 18 },
+  { period: '2022년', gyogu1: 21, gyogu2: 20, gyogu3: 17, present: 58 },
+  { period: '2023년', gyogu1: 24, gyogu2: 21, gyogu3: 18, present: 63 },
+  { period: '2024년', gyogu1: 26, gyogu2: 23, gyogu3: 20, present: 69 },
+  { period: '2025년', gyogu1: 28, gyogu2: 25, gyogu3: 20, present: 73 },
+  { period: '2026년', gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
 ];
+
+const GYOGU_LINE_CONFIG = [
+  { key: 'gyogu1', label: '1교구', color: '#187EF4' },
+  { key: 'gyogu2', label: '2교구', color: '#10b981' },
+  { key: 'gyogu3', label: '3교구', color: '#f59e0b' },
+] as const;
 
 // 차원별 — Y축: 인원 수
 const DIM_GYOGU      = [
@@ -99,6 +107,7 @@ const PERIOD_OPTIONS = [
   { value: 'weekly',  label: '주간' },
   { value: 'monthly', label: '월간' },
   { value: 'yearly',  label: '연간' },
+  { value: '3years',  label: '3개년' },
   { value: 'custom',  label: '직접 입력' },
 ];
 
@@ -292,6 +301,41 @@ const AttendanceDashboard: React.FC = () => {
     return TREND_WEEKLY;
   }, [periodUnit]);
 
+  // ── 3개년 비교 데이터: 4개 주 × 교구별 막대 + 3개년 라인 ──────────────
+  const yearLineConfig = useMemo(() => {
+    const end = Number(selectedYearOnly);
+    return [
+      { year: end - 2, color: '#94a3b8' },
+      { year: end - 1, color: '#64748b' },
+      { year: end,     color: '#1e293b' },
+    ];
+  }, [selectedYearOnly]);
+
+  const threeYearsData = useMemo(() => {
+    const [y0, y1, y2] = yearLineConfig.map(c => c.year);
+    // 가장 최근 토요일 기준으로 4주 레이블 계산 (오래된 순)
+    const weekLabels = Array.from({ length: 4 }, (_, i) => {
+      const d = new Date(mostRecentSat);
+      d.setDate(d.getDate() - (3 - i) * 7);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    const mock = [
+      { gyogu1: 26, gyogu2: 23, gyogu3: 20, l0: 58, l1: 65, l2: 72 },
+      { gyogu1: 25, gyogu2: 21, gyogu3: 19, l0: 56, l1: 62, l2: 69 },
+      { gyogu1: 28, gyogu2: 25, gyogu3: 21, l0: 62, l1: 68, l2: 75 },
+      { gyogu1: 27, gyogu2: 24, gyogu3: 20, l0: 60, l1: 66, l2: 71 },
+    ];
+    return mock.map((m, i) => ({
+      week: weekLabels[i],
+      gyogu1: m.gyogu1,
+      gyogu2: m.gyogu2,
+      gyogu3: m.gyogu3,
+      [`${y0}년`]: m.l0,
+      [`${y1}년`]: m.l1,
+      [`${y2}년`]: m.l2,
+    }));
+  }, [yearLineConfig, mostRecentSat]);
+
   // ── 차원별 데이터 ─────────────────────────────────────────────────────
   const dimensionData = useMemo(() => {
     switch (dimension) {
@@ -309,13 +353,14 @@ const AttendanceDashboard: React.FC = () => {
   const kpiGen45Total   = 26;   // 45기 전체 인원
   const kpiGen46Present = 18;   // 46기 출석 인원
   const kpiGen46Total   = 23;   // 46기 전체 인원
-  const kpiTopGyogu     = { name: '1교구', present: 36 }; // 최다 출석 교구
+  const kpiTopAbsentReason = ABSENT_REASON_DATA.reduce((a, b) => a.value >= b.value ? a : b);
 
   // ── 기간 설명 텍스트 ──────────────────────────────────────────────────
   const periodDesc = useMemo(() => {
     if (periodUnit === 'weekly')  return `${formatWeekLabel(weekSaturday)} 출석 인원 추이`;
     if (periodUnit === 'monthly') return `${selectedYear}년 ${selectedMonth}월 주차별 출석 인원 추이`;
     if (periodUnit === 'yearly')  return `${selectedYearOnly}년 월별 출석 인원 추이`;
+    if (periodUnit === '3years')  return `${Number(selectedYearOnly) - 2}년 ~ ${selectedYearOnly}년 3개년 출석 인원 추이`;
     if (customStart && customEnd) return `${customStart} ~ ${customEnd} 출석 인원 추이`;
     return '기간을 설정해주세요';
   }, [periodUnit, weekSaturday, selectedYear, selectedMonth, selectedYearOnly, customStart, customEnd]);
@@ -366,6 +411,18 @@ const AttendanceDashboard: React.FC = () => {
             onChange={(v) => setSelectedYearOnly(String(v))}
             width={90}
           />
+        )}
+
+        {periodUnit === '3years' && (
+          <>
+            <Select
+              value={selectedYearOnly}
+              options={YEAR_OPTIONS}
+              onChange={(v) => setSelectedYearOnly(String(v))}
+              width={90}
+            />
+            <FilterLabel>기준 (최근 3개년)</FilterLabel>
+          </>
         )}
 
         {periodUnit === 'custom' && (
@@ -429,10 +486,10 @@ const AttendanceDashboard: React.FC = () => {
           iconBgColor="#f3e8ff"
         />
         <StatCard
-          label="최다 출석 교구"
-          value={`${kpiTopGyogu.name}`}
-          change={`${kpiTopGyogu.present}명`}
-          isPositive={true}
+          label="최다 결석 사유"
+          value={kpiTopAbsentReason.name}
+          change={`${kpiTopAbsentReason.value}명`}
+          isPositive={false}
           icon={<TrendingUp size={24} />}
           iconBgColor="#fef9c3"
         />
@@ -443,25 +500,78 @@ const AttendanceDashboard: React.FC = () => {
         {/* ① 출석 인원 추이 — Y축: 인원 수(명) */}
         <ChartContainer title="출석 인원 추이" description={periodDesc}>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trendData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
-              <XAxis
-                dataKey="period"
-                tick={{ fontSize: 12, fill: '#475569' }}
-                tickLine={false}
-                axisLine={{ stroke: '#e5e7eb' }}
-              />
-              <YAxis
-                tick={{ fontSize: 12, fill: '#475569' }}
-                tickFormatter={(v) => `${v}명`}
-                domain={[0, 'auto']}
-              />
-              <Tooltip
-                contentStyle={TooltipStyle}
-                formatter={(v: number) => [`${v}명`, '출석 인원']}
-              />
-              <Line type="monotone" dataKey="present" name="출석 인원" stroke="#187EF4" strokeWidth={2} dot={{ fill: '#187EF4', r: 4 }} />
-            </LineChart>
+            {periodUnit === '3years' ? (
+              // 3개년: 교구별 그룹 막대(4개 주) + 각 연도 라인 3개
+              <ComposedChart data={threeYearsData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickFormatter={(v) => `${v}명`}
+                  domain={[0, 'auto']}
+                />
+                <Tooltip
+                  contentStyle={TooltipStyle}
+                  formatter={(v: number, name: string) => [`${v}명`, name]}
+                />
+                {GYOGU_LINE_CONFIG.map(({ key, label, color }) => (
+                  <Bar key={key} dataKey={key} name={label} fill={color} maxBarSize={24} />
+                ))}
+                {yearLineConfig.map(({ year, color }) => (
+                  <Line
+                    key={year}
+                    type="monotone"
+                    dataKey={`${year}년`}
+                    name={`${year}년`}
+                    stroke={color}
+                    strokeWidth={2}
+                    dot={{ fill: color, r: 4 }}
+                  />
+                ))}
+                <Legend />
+              </ComposedChart>
+            ) : (
+              // 주간/월간/연간/직접입력: 기존 라인차트
+              <LineChart data={trendData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickFormatter={(v) => `${v}명`}
+                  domain={[0, 'auto']}
+                />
+                <Tooltip
+                  contentStyle={TooltipStyle}
+                  formatter={(v: number, name: string) => [`${v}명`, name]}
+                />
+                {gyogu === '' ? (
+                  GYOGU_LINE_CONFIG.map(({ key, label, color }) => (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      name={label}
+                      stroke={color}
+                      strokeWidth={2}
+                      dot={{ fill: color, r: 4 }}
+                    />
+                  ))
+                ) : (
+                  <Line type="monotone" dataKey="present" name="출석 인원" stroke="#187EF4" strokeWidth={2} dot={{ fill: '#187EF4', r: 4 }} />
+                )}
+                <Legend />
+              </LineChart>
+            )}
           </ResponsiveContainer>
         </ChartContainer>
 

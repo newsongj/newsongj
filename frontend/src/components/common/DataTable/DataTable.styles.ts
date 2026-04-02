@@ -13,9 +13,13 @@ import {
   IconButton
 } from '@mui/material';
 
-export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
+export const StyledWrapper = styled('div')(({ theme }) => ({
   borderRadius: theme.custom.borderRadius,
   border: `1px solid ${theme.custom.colors.primary.outline}`,
+  overflow: 'hidden',
+}));
+
+export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
   backgroundColor: theme.custom.colors.white,
 }));
 

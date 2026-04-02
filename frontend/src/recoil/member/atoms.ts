@@ -1,5 +1,5 @@
 import { atom } from 'recoil';
-import { MemberRow } from '@/models/교적.types';
+import { MemberRow } from '@/models/member.types';
 import { PageMeta } from '@/models/common.types';
 
 export const membersState = atom({
