@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import { getAccessToken, removeAccessToken } from '@/utils/auth';
-import { APP_CONFIG } from '@/constants/config.ts';
+import { APP_CONFIG } from '@/constants/config';
 
 const client = axios.create({
   baseURL: APP_CONFIG.api.url,
