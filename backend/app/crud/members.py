@@ -1,10 +1,45 @@
-"""교적 멤버 CRUD — 순수 DB 조작만 담당"""
+"""gyojeok 멤버 CRUD — 순수 DB 조작만 담당"""
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
-from app.models import Member, MemberProfile
+from sqlalchemy import desc, func, or_, cast, String
+from app.models import Member, MemberProfile, Leader
 from app.schemas.members import MemberDeleteRequest, MemberCreate
 from fastapi import HTTPException
 import datetime
+
+
+def _apply_keyword_filter(query, db: Session, field: str, keyword: str):
+    """키워드 검색 조건 적용 (활성/삭제 목록 공용)"""
+    if field == "leader":
+        matching_ids = [str(r[0]) for r in db.query(Leader.leader_id).filter(
+            Leader.leader_name.like(f"%{keyword}%")
+        ).all()]
+        if not matching_ids:
+            return query, True  # 결과 없음 플래그
+        return query.filter(
+            or_(*[MemberProfile.leader_ids.like(f'%"{lid}"%') for lid in matching_ids])
+        ), False
+    elif field == "generation":
+        digits = ''.join(filter(str.isdigit, keyword))
+        if not digits:
+            return query, True
+        return query.filter(Member.generation == int(digits)), False
+    elif field == "name":
+        return query.filter(Member.name.like(f"%{keyword}%")), False
+    elif field == "phone_number":
+        return query.filter(Member.phone_number.like(f"%{keyword}%")), False
+    elif field == "birthdate":
+        return query.filter(cast(Member.birthdate, String).like(f"%{keyword}%")), False
+    elif field == "enrolled_at":
+        return query.filter(cast(Member.enrolled_at, String).like(f"%{keyword}%")), False
+    elif field == "school_work":
+        return query.filter(Member.school_work.like(f"%{keyword}%")), False
+    elif field == "major":
+        return query.filter(Member.major.like(f"%{keyword}%")), False
+    elif field == "v8pid":
+        return query.filter(Member.v8pid.like(f"%{keyword}%")), False
+    elif field == "member_type":
+        return query.filter(MemberProfile.member_type.like(f"%{keyword}%")), False
+    return query, False
 
 
 def _apply_filters(query, gyogu=None, team=None, group_no=None, generation=None):
@@ -28,55 +63,105 @@ def _paginate(query, page: int, page_size: int):
     return rows, total
 
 
-def get_members(db: Session, page: int, page_size: int, year, gyogu=None, team=None, group_no=None, generation=None):
-    """활성 멤버 목록 조회 (deleted_at IS NULL)"""
-    # year는 필수: MemberProfile이 연도별 행이므로 year 조건 없이 조인하면 중복 반환됨
-    query = db.query(Member, MemberProfile).outerjoin(
+def get_members(db: Session, page: int, page_size: int, year: int, gyogu=None, team=None, group_no=None, generation=None, field=None, keyword=None):
+    """활성 멤버 목록 조회 — 드롭다운 필터 + 키워드 검색 통합 (deleted_at IS NULL)
+
+    year 처리 방식:
+    - 해당 연도(YYYY) 범위 내 profile row가 하나라도 있는 멤버만 포함 (inner join)
+    - 해당 연도 내 row가 여러 개면 MAX(year) → 동일 날짜면 MAX(profile_id) 로 최신 row 선택
+    """
+    year_start = datetime.date(year, 1, 1)
+    year_end = datetime.date(year + 1, 1, 1)
+
+    # Step 1: 해당 연도 내 member별 MAX(year)
+    max_year_sq = db.query(
+        MemberProfile.member_id,
+        func.max(MemberProfile.year).label("max_year"),
+    ).filter(
+        MemberProfile.year >= year_start,
+        MemberProfile.year < year_end,
+    ).group_by(MemberProfile.member_id).subquery()
+
+    # Step 2: 같은 날짜 row가 여러 개일 때 MAX(profile_id)로 단일 row 확정
+    latest_sq = db.query(
+        MemberProfile.member_id,
+        func.max(MemberProfile.profile_id).label("max_profile_id"),
+    ).join(
+        max_year_sq,
+        (MemberProfile.member_id == max_year_sq.c.member_id)
+        & (MemberProfile.year == max_year_sq.c.max_year),
+    ).group_by(MemberProfile.member_id).subquery()
+
+    # inner join: 해당 연도 profile 없는 멤버는 결과에서 제외
+    query = db.query(Member, MemberProfile).join(
+        latest_sq, Member.member_id == latest_sq.c.member_id,
+    ).join(
         MemberProfile,
-        (Member.member_id == MemberProfile.member_id) & (MemberProfile.year == year),
-    )
+        MemberProfile.profile_id == latest_sq.c.max_profile_id,
+    ).filter(Member.deleted_at.is_(None))
 
-    # 삭제된 멤버 제외 (필수)
-    query = query.filter(Member.deleted_at == None)
-
-    # 공통 필터 적용
     query = _apply_filters(query, gyogu, team, group_no, generation)
+
+    if field and keyword:
+        query, empty = _apply_keyword_filter(query, db, field, keyword)
+        if empty:
+            return [], 0
 
     return _paginate(query, page, page_size)
 
 
 def _deleted_base_query(db: Session):
-    """삭제된 멤버 조회용 기본 쿼리 (최신 프로필 조인, 공용)"""
-    latest_year = db.query(
+    """삭제된 멤버 조회용 기본 쿼리 (전체 이력 중 최신 프로필 조인, 공용)
+    동일 날짜 row 중복 시 MAX(profile_id)로 단일 row 확정.
+    """
+    max_year_sq = db.query(
         MemberProfile.member_id,
         func.max(MemberProfile.year).label("max_year"),
     ).group_by(MemberProfile.member_id).subquery()
 
+    latest_sq = db.query(
+        MemberProfile.member_id,
+        func.max(MemberProfile.profile_id).label("max_profile_id"),
+    ).join(
+        max_year_sq,
+        (MemberProfile.member_id == max_year_sq.c.member_id)
+        & (MemberProfile.year == max_year_sq.c.max_year),
+    ).group_by(MemberProfile.member_id).subquery()
+
     return db.query(Member, MemberProfile).outerjoin(
-        latest_year, Member.member_id == latest_year.c.member_id
+        latest_sq, Member.member_id == latest_sq.c.member_id,
     ).outerjoin(
         MemberProfile,
-        (Member.member_id == MemberProfile.member_id)
-        & (MemberProfile.year == latest_year.c.max_year),
-    ).filter(Member.deleted_at != None)
+        MemberProfile.profile_id == latest_sq.c.max_profile_id,
+    ).filter(Member.deleted_at.isnot(None))
 
 
-def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None, deleted_from=None, deleted_to=None):
-    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL, 최신 프로필만 조인)"""
+def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None, deleted_from=None, deleted_to=None, field=None, keyword=None):
+    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL)
+
+    year: 삭제 멤버의 최종 member_profile 연도 기준 필터 (선택)
+    deleted_from/deleted_to: deleted_at 범위 필터
+    field/keyword: 활성 멤버와 동일한 검색 필드
+    """
     query = _deleted_base_query(db)
 
-    # 삭제일 범위 필터
     if deleted_from is not None:
         query = query.filter(Member.deleted_at >= deleted_from)
     if deleted_to is not None:
         query = query.filter(Member.deleted_at <= deleted_to)
 
-    # year 필터 (삭제 목록에서는 선택)
+    # year — 최종 profile의 year가 해당 연도 범위에 속하는 멤버만
     if year is not None:
-        query = query.filter(MemberProfile.year == year)
+        year_start = datetime.date(year, 1, 1)
+        year_end = datetime.date(year + 1, 1, 1)
+        query = query.filter(MemberProfile.year >= year_start, MemberProfile.year < year_end)
 
-    # 공통 필터 적용
     query = _apply_filters(query, gyogu, team, group_no, generation)
+
+    if field and keyword:
+        query, empty = _apply_keyword_filter(query, db, field, keyword)
+        if empty:
+            return [], 0
 
     return _paginate(query, page, page_size)
 
@@ -136,7 +221,7 @@ def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfil
 
 def update_member(db: Session, member_id: int, data: MemberCreate) -> int:
     """멤버 정보 수정 (Member + 최신 MemberProfile)"""
-    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at == None).first()
+    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at.is_(None)).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
 
@@ -151,21 +236,20 @@ def update_member(db: Session, member_id: int, data: MemberCreate) -> int:
     member.major = data.major
     # enrolled_at은 등록일자이므로 수정하지 않음
 
-    # 가장 최근 연도의 프로필을 찾아서 업데이트
-    profile = db.query(MemberProfile).filter(
-        MemberProfile.member_id == member_id,
-    ).order_by(desc(MemberProfile.year)).first()
-
-    if not profile:
-        raise HTTPException(status_code=404, detail="해당 멤버의 프로필이 존재하지 않습니다.")
-
-    profile.gyogu = data.gyogu
-    profile.team = data.team
-    profile.group_no = data.group_no
-    profile.member_type = data.member_type
-    # attendance_grade는 동적 계산 필드이므로 수정하지 않음
-    profile.plt_status = data.plt_status
-    profile.leader_ids = data.leader_ids
+    # member_profile은 이력 보존 — 덮어쓰지 않고 새 row insert
+    # year = 오늘 날짜 (소속 변경 유효 시작일)
+    new_profile = MemberProfile(
+        member_id=member_id,
+        year=datetime.date.today(),
+        gyogu=data.gyogu,
+        team=data.team,
+        group_no=data.group_no,
+        member_type=data.member_type,
+        plt_status=data.plt_status,
+        leader_ids=data.leader_ids,
+        # attendance_grade는 동적 계산 필드이므로 미설정
+    )
+    db.add(new_profile)
 
     db.commit()
     return member_id
@@ -173,7 +257,7 @@ def update_member(db: Session, member_id: int, data: MemberCreate) -> int:
 
 def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Member:
     """멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)"""
-    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at == None).first()
+    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at.is_(None)).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
 

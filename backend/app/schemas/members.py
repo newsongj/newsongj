@@ -78,3 +78,4 @@ class DeletedMember(MemberResponse):
 class DeletedMemberListResponse(BaseModel):
     items: list[DeletedMember]
     meta: PageMeta
+
