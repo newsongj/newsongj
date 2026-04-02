@@ -86,6 +86,6 @@ def test_create_attendance(db: Session):
         print("\n[PASS] test_create_attendance")
 
     finally:
-        
+        delete_test_members(db, member_ids=member_ids)
         db.close()
 

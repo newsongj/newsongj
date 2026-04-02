@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from .attendanceRecord_test import test_create_attendance, create_test_members
+from ...tests.attendanceRecord_test import test_create_attendance, create_test_members
 from app.models import Member, MemberProfile
 
 router = APIRouter()
