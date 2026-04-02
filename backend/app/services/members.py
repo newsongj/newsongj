@@ -1,7 +1,7 @@
 """gyojeok 멤버 비즈니스 로직 — DB 조회 결과를 응답 스키마로 변환"""
 from sqlalchemy.orm import Session
-from app.models import Leader
 from app.schemas.members import MemberResponse, DeletedMember, PageMeta, MemberListResponse, DeletedMemberListResponse
+from app.crud.leaders import get_leader_map
 import json
 
 
@@ -15,12 +15,6 @@ def resolve_leader_names(leader_ids_json: str | None, leader_map: dict) -> str |
         return None
     names = [leader_map[str(id)] for id in ids if str(id) in leader_map]
     return ', '.join(names) if names else None
-
-
-def _get_leader_map(db: Session) -> dict:
-    """Leader 테이블 전체를 조회해서 id → name 맵 반환"""
-    leaders = db.query(Leader).all()
-    return {str(l.leader_id): l.leader_name for l in leaders}
 
 
 def _to_member_response(member, profile, leader_map) -> MemberResponse:
@@ -59,13 +53,13 @@ def _to_deleted_member(member, profile, leader_map) -> DeletedMember:
 
 def build_member_response(member, profile, db: Session) -> MemberResponse:
     """단건 변환 (CUD 응답용)"""
-    leader_map = _get_leader_map(db)
+    leader_map = get_leader_map(db)
     return _to_member_response(member, profile, leader_map)
 
 
 def build_member_list(rows, total: int, page: int, page_size: int, db: Session) -> MemberListResponse:
     """활성 멤버 목록 → MemberListResponse 변환"""
-    leader_map = _get_leader_map(db)
+    leader_map = get_leader_map(db)
     items = [_to_member_response(member, profile, leader_map) for member, profile in rows]
     return MemberListResponse(
         items=items,
@@ -75,13 +69,13 @@ def build_member_list(rows, total: int, page: int, page_size: int, db: Session) 
 
 def build_deleted_member_response(member, profile, db: Session) -> DeletedMember:
     """삭제된 멤버 단건 변환"""
-    leader_map = _get_leader_map(db)
+    leader_map = get_leader_map(db)
     return _to_deleted_member(member, profile, leader_map)
 
 
 def build_deleted_member_list(rows, total: int, page: int, page_size: int, db: Session) -> DeletedMemberListResponse:
     """삭제된 멤버 목록 → DeletedMemberListResponse 변환"""
-    leader_map = _get_leader_map(db)
+    leader_map = get_leader_map(db)
     items = [_to_deleted_member(member, profile, leader_map) for member, profile in rows]
     return DeletedMemberListResponse(
         items=items,

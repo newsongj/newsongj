@@ -12,7 +12,7 @@ from app.crud.members import (
 from app.services.members import build_member_list, build_deleted_member_list, build_member_response, build_deleted_member_response
 from app.schemas.members import (
     MemberListResponse, DeletedMemberListResponse, DeletedMember,
-    MemberResponse, MemberDeleteRequest, MemberCreate, MemberIdResponse,
+    MemberResponse, MemberDeleteRequest, MemberRequest, MemberIdResponse,
 )
 from typing import Optional
 import datetime
@@ -67,7 +67,7 @@ def get_deleted_member_detail(
 
 @router.post("/members", response_model=MemberResponse, status_code=201, tags=["교적 생성"], summary="멤버 추가")
 def create_member(
-    body: MemberCreate,
+    body: MemberRequest,
     db: Session = Depends(get_db),
 ):
     member, profile = crud_create_member(db, body)
@@ -77,7 +77,7 @@ def create_member(
 @router.put("/members/{member_id}", response_model=MemberIdResponse, tags=["교적 수정"], summary="멤버 정보 수정")
 def update_member(
     member_id: int = Path(...),
-    body: MemberCreate = ...,
+    body: MemberRequest = ...,
     db: Session = Depends(get_db),
 ):
     replaced_id = crud_update_member(db, member_id, body)

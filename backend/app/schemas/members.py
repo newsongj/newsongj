@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, model_validator
+from typing import Optional, Literal
 import datetime
 
 
@@ -39,9 +39,9 @@ class MemberListResponse(BaseModel):
 
 
 # 멤버 생성/수정 요청 스키마
-class MemberCreate(BaseModel):
+class MemberRequest(BaseModel):
     name: str
-    gender: str
+    gender: Literal['남', '여']
     generation: int
     phone_number: Optional[str] = None
     birthdate: Optional[datetime.date] = None
@@ -49,13 +49,21 @@ class MemberCreate(BaseModel):
     team: Optional[int] = None
     group_no: Optional[int] = None
     leader_ids: Optional[str] = None   # JSON 배열 문자열 (예: ["1", "3"])
-    member_type: Optional[str] = None
-    attendance_grade: Optional[str] = None
-    plt_status: Optional[str] = None
+    member_type: Optional[Literal['토요예배', '주일예배', '래사랑', '군지체', '해외지체', '새가족']] = None
+    attendance_grade: Optional[Literal['A', 'B', 'C', 'D']] = None
+    plt_status: Optional[Literal['수료', '1학기 수료']] = None
     v8pid: Optional[str] = None
     school_work: Optional[str] = None  # 학교 및 직장
     major: Optional[str] = None        # 전공
     # enrolled_at: 서버에서 자동 생성 (crud/members.py create_member에서 datetime.now())
+
+    @model_validator(mode="after")
+    def validate_profile_fields(self) -> "MemberRequest":
+        profile_fields = [self.gyogu, self.team, self.group_no, self.member_type]
+        filled = sum(1 for f in profile_fields if f is not None)
+        if filled not in (0, 4):
+            raise ValueError("gyogu, team, group_no, member_type는 모두 입력하거나 모두 비워야 합니다.")
+        return self
 
 
 # 멤버 생성/수정 응답 (member_id만 반환)
