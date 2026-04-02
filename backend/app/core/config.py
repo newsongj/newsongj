@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _get_env_files() -> tuple[str, ...]:
     # config.py 위치(backend/app/core/) 기준으로 backend/ 디렉토리를 고정
-    base_dir = Path(__file__).resolve().parent.parent.parent
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent
     app_env = os.getenv("APP_ENV", "").strip().lower()
     candidates = [base_dir / ".env"]
     if app_env:
