@@ -93,7 +93,10 @@ jobs:
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_HOST=mariadb
+            DB_PORT=3306
             DB_NAME=newsongj
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            BACKEND_URL=${{ secrets.BACKEND_URL }}
             EOF
 
             cat > ~/newsongj/docker-compose.yml << 'COMPOSEOF'
