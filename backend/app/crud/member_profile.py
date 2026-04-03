@@ -388,3 +388,32 @@ def build_deleted_members_query(db: Session) -> Query:
         .outerjoin(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .filter(Member.deleted_at.isnot(None))
     )
+
+
+def build_members_as_of_query(db: Session, as_of_date: datetime.date) -> Query:
+    """특정 날짜 기준 활성 멤버와 유효 profile을 (Member, MemberProfile) 튜플로 반환하는 기반 쿼리.
+
+    - MAX(year) WHERE year <= as_of_date 로 멤버별 최신 profile 선택
+    - deleted_at IS NULL 인 활성 멤버만 포함
+    - 출석 API용 — worship_date 기준 소속 확정
+    """
+    sq = (
+        db.query(
+            MemberProfile.member_id,
+            func.max(MemberProfile.year).label("max_year"),
+        )
+        .filter(MemberProfile.year <= as_of_date)
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
+    return (
+        db.query(Member, MemberProfile)
+        .join(sq, and_(
+            MemberProfile.member_id == sq.c.member_id,
+            MemberProfile.year == sq.c.max_year,
+        ))
+        .join(Member, and_(
+            Member.member_id == MemberProfile.member_id,
+            Member.deleted_at.is_(None),
+        ))
+    )
