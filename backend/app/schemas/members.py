@@ -1,6 +1,7 @@
 from pydantic import BaseModel, model_validator
 from typing import Optional, Literal
 import datetime
+from app.schemas.common import PageMeta
 
 
 class MemberResponse(BaseModel):
@@ -25,12 +26,6 @@ class MemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class PageMeta(BaseModel):
-    current_page: int
-    page_size: int
-    total_items: int
 
 
 class MemberListResponse(BaseModel):

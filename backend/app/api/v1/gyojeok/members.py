@@ -9,10 +9,10 @@ from app.crud.members import (
     delete_member as crud_delete_member,
     restore_member as crud_restore_member,
 )
-from app.services.members import build_member_list, build_deleted_member_list, build_member_response, build_deleted_member_response
+from app.services.members import build_member_list, build_deleted_member_list, build_deleted_member_response
 from app.schemas.members import (
     MemberListResponse, DeletedMemberListResponse, DeletedMember,
-    MemberResponse, MemberDeleteRequest, MemberRequest, MemberIdResponse,
+    MemberDeleteRequest, MemberRequest, MemberIdResponse,
 )
 from typing import Optional
 import datetime
@@ -65,13 +65,13 @@ def get_deleted_member_detail(
     return build_deleted_member_response(member, profile, db)
 
 
-@router.post("/members", response_model=MemberResponse, status_code=201, tags=["교적 생성"], summary="멤버 추가")
+@router.post("/members", response_model=MemberIdResponse, status_code=201, tags=["교적 생성"], summary="멤버 추가")
 def create_member(
     body: MemberRequest,
     db: Session = Depends(get_db),
 ):
-    member, profile = crud_create_member(db, body)
-    return build_member_response(member, profile, db)
+    member, _ = crud_create_member(db, body)
+    return MemberIdResponse(member_id=member.member_id)
 
 
 @router.put("/members/{member_id}", response_model=MemberIdResponse, tags=["교적 수정"], summary="멤버 정보 수정")
@@ -84,14 +84,14 @@ def update_member(
     return MemberIdResponse(member_id=replaced_id)
 
 
-@router.delete("/members/{member_id}", response_model=MemberResponse, tags=["교적 삭제"], summary="멤버 소프트 삭제")
+@router.delete("/members/{member_id}", response_model=MemberIdResponse, tags=["교적 삭제"], summary="멤버 소프트 삭제")
 def delete_member(
     member_id: int = Path(...),
     body: MemberDeleteRequest = ...,
     db: Session = Depends(get_db),
 ):
-    member = crud_delete_member(db, member_id, body)
-    return build_member_response(member, None, db)
+    crud_delete_member(db, member_id, body)
+    return MemberIdResponse(member_id=member_id)
 
 
 @router.post("/members/restore/{member_id}", response_model=MemberIdResponse, tags=["교적 삭제"], summary="삭제된 멤버 복원")

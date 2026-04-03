@@ -5,16 +5,15 @@ from app.crud.leaders import get_leader_map
 import json
 
 
-def resolve_leader_names(leader_ids_json: str | None, leader_map: dict) -> str | None:
-    """JSON 배열 문자열 (예: '["1", "3"]')을 '팀장, 그룹장' 형태로 변환"""
+def resolve_leader_names(leader_ids_json: str | None, leader_map: dict) -> list[str]:
+    """JSON 배열 문자열 (예: '["1", "3"]')을 ['팀장', '그룹장'] 리스트로 변환"""
     if not leader_ids_json:
-        return None
+        return []
     try:
-        ids = json.loads(leader_ids_json)  # JSON 파싱 (["1", "3"] → list)
+        ids = json.loads(leader_ids_json)
     except (json.JSONDecodeError, TypeError):
-        return None
-    names = [leader_map[str(id)] for id in ids if str(id) in leader_map]
-    return ', '.join(names) if names else None
+        return []
+    return [leader_map[str(id)] for id in ids if str(id) in leader_map]
 
 
 def _to_member_response(member, profile, leader_map) -> MemberResponse:
@@ -32,7 +31,7 @@ def _to_member_response(member, profile, leader_map) -> MemberResponse:
         member_type=profile.member_type if profile else None,
         attendance_grade=profile.attendance_grade if profile else None,
         plt_status=profile.plt_status if profile else None,
-        leader_ids=resolve_leader_names(profile.leader_ids, leader_map) if profile else None,
+        leader_ids=', '.join(resolve_leader_names(profile.leader_ids, leader_map)) if profile else None,
         v8pid=member.v8pid,
         school_work=member.school_work,
         major=member.major,
