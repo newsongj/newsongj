@@ -5,7 +5,7 @@ import path from 'path'
 import svgr from 'vite-plugin-svgr'
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, path.resolve(__dirname, '..'))
+    const env = loadEnv(mode, process.cwd())
 
     return {
         plugins: [
@@ -38,8 +38,6 @@ export default defineConfig(({ mode }) => {
 
             },
         },
-
-        envDir: path.resolve(__dirname, '..'),
 
         server: {
             port: 3001,       // 개발 서버 포트 고정
