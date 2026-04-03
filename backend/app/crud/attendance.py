@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.models import AttendanceRecord, Member, Leader
 from app.schemas.attendance import AttendanceBatchRequest
-from app.crud.member_profile import (
+from app.crud.query_builders import (
+    active_as_of,
     build_members_as_of_query,
     by_gyogu, by_team, by_group_no, by_leader,
 )
@@ -16,9 +17,10 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
 
     valid_ids = {
         row.member_id
-        for row in db.query(Member.member_id)
-        .filter(Member.member_id.in_(request_ids), Member.deleted_at.is_(None))
-        .all()
+        for row in active_as_of(
+            db.query(Member.member_id).filter(Member.member_id.in_(request_ids)),
+            req.worship_date,
+        ).all()
     }
 
     invalid_ids = request_ids - valid_ids
@@ -28,17 +30,19 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
             detail=f"존재하지 않거나 삭제된 멤버입니다: {sorted(invalid_ids)}",
         )
 
+    # 기존 레코드 일괄 조회 — N+1 방지
+    existing_map: dict[int, AttendanceRecord] = {
+        r.member_id: r
+        for r in db.query(AttendanceRecord).filter(
+            AttendanceRecord.member_id.in_(valid_ids),
+            AttendanceRecord.worship_date == req.worship_date,
+        ).all()
+    }
+
     saved_count = 0
 
     for item in req.records:
-        existing = (
-            db.query(AttendanceRecord)
-            .filter(
-                AttendanceRecord.member_id == item.member_id,
-                AttendanceRecord.worship_date == req.worship_date,
-            )
-            .first()
-        )
+        existing = existing_map.get(item.member_id)
 
         if existing is None:
             db.add(AttendanceRecord(
