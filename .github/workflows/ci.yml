@@ -7,6 +7,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - '.github/workflows/**'
+      - 'docker-compose.yml'
 
 jobs:
 
@@ -34,16 +35,19 @@ jobs:
   # ──────────────────────────────────────────
   test-backend:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        if: needs.changes.outputs.backend == 'true'
       - uses: actions/setup-python@v4
+        if: needs.changes.outputs.backend == 'true'
         with:
           python-version: '3.11'
       - name: Install dependencies
+        if: needs.changes.outputs.backend == 'true'
         run: pip install -r backend/requirements.txt pytest
       - name: Run tests
+        if: needs.changes.outputs.backend == 'true'
         run: cd backend && pytest || echo "No tests found"
 
   # ──────────────────────────────────────────
@@ -51,11 +55,14 @@ jobs:
   # ──────────────────────────────────────────
   test-frontend:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        if: needs.changes.outputs.frontend == 'true'
       - uses: actions/setup-node@v3
+        if: needs.changes.outputs.frontend == 'true'
         with:
           node-version: '22'
-      - run: cd frontend && npm install && npm run build
+      - name: Build
+        if: needs.changes.outputs.frontend == 'true'
+        run: cd frontend && npm install && npm run build
