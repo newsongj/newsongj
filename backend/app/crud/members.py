@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import cast, String
 from app.models import Member, MemberProfile, Leader
 from app.schemas.members import MemberDeleteRequest, MemberRequest
-from app.crud.member_profile import (
-    insert_profile, upsert_profile_on_date,
+from app.crud.member_profile import insert_profile, upsert_profile_on_date
+from app.crud.query_builders import (
+    active_now,
     by_gyogu, by_team, by_group_no, by_leader_ids, by_member_type, by_year_range,
     build_active_members_query, build_deleted_members_query,
 )
@@ -161,7 +162,7 @@ def update_member(
     profile_year: profile row의 year 기준일. None이면 오늘(KST) 사용.
                   미래 날짜 지정이 필요한 경우 명시적으로 전달.
     """
-    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at.is_(None)).first()
+    member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
 
@@ -195,7 +196,7 @@ def update_member(
 
 def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Member:
     """멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)"""
-    member = db.query(Member).filter(Member.member_id == member_id, Member.deleted_at.is_(None)).first()
+    member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
     if not member:
         raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
 
