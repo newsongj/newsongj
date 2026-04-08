@@ -21,7 +21,7 @@ class MemberResponse(BaseModel):
     v8pid: Optional[str]
     school_work: Optional[str]      # 학교 및 직장
     major: Optional[str]            # 전공
-    year: Optional[datetime.date]
+    updated_at: Optional[datetime.date]
     enrolled_at: Optional[datetime.datetime]
 
     class Config:

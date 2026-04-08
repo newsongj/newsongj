@@ -1,20 +1,22 @@
-"""쿼리 빌더 & 필터 체이너 모음
-
-두 가지 재사용 도구를 제공한다:
+"""재사용 가능한 쿼리 조각 모음 — 도메인 무관, 재사용 여부 기준
 
 1. 소프트 삭제 필터 체이너 (Member.deleted_at 기반)
    - active_now, active_as_of, deleted_only
-   - 정책 근거: feature_spec.md 8절
 
-2. MemberProfile 필터 체이너 & 쿼리 빌더 (year/소속 기반)
+2. MemberProfile 필터 체이너 & 쿼리 빌더
    - by_gyogu, by_team, by_group_no, by_leader, by_leader_ids, by_member_type, by_year_range
    - build_active_members_query, build_deleted_members_query, build_members_as_of_query
-   - 설계 의도: feature_spec.md 2절
+
+3. 출석/대시보드 공통 필터 & 조회
+   - apply_attendance_filters
+   - get_worship_dates_in_range
+   - get_records_by_dates
+   - build_attendance_records_query
 """
 import datetime
 from sqlalchemy.orm import Session, Query
 from sqlalchemy import func, and_, or_
-from app.models import Member, MemberProfile
+from app.models import Member, MemberProfile, Leader, AttendanceRecord
 
 
 # ---------------------------------------------------------------------------
@@ -58,14 +60,15 @@ def by_group_no(q: Query, group_no: int) -> Query:
     return q.filter(MemberProfile.group_no == group_no)
 
 
-def by_leader(q: Query, leader_id: int) -> Query:
-    """leader_ids JSON 배열 안에 leader_id가 포함된 profile 필터."""
-    return q.filter(MemberProfile.leader_ids.like(f'%"{leader_id}"%'))
+def by_leader(q: Query, leader_ids: int | list) -> Query:
+    """leader_ids JSON 배열 안에 포함된 멤버 필터. 단일 id 또는 id 목록 모두 허용."""
+    ids = leader_ids if isinstance(leader_ids, list) else [leader_ids]
+    return q.filter(or_(*[MemberProfile.leader_ids.like(f'%"{lid}"%') for lid in ids]))
 
 
-def by_leader_ids(q: Query, leader_ids: list[str]) -> Query:
-    """leader_ids 목록 중 하나라도 포함된 profile 필터 (이름 검색 결과 다중 id 대응)."""
-    return q.filter(or_(*[MemberProfile.leader_ids.like(f'%"{lid}"%') for lid in leader_ids]))
+def get_leader_id(db: Session, leader_name: str) -> int | None:
+    """leader 이름으로 leader_id 조회."""
+    return db.query(Leader.leader_id).filter(Leader.leader_name == leader_name).scalar()
 
 
 def by_member_type(q: Query, keyword: str) -> Query:
@@ -76,7 +79,56 @@ def by_year_range(q: Query, year_int: int) -> Query:
     """특정 연도(YYYY-01-01 ~ YYYY+1-01-01) 범위 내 profile 필터."""
     year_start = datetime.date(year_int, 1, 1)
     year_end   = datetime.date(year_int + 1, 1, 1)
-    return q.filter(MemberProfile.year >= year_start, MemberProfile.year < year_end)
+    return q.filter(MemberProfile.updated_at >= year_start, MemberProfile.updated_at < year_end)
+
+
+# ---------------------------------------------------------------------------
+# 내부 서브쿼리 헬퍼 — 중복 제거용
+# ---------------------------------------------------------------------------
+
+def _latest_as_of_sq(db: Session, as_of_date: datetime.date):
+    """멤버별 updated_at <= as_of_date 범위에서 최신 profile date 서브쿼리."""
+    return (
+        db.query(
+            MemberProfile.member_id,
+            func.max(MemberProfile.updated_at).label("max_year"),
+        )
+        .filter(MemberProfile.updated_at <= as_of_date)
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
+
+
+def _latest_in_year_sq(db: Session, year_int: int):
+    """멤버별 특정 연도(YYYY-01-01 ~ YYYY+1-01-01) 범위 내 최신 profile date 서브쿼리."""
+    year_start = datetime.date(year_int, 1, 1)
+    year_end   = datetime.date(year_int + 1, 1, 1)
+    return (
+        db.query(
+            MemberProfile.member_id,
+            func.max(MemberProfile.updated_at).label("max_year"),
+        )
+        .filter(MemberProfile.updated_at >= year_start, MemberProfile.updated_at < year_end)
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
+
+
+def _latest_profile_id_sq(db: Session, max_year_sq):
+    """MAX(updated_at) 서브쿼리 기준으로 같은 날 중복 row를 MAX(profile_id)로 단일화하는 서브쿼리."""
+    return (
+        db.query(
+            MemberProfile.member_id,
+            func.max(MemberProfile.profile_id).label("max_profile_id"),
+        )
+        .join(
+            max_year_sq,
+            (MemberProfile.member_id == max_year_sq.c.member_id)
+            & (MemberProfile.updated_at == max_year_sq.c.max_year),
+        )
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -84,57 +136,61 @@ def by_year_range(q: Query, year_int: int) -> Query:
 # ---------------------------------------------------------------------------
 
 def _base_query_as_of(db: Session, as_of_date: datetime.date) -> Query:
-    """특정 날짜 기준으로 각 활성 멤버의 유효 profile을 가져오는 기반 쿼리.
+    """특정 날짜 기준 활성 멤버의 유효 profile 기반 쿼리 (MemberProfile 반환).
 
-    - MAX(year) WHERE year <= as_of_date 로 멤버별 최신 profile 선택
     - active_now 적용 (deleted_at IS NULL)
     - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
     """
-    sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.year).label("max_year"),
-        )
-        .filter(MemberProfile.year <= as_of_date)
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
+    sq = _latest_as_of_sq(db, as_of_date)
     return active_now(
         db.query(MemberProfile)
         .join(sq, and_(
             MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.year == sq.c.max_year,
+            MemberProfile.updated_at == sq.c.max_year,
         ))
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
 
 
 def _base_query_in_year(db: Session, year_int: int) -> Query:
-    """특정 연도(YYYY-01-01 ~ YYYY+1-01-01) 내 각 활성 멤버의 최신 profile 기반 쿼리.
+    """특정 연도 내 활성 멤버의 최신 profile 기반 쿼리 (MemberProfile 반환).
 
-    - 해당 연도에 profile row가 하나라도 있는 멤버만 포함
     - active_now 적용 (deleted_at IS NULL)
     - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
     """
-    year_start = datetime.date(year_int, 1, 1)
-    year_end   = datetime.date(year_int + 1, 1, 1)
-    sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.year).label("max_year"),
-        )
-        .filter(MemberProfile.year >= year_start, MemberProfile.year < year_end)
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
+    sq = _latest_in_year_sq(db, year_int)
     return active_now(
         db.query(MemberProfile)
         .join(sq, and_(
             MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.year == sq.c.max_year,
+            MemberProfile.updated_at == sq.c.max_year,
         ))
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
+
+
+# ---------------------------------------------------------------------------
+# 출석/대시보드 공통 필터 조합 헬퍼
+# ---------------------------------------------------------------------------
+
+def apply_attendance_filters(
+    q: Query,
+    db: Session,
+    gyogu_no: int | None = None,
+    team_no: int | None = None,
+    is_imwondan: bool = False,
+) -> Query | None:
+    """gyogu/team/임원단 필터를 한 번에 적용. 임원단 leader가 없으면 None 반환."""
+    if gyogu_no is not None:
+        q = by_gyogu(q, gyogu_no)
+    if team_no is not None:
+        q = by_team(q, team_no)
+    if is_imwondan:
+        leader_id = get_leader_id(db, "임원단")
+        if not leader_id:
+            return None
+        q = by_leader(q, leader_id)
+    return q
 
 
 # ---------------------------------------------------------------------------
@@ -148,32 +204,8 @@ def build_active_members_query(db: Session, year_int: int) -> Query:
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - active_now 적용 (deleted_at IS NULL)
     """
-    year_start = datetime.date(year_int, 1, 1)
-    year_end   = datetime.date(year_int + 1, 1, 1)
-
-    max_year_sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.year).label("max_year"),
-        )
-        .filter(MemberProfile.year >= year_start, MemberProfile.year < year_end)
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
-
-    latest_sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.profile_id).label("max_profile_id"),
-        )
-        .join(
-            max_year_sq,
-            (MemberProfile.member_id == max_year_sq.c.member_id)
-            & (MemberProfile.year == max_year_sq.c.max_year),
-        )
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
+    max_year_sq = _latest_in_year_sq(db, year_int)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
 
     return active_now(
         db.query(Member, MemberProfile)
@@ -192,25 +224,12 @@ def build_deleted_members_query(db: Session) -> Query:
     max_year_sq = (
         db.query(
             MemberProfile.member_id,
-            func.max(MemberProfile.year).label("max_year"),
+            func.max(MemberProfile.updated_at).label("max_year"),
         )
         .group_by(MemberProfile.member_id)
         .subquery()
     )
-
-    latest_sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.profile_id).label("max_profile_id"),
-        )
-        .join(
-            max_year_sq,
-            (MemberProfile.member_id == max_year_sq.c.member_id)
-            & (MemberProfile.year == max_year_sq.c.max_year),
-        )
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
 
     return deleted_only(
         db.query(Member, MemberProfile)
@@ -222,24 +241,15 @@ def build_deleted_members_query(db: Session) -> Query:
 def build_members_as_of_query(db: Session, as_of_date: datetime.date) -> Query:
     """특정 날짜 기준 활성 멤버와 유효 profile을 (Member, MemberProfile) 튜플로 반환하는 기반 쿼리.
 
-    - MAX(year) WHERE year <= as_of_date 로 멤버별 최신 profile 선택
     - active_as_of 적용 (deleted_at IS NULL OR deleted_at > as_of_date)
     - 출석 API용 — worship_date 기준 소속 확정
     """
-    sq = (
-        db.query(
-            MemberProfile.member_id,
-            func.max(MemberProfile.year).label("max_year"),
-        )
-        .filter(MemberProfile.year <= as_of_date)
-        .group_by(MemberProfile.member_id)
-        .subquery()
-    )
+    sq = _latest_as_of_sq(db, as_of_date)
     q = (
         db.query(Member, MemberProfile)
         .join(sq, and_(
             MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.year == sq.c.max_year,
+            MemberProfile.updated_at == sq.c.max_year,
         ))
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
@@ -278,3 +288,62 @@ def get_profiles_in_year(
     if team     is not None: q = by_team(q, team)
     if group_no is not None: q = by_group_no(q, group_no)
     return q.all()
+
+
+# ---------------------------------------------------------------------------
+# AttendanceRecord 조회
+# ---------------------------------------------------------------------------
+
+def get_worship_dates_in_range(
+    db: Session,
+    start_date: datetime.date,
+    end_date: datetime.date,
+) -> list[datetime.date]:
+    """기간 내 예배 날짜 목록 (attendance_record 기준, 오름차순)."""
+    rows = (
+        db.query(AttendanceRecord.worship_date)
+        .filter(
+            AttendanceRecord.worship_date >= start_date,
+            AttendanceRecord.worship_date <= end_date,
+        )
+        .distinct()
+        .order_by(AttendanceRecord.worship_date)
+        .all()
+    )
+    return [r.worship_date for r in rows]
+
+
+def get_records_by_dates(
+    db: Session,
+    dates: list[datetime.date],
+) -> dict[tuple, AttendanceRecord]:
+    """날짜 목록에 해당하는 출석 기록을 (member_id, worship_date) → record 맵으로 반환."""
+    if not dates:
+        return {}
+    return {
+        (r.member_id, r.worship_date): r
+        for r in db.query(AttendanceRecord).filter(
+            AttendanceRecord.worship_date.in_(dates)
+        ).all()
+    }
+
+
+def build_attendance_records_query(db: Session, worship_date: datetime.date) -> Query:
+    """특정 예배일의 출석 기록을 member + 당시 profile과 함께 반환.
+
+    (AttendanceRecord, Member, MemberProfile) 튜플로 반환.
+    - worship_date 기준 가장 최신 profile 사용 (updated_at <= worship_date)
+    - 소프트 삭제 필터 없음 — 출석 기록은 삭제 여부와 무관한 역사적 사실
+    - by_gyogu/by_team/by_leader 등 필터 체이너로 조건 추가 후 .all() 실행
+    """
+    sq = _latest_as_of_sq(db, worship_date)
+    return (
+        db.query(AttendanceRecord, Member, MemberProfile)
+        .join(Member, Member.member_id == AttendanceRecord.member_id)
+        .join(sq, sq.c.member_id == AttendanceRecord.member_id)
+        .join(MemberProfile, and_(
+            MemberProfile.member_id == sq.c.member_id,
+            MemberProfile.updated_at == sq.c.max_year,
+        ))
+        .filter(AttendanceRecord.worship_date == worship_date)
+    )

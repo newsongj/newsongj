@@ -44,9 +44,6 @@ class AttendanceMemberItem(BaseModel):
     name: str
     generation: int
     leader_names: Optional[str]  # 콤마 구분 문자열 (예: "팀장, 구역장"), 없으면 None
-    gyogu: int
-    team: int
-    group_no: int
     status: Optional[Literal["PRESENT", "ABSENT"]] = None  # 출석 기록 없으면 None
     absent_reason: Optional[Literal["학교/학원", "회사", "알바", "가족모임", "개인일정", "아픔", "기타"]] = None
 

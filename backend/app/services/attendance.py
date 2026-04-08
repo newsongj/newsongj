@@ -23,9 +23,6 @@ def _to_item(member, profile, record, leader_map) -> AttendanceMemberItem:
         name=member.name,
         generation=member.generation,
         leader_names=', '.join(names) or None,
-        gyogu=profile.gyogu,
-        team=profile.team,
-        group_no=profile.group_no,
         status=record.status if record else None,
         absent_reason=record.absent_reason if record else None,
     )
