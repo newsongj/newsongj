@@ -35,7 +35,7 @@ def _to_member_response(member, profile, leader_map) -> MemberResponse:
         v8pid=member.v8pid,
         school_work=member.school_work,
         major=member.major,
-        year=profile.year if profile else None,
+        updated_at=profile.updated_at if profile else None,
         enrolled_at=member.enrolled_at,
     )
 

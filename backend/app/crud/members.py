@@ -6,7 +6,7 @@ from app.schemas.members import MemberDeleteRequest, MemberRequest
 from app.crud.member_profile import insert_profile, upsert_profile_on_date
 from app.crud.query_builders import (
     active_now,
-    by_gyogu, by_team, by_group_no, by_leader_ids, by_member_type, by_year_range,
+    by_gyogu, by_team, by_group_no, by_leader, by_member_type, by_year_range,
     build_active_members_query, build_deleted_members_query,
 )
 from fastapi import HTTPException
@@ -22,7 +22,7 @@ def _apply_keyword_filter(query, db: Session, field: str, keyword: str):
         ).all()]
         if not matching_ids:
             return query, True  # 결과 없음 플래그
-        return by_leader_ids(query, matching_ids), False
+        return by_leader(query, matching_ids), False
     elif field == "generation":
         digits = ''.join(filter(str.isdigit, keyword))
         if not digits:
@@ -133,9 +133,8 @@ def create_member(db: Session, data: MemberRequest) -> tuple[Member, MemberProfi
     profile = None
     # 프로필 필수 필드가 모두 있을 때만 생성
     if all(v is not None for v in [data.member_type, data.gyogu, data.team, data.group_no]):
-        current_year = datetime.date(today_kst().year, 1, 1)
         profile = insert_profile(
-            db, member.member_id, current_year,
+            db, member.member_id, today_kst(),
             gyogu=data.gyogu,          # type: ignore[arg-type]
             team=data.team,            # type: ignore[arg-type]
             group_no=data.group_no,    # type: ignore[arg-type]

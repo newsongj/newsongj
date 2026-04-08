@@ -1,7 +1,7 @@
 """member_profile CRUD — MemberProfile 단건 조회/쓰기만 담당
 
 설계 원칙:
-  - year는 "소속 유효 시작일(effective_from date)" — 연도 레이블이 아님
+  - updated_at은 "소속 유효 시작일(effective_from date)" — 연도 레이블이 아님
   - 당일 중복 변경은 추적하지 않음 (upsert_profile_on_date 참고)
   - 상세 설계 의도: feature_spec.md 2절 참고
   - 필터 체이너 & 쿼리 빌더: query_builders.py 참고
@@ -24,7 +24,7 @@ def get_profile_on_date(
     """정확히 그 날짜(year)와 일치하는 profile row 반환."""
     return (
         db.query(MemberProfile)
-        .filter(MemberProfile.member_id == member_id, MemberProfile.year == date)
+        .filter(MemberProfile.member_id == member_id, MemberProfile.updated_at == date)
         .first()
     )
 
@@ -35,7 +35,7 @@ def get_latest_profile(
 ) -> MemberProfile | None:
     """전체 이력 중 가장 최신(MAX year) profile row 반환 — 현재 소속."""
     latest_year = (
-        db.query(func.max(MemberProfile.year))
+        db.query(func.max(MemberProfile.updated_at))
         .filter(MemberProfile.member_id == member_id)
         .scalar()
     )
@@ -54,8 +54,8 @@ def get_profile_as_of(
     출석 집계, 통계, 특정 시점 소속 조회 등에 사용.
     """
     latest_year = (
-        db.query(func.max(MemberProfile.year))
-        .filter(MemberProfile.member_id == member_id, MemberProfile.year <= as_of_date)
+        db.query(func.max(MemberProfile.updated_at))
+        .filter(MemberProfile.member_id == member_id, MemberProfile.updated_at <= as_of_date)
         .scalar()
     )
     if latest_year is None:
@@ -72,11 +72,11 @@ def get_latest_profile_in_year(
     year_start = datetime.date(year_int, 1, 1)
     year_end   = datetime.date(year_int + 1, 1, 1)
     latest_year = (
-        db.query(func.max(MemberProfile.year))
+        db.query(func.max(MemberProfile.updated_at))
         .filter(
             MemberProfile.member_id == member_id,
-            MemberProfile.year >= year_start,
-            MemberProfile.year < year_end,
+            MemberProfile.updated_at >= year_start,
+            MemberProfile.updated_at < year_end,
         )
         .scalar()
     )
@@ -93,7 +93,7 @@ def get_all_profiles(
     return (
         db.query(MemberProfile)
         .filter(MemberProfile.member_id == member_id)
-        .order_by(MemberProfile.year)
+        .order_by(MemberProfile.updated_at)
         .all()
     )
 
@@ -116,7 +116,7 @@ def insert_profile(
     """새 profile row를 INSERT하고 반환. commit은 호출부에서."""
     profile = MemberProfile(
         member_id=member_id,
-        year=year,
+        updated_at=year,
         gyogu=gyogu,
         team=team,
         group_no=group_no,
