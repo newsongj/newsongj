@@ -251,6 +251,85 @@ POST /api/v1/gyojeok/members/restore/{member_id}
 
 ---
 
+
+### 7. KPI 카드 집계
+
+```
+GET /api/attendance/dashboard/kpi
+```
+
+| 항목 | 내용 |
+|------|------|
+| 설명 | 기간 평균 출석 인원, 올해 새큼이와 작년 새큼이 출석 인원, 최다 결석 사유 |
+| 사용 화면 | 출석 대시보드 > KPI 카드 4개 |
+
+**Query Params**
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| start_date | string (YYYY-MM-DD) | O | 기간 시작일 |
+| end_date | string (YYYY-MM-DD) | O | 기간 종료일 |
+| gyogu_no | number | - | 교구 번호 (없으면 전체) |
+| team_no | number | - | 팀 번호 (없으면 전체, gyogu_no 필요) |
+| is_imwondan | boolean | - | true 이면 임원단 필터 추가 예정|
+
+**Response**
+```json
+{
+  "avg_present": 75,
+  "total_members": 109,
+  "gen45": {
+    "present": 22,
+    "total": 26
+  },
+  "gen46": {
+    "present": 18,
+    "total": 23
+  },
+  "top_absent_reason": {
+    "reason": "회사",
+    "count": 36
+  }
+}
+```
+
+---
+
+### 8. 출석 인원 추이
+
+```
+GET /api/attendance/dashboard/trend
+```
+
+| 항목 | 내용 |
+|------|------|
+| 설명 | 기간 단위별(주간/월간/연간) 출석 인원 시계열 데이터 |
+| 사용 화면 | 출석 대시보드 > ① 출석 인원 추이 (LineChart) |
+
+**Query Params**
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| period_unit | `weekly` \| `monthly` \| `yearly` \| `3years` \| `custom` | O | 집계 단위 |
+| start_date | string (YYYY-MM-DD) | O | 기간 시작일 |
+| end_date | string (YYYY-MM-DD) | O | 기간 종료일 |
+| gyogu_no | number | - | 교구 번호 |
+| team_no | number | - | 팀 번호 |
+| is_imwondan | boolean | - | 임원단 필터 추후 적용|
+
+**Response**
+```json
+[
+  { "period": "1/4",  "present": 71 },
+  { "period": "1/11", "present": 67 },
+  { "period": "1/18", "present": 74 }
+]
+```
+
+> `period` 포맷: weekly → `M/D`, monthly → `N월`, yearly → `YYYY년`
+
+---
+
 ## 공통 사항
 
 ### 에러 응답

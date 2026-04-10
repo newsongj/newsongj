@@ -24,7 +24,7 @@ class MemberProfile(Base):
 
     profile_id       = Column(BigInteger, primary_key=True, autoincrement=True)
     member_id        = Column(BigInteger, nullable=False)
-    year             = Column(Date, nullable=False)
+    updated_at             = Column(Date, nullable=False)
     member_type      = Column(Enum('토요예배', '주일예배', '래사랑', '군지체', '해외지체', '새가족'), nullable=False)
     attendance_rate  = Column(Numeric(5, 2), nullable=True)
     attendance_grade = Column(Enum('A', 'B', 'C', 'D'), nullable=True)
@@ -50,9 +50,6 @@ class AttendanceRecord(Base):
     attendance_id = Column(BigInteger, primary_key=True, autoincrement=True)
     worship_date  = Column(Date, nullable=False)
     member_id     = Column(BigInteger, nullable=False)
-    gyogu         = Column(SmallInteger, nullable=False)
-    team          = Column(SmallInteger, nullable=False)
-    group_no      = Column(SmallInteger, nullable=False)
     status        = Column(Enum('PRESENT', 'ABSENT'), nullable=False, default='ABSENT')
     absent_reason = Column(Enum('학교/학원', '회사', '알바', '가족모임', '개인일정', '아픔', '기타'), nullable=True)
     checked_at    = Column(DateTime, nullable=False)
