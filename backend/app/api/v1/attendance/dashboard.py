@@ -6,7 +6,7 @@ from typing import Optional
 from typing import Union
 from app.core.database import get_db
 from app.schemas.dashboard import KpiResponse
-from app.schemas.dashboards import Dashboard, Trend, GyoguTrendResponse, ThreeYearsTrendResponse, AbsentReasonResponse
+from app.schemas.dashboards import KpiCard, Trend, GyoguTrendResponse, ThreeYearsTrendResponse, AbsentReasonResponse
 from app.services.dashboard import build_kpi_response
 from app.services.dashboards import build_trend, build_absent
 
@@ -23,9 +23,6 @@ def get_kpi(
     db: Session = Depends(get_db),
 ):
     return build_kpi_response(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
-
-
-router = APIRouter(prefix="/api/attendance/dashboard", tags=["대시보드"])
 
 
 @router.get(
@@ -58,7 +55,7 @@ def get_trend(
     summary="결석 사유별 인원",
 )
 def get_absent_reason(
-    data: Dashboard = Query(...),
+    data: KpiCard = Query(...),
     db: Session = Depends(get_db),
 ):
     return build_absent(db, data)
