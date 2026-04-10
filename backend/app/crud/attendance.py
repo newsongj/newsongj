@@ -1,12 +1,13 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import AttendanceRecord, Member, Leader
+from app.models import AttendanceRecord, Member
 from app.schemas.attendance import AttendanceBatchRequest
 from app.crud.query_builders import (
     active_as_of,
     build_members_as_of_query,
-    by_gyogu, by_team, by_group_no, by_leader,
+    by_group_no,
+    apply_attendance_filters,
 )
 from app.core.timezone import now_kst
 import datetime
@@ -48,9 +49,6 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
             db.add(AttendanceRecord(
                 worship_date=req.worship_date,
                 member_id=item.member_id,
-                gyogu=0,      # 삭제 예정 컬럼 — NOT NULL 제약 임시 충족
-                team=0,
-                group_no=0,
                 status=item.status,
                 absent_reason=item.absent_reason,
                 checked_at=now_kst(),
@@ -83,17 +81,11 @@ def get_attendance_records(
     - (Member, MemberProfile, AttendanceRecord|None) 튜플 목록 반환
     """
     query = build_members_as_of_query(db, worship_date)
-    query = by_gyogu(query, gyogu_no)
-    if team_no is not None:
-        query = by_team(query, team_no)
+    query = apply_attendance_filters(query, db, gyogu_no, team_no, is_imwondan)
+    if query is None:
+        return [], 0
     if group_no is not None:
         query = by_group_no(query, group_no)
-
-    if is_imwondan:
-        leader_id = db.query(Leader.leader_id).filter(Leader.leader_name == "임원단").scalar()
-        if not leader_id:
-            return [], 0
-        query = by_leader(query, leader_id)
 
     total = query.count()
 

@@ -24,7 +24,7 @@ class MemberProfile(Base):
 
     profile_id       = Column(BigInteger, primary_key=True, autoincrement=True)
     member_id        = Column(BigInteger, nullable=False)
-    updated_at             = Column(Date, nullable=False)
+    updated_at       = Column(Date, nullable=False)
     member_type      = Column(Enum('토요예배', '주일예배', '래사랑', '군지체', '해외지체', '새가족'), nullable=False)
     attendance_rate  = Column(Numeric(5, 2), nullable=True)
     attendance_grade = Column(Enum('A', 'B', 'C', 'D'), nullable=True)
