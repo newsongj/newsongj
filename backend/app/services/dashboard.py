@@ -1,7 +1,20 @@
 """대시보드 비즈니스 로직 — 집계 결과를 응답 스키마로 변환"""
+import datetime
+from collections import defaultdict
 from sqlalchemy.orm import Session
-from app.crud.dashboard import get_kpi_stats
-from app.schemas.dashboard import KpiResponse, AttendanceStats, GenStats, TopReason
+from app.crud.dashboard import get_kpi_stats, get_trend_stats, get_dimension_stats, get_absent_reason_stats, get_gyogu_status_stats, ABSENT_REASONS, GYOGU_KEYS
+from app.schemas.dashboard import KpiResponse, AttendanceStats, GenStats, TopReason, TrendItem, DimensionItem, AbsentReasonItem, GyoguStatusItem
+
+
+def _saturdays_in_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
+    """기간 내 모든 토요일 목록 반환."""
+    # 첫 토요일 찾기 (토요일 = weekday 5)
+    d = start + datetime.timedelta(days=(5 - start.weekday()) % 7)
+    result = []
+    while d <= end:
+        result.append(d)
+        d += datetime.timedelta(days=7)
+    return result
 
 
 def _empty_gen_stats(end_date) -> list[GenStats]:
@@ -53,3 +66,113 @@ def build_kpi_response(
         ],
         top_reason=top_reason,
     )
+
+
+def build_trend_response(
+    db: Session,
+    period_unit: str,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    gyogu_no: int | None,
+    team_no: int | None,
+    is_imwondan: bool,
+) -> list[TrendItem]:
+    if period_unit == "three_year":
+        current_year = end_date.year
+        return [
+            TrendItem(period=f"{current_year - 2}년", present=0),
+            TrendItem(period=f"{current_year - 1}년", present=0),
+            TrendItem(period=f"{current_year}년", present=0),
+        ]
+
+    date_present = get_trend_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+
+    if period_unit == "weekly":
+        # 기간 내 모든 일요일 생성, 데이터 없으면 0
+        saturdays = _saturdays_in_range(start_date, end_date)
+        return [
+            TrendItem(period=f"{d.month}/{d.day}", present=date_present.get(d, 0))
+            for d in saturdays
+        ]
+
+    if period_unit == "monthly":
+        items = []
+        y, m = start_date.year, start_date.month
+        while (y, m) <= (end_date.year, end_date.month):
+            vals = [p for d, p in date_present.items() if d.year == y and d.month == m]
+            present = round(sum(vals) / len(vals)) if vals else 0
+            items.append(TrendItem(period=f"{m}월", present=present))
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+        return items
+
+    # yearly
+    items = []
+    for y in range(start_date.year, end_date.year + 1):
+        vals = [p for d, p in date_present.items() if d.year == y]
+        present = round(sum(vals) / len(vals)) if vals else 0
+        items.append(TrendItem(period=f"{y}년", present=present))
+    return items
+
+
+def build_dimension_response(
+    db: Session,
+    dimension: str,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    gyogu_no: int | None,
+    team_no: int | None,
+    is_imwondan: bool,
+) -> list[DimensionItem]:
+    stats = get_dimension_stats(db, dimension, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    n = stats["n"]
+
+    return [
+        DimensionItem(
+            name=key,
+            present=round(sum(stats["buckets"][key]) / n) if n > 0 else 0,
+        )
+        for key in stats["keys"]
+    ]
+
+
+def build_absent_reason_response(
+    db: Session,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    gyogu_no: int | None,
+    team_no: int | None,
+    is_imwondan: bool,
+) -> list[AbsentReasonItem]:
+    stats = get_absent_reason_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    n = stats["n"]
+
+    return [
+        AbsentReasonItem(
+            reason=r,
+            count=round(sum(stats["buckets"][r]) / n) if n > 0 else 0,
+        )
+        for r in ABSENT_REASONS
+    ]
+
+
+def build_gyogu_status_response(
+    db: Session,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    gyogu_no: int | None,
+    is_imwondan: bool,
+) -> list[GyoguStatusItem]:
+    stats = get_gyogu_status_stats(db, start_date, end_date, gyogu_no, is_imwondan)
+    n = stats["n"]
+
+    return [
+        GyoguStatusItem(
+            name=k,
+            present=round(sum(stats["present"][k]) / n) if n > 0 else 0,
+            absent=round(sum(stats["absent"][k]) / n) if n > 0 else 0,
+        )
+        for k in GYOGU_KEYS
+    ]
