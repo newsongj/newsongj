@@ -22,3 +22,24 @@ class KpiResponse(BaseModel):
     all: AttendanceStats
     by_gen: list[GenStats]
     top_reason: Optional[TopReason]
+
+
+class TrendItem(BaseModel):
+    period: str
+    present: int
+
+
+class DimensionItem(BaseModel):
+    name: str
+    present: int
+
+
+class AbsentReasonItem(BaseModel):
+    reason: str
+    count: int
+
+
+class GyoguStatusItem(BaseModel):
+    name: str
+    present: int
+    absent: int
