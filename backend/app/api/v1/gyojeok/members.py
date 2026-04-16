@@ -1,5 +1,5 @@
 """gyojeok 멤버 API 엔드포인트 — 파라미터 파싱 + service 호출만 담당"""
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.crud.members import (
@@ -8,11 +8,12 @@ from app.crud.members import (
     update_member as crud_update_member,
     delete_member as crud_delete_member,
     restore_member as crud_restore_member,
+    MemberNotFoundError, MemberAlreadyActiveError,
 )
 from app.services.members import build_member_list, build_deleted_member_list, build_deleted_member_response
 from app.schemas.members import (
     MemberListResponse, DeletedMemberListResponse, DeletedMember,
-    MemberDeleteRequest, MemberRequest, MemberIdResponse,
+    MemberDeleteRequest, MemberCreate, MemberUpdate, MemberIdResponse,
 )
 from typing import Optional
 import datetime
@@ -61,13 +62,16 @@ def get_deleted_member_detail(
     member_id: int = Path(...),
     db: Session = Depends(get_db),
 ):
-    member, profile = crud_get_deleted_member(db, member_id)
+    try:
+        member, profile = crud_get_deleted_member(db, member_id)
+    except MemberNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return build_deleted_member_response(member, profile, db)
 
 
 @router.post("/members", response_model=MemberIdResponse, status_code=201, tags=["교적 생성"], summary="멤버 추가")
 def create_member(
-    body: MemberRequest,
+    body: MemberCreate,
     db: Session = Depends(get_db),
 ):
     member, _ = crud_create_member(db, body)
@@ -77,10 +81,13 @@ def create_member(
 @router.put("/members/{member_id}", response_model=MemberIdResponse, tags=["교적 수정"], summary="멤버 정보 수정")
 def update_member(
     member_id: int = Path(...),
-    body: MemberRequest = ...,
+    body: MemberUpdate = ...,
     db: Session = Depends(get_db),
 ):
-    replaced_id = crud_update_member(db, member_id, body)
+    try:
+        replaced_id = crud_update_member(db, member_id, body)
+    except MemberNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return MemberIdResponse(member_id=replaced_id)
 
 
@@ -90,7 +97,10 @@ def delete_member(
     body: MemberDeleteRequest = ...,
     db: Session = Depends(get_db),
 ):
-    crud_delete_member(db, member_id, body)
+    try:
+        crud_delete_member(db, member_id, body)
+    except MemberNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return MemberIdResponse(member_id=member_id)
 
 
@@ -99,5 +109,10 @@ def restore_member(
     member_id: int = Path(...),
     db: Session = Depends(get_db),
 ):
-    crud_restore_member(db, member_id)
+    try:
+        crud_restore_member(db, member_id)
+    except MemberNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except MemberAlreadyActiveError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return MemberIdResponse(member_id=member_id)

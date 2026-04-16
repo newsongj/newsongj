@@ -77,14 +77,6 @@ def build_trend_response(
     team_no: int | None,
     is_imwondan: bool,
 ) -> list[TrendItem]:
-    if period_unit == "three_year":
-        current_year = end_date.year
-        return [
-            TrendItem(period=f"{current_year - 2}년", present=0),
-            TrendItem(period=f"{current_year - 1}년", present=0),
-            TrendItem(period=f"{current_year}년", present=0),
-        ]
-
     date_present = get_trend_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
 
     if period_unit == "weekly":

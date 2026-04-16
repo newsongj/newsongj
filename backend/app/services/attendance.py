@@ -17,12 +17,11 @@ def build_attendance_list(rows: list, total: int, page: int, page_size: int, db:
 
 
 def _to_item(member, profile, record, leader_map) -> AttendanceMemberItem:
-    names = resolve_leader_names(profile.leader_ids, leader_map)
     return AttendanceMemberItem(
         member_id=member.member_id,
         name=member.name,
         generation=member.generation,
-        leader_names=', '.join(names) or None,
+        leader_names=resolve_leader_names(profile.leader_ids, leader_map),
         status=record.status if record else None,
         absent_reason=record.absent_reason if record else None,
     )

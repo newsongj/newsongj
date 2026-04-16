@@ -9,6 +9,7 @@
 
 3. 출석/대시보드 공통 필터 & 조회
    - apply_attendance_filters
+   - AttendanceRecord 체이너 (by_status, by_worship_date_range, by_worship_date_lte, by_member_ids)
    - get_worship_dates_in_range
    - get_records_by_dates
    - build_attendance_records_query
@@ -288,6 +289,29 @@ def get_profiles_in_year(
     if team     is not None: q = by_team(q, team)
     if group_no is not None: q = by_group_no(q, group_no)
     return q.all()
+
+
+# ---------------------------------------------------------------------------
+# AttendanceRecord 필터 체이너
+# ---------------------------------------------------------------------------
+
+def by_status(q: Query, status: str) -> Query:
+    return q.filter(AttendanceRecord.status == status)
+
+
+def by_worship_date_range(q: Query, start: datetime.date, end: datetime.date) -> Query:
+    return q.filter(
+        AttendanceRecord.worship_date >= start,
+        AttendanceRecord.worship_date <= end,
+    )
+
+
+def by_worship_date_lte(q: Query, end: datetime.date) -> Query:
+    return q.filter(AttendanceRecord.worship_date <= end)
+
+
+def by_member_ids(q: Query, member_ids: list[int]) -> Query:
+    return q.filter(AttendanceRecord.member_id.in_(member_ids))
 
 
 # ---------------------------------------------------------------------------

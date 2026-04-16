@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.models import AttendanceRecord, Member
@@ -9,27 +8,46 @@ from app.crud.query_builders import (
     by_group_no,
     apply_attendance_filters,
 )
-from app.core.timezone import now_kst
+from app.crud.attendance_rate import update_rates_for_members
+from app.core.timezone import now_kst, today_kst
 import datetime
+
+
+class InvalidMemberIdsError(Exception):
+    """존재하지 않거나 삭제된 멤버 ID 목록 포함 (404 매핑 대상)."""
+    def __init__(self, ids: list[int]):
+        self.ids = ids
+        super().__init__(f"존재하지 않거나 삭제된 멤버입니다: {ids}")
+
+
+class InvalidEnrolledError(Exception):
+    """등록일(enrolled_at)이 없거나 미래인 멤버 포함 (400 매핑 대상)."""
+    def __init__(self, ids: list[int]):
+        self.ids = ids
+        super().__init__(f"등록일이 없거나 미래인 멤버: {ids}")
 
 
 def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
     request_ids = {item.member_id for item in req.records}
 
-    valid_ids = {
-        row.member_id
+    valid_map: dict[int, datetime.date | None] = {
+        row.member_id: (row.enrolled_at.date() if row.enrolled_at else None)
         for row in active_as_of(
-            db.query(Member.member_id).filter(Member.member_id.in_(request_ids)),
+            db.query(Member.member_id, Member.enrolled_at)
+              .filter(Member.member_id.in_(request_ids)),
             req.worship_date,
         ).all()
     }
+    valid_ids = set(valid_map)
 
     invalid_ids = request_ids - valid_ids
     if invalid_ids:
-        raise HTTPException(
-            status_code=404,
-            detail=f"존재하지 않거나 삭제된 멤버입니다: {sorted(invalid_ids)}",
-        )
+        raise InvalidMemberIdsError(sorted(invalid_ids))
+
+    today = today_kst()
+    bad_enrolled = [mid for mid, e in valid_map.items() if e is None or e > today]
+    if bad_enrolled:
+        raise InvalidEnrolledError(sorted(bad_enrolled))
 
     # 기존 레코드 일괄 조회 — N+1 방지
     existing_map: dict[int, AttendanceRecord] = {
@@ -60,6 +78,9 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
             existing.absent_reason = item.absent_reason
             existing.checked_at = now_kst()
             saved_count += 1
+
+    db.flush()
+    update_rates_for_members(db, valid_map, today)
 
     db.commit()
     return saved_count

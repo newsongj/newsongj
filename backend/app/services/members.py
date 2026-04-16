@@ -31,7 +31,7 @@ def _to_member_response(member, profile, leader_map) -> MemberResponse:
         member_type=profile.member_type if profile else None,
         attendance_grade=profile.attendance_grade if profile else None,
         plt_status=profile.plt_status if profile else None,
-        leader_ids=', '.join(resolve_leader_names(profile.leader_ids, leader_map)) if profile else None,
+        leader_names=resolve_leader_names(profile.leader_ids, leader_map) if profile else [],
         v8pid=member.v8pid,
         school_work=member.school_work,
         major=member.major,
