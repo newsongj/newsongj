@@ -17,7 +17,7 @@ class MemberResponse(BaseModel):
     member_type: Optional[str]
     attendance_grade: Optional[str]
     plt_status: Optional[str]
-    leader_ids: Optional[str]       # JSON 배열 문자열 또는 resolve된 이름 문자열
+    leader_names: list[str]         # 리더 이름 배열 (리더 없으면 [])
     v8pid: Optional[str]
     school_work: Optional[str]      # 학교 및 직장
     major: Optional[str]            # 전공
@@ -33,8 +33,8 @@ class MemberListResponse(BaseModel):
     meta: PageMeta
 
 
-# 멤버 생성/수정 요청 스키마
-class MemberRequest(BaseModel):
+# 멤버 생성 요청 스키마
+class MemberCreate(BaseModel):
     name: str
     gender: Literal['남', '여']
     generation: int
@@ -50,15 +50,21 @@ class MemberRequest(BaseModel):
     v8pid: Optional[str] = None
     school_work: Optional[str] = None  # 학교 및 직장
     major: Optional[str] = None        # 전공
-    # enrolled_at: 서버에서 자동 생성 (crud/members.py create_member에서 datetime.now())
+    # enrolled_at: 서버에서 자동 생성 (crud/members.py create_member에서 now_kst())
 
     @model_validator(mode="after")
-    def validate_profile_fields(self) -> "MemberRequest":
+    def validate_profile_fields(self):
         profile_fields = [self.gyogu, self.team, self.group_no, self.member_type]
         filled = sum(1 for f in profile_fields if f is not None)
         if filled not in (0, 4):
             raise ValueError("gyogu, team, group_no, member_type는 모두 입력하거나 모두 비워야 합니다.")
         return self
+
+
+# 멤버 수정 요청 스키마 — 현재 필드/검증 규칙은 생성과 동일하나,
+# 향후 PUT 전용 필드 추가(예: enrolled_at 보정) 시 Create와 독립적으로 진화 가능하도록 분리
+class MemberUpdate(MemberCreate):
+    pass
 
 
 # 멤버 생성/수정 응답 (member_id만 반환)

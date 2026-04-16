@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.models import AttendanceRecord, Member
@@ -12,6 +11,20 @@ from app.crud.query_builders import (
 from app.crud.attendance_rate import update_rates_for_members
 from app.core.timezone import now_kst, today_kst
 import datetime
+
+
+class InvalidMemberIdsError(Exception):
+    """존재하지 않거나 삭제된 멤버 ID 목록 포함 (404 매핑 대상)."""
+    def __init__(self, ids: list[int]):
+        self.ids = ids
+        super().__init__(f"존재하지 않거나 삭제된 멤버입니다: {ids}")
+
+
+class InvalidEnrolledError(Exception):
+    """등록일(enrolled_at)이 없거나 미래인 멤버 포함 (400 매핑 대상)."""
+    def __init__(self, ids: list[int]):
+        self.ids = ids
+        super().__init__(f"등록일이 없거나 미래인 멤버: {ids}")
 
 
 def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
@@ -29,18 +42,12 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
 
     invalid_ids = request_ids - valid_ids
     if invalid_ids:
-        raise HTTPException(
-            status_code=404,
-            detail=f"존재하지 않거나 삭제된 멤버입니다: {sorted(invalid_ids)}",
-        )
+        raise InvalidMemberIdsError(sorted(invalid_ids))
 
     today = today_kst()
     bad_enrolled = [mid for mid, e in valid_map.items() if e is None or e > today]
     if bad_enrolled:
-        raise HTTPException(
-            status_code=400,
-            detail=f"등록일이 없거나 미래인 멤버: {sorted(bad_enrolled)}",
-        )
+        raise InvalidEnrolledError(sorted(bad_enrolled))
 
     # 기존 레코드 일괄 조회 — N+1 방지
     existing_map: dict[int, AttendanceRecord] = {
