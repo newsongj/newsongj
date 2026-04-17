@@ -11,14 +11,7 @@ from app.crud.query_builders import (
 )
 import datetime
 from app.core.timezone import now_kst, today_kst
-
-
-class MemberNotFoundError(Exception):
-    """멤버 또는 삭제된 멤버 조회 실패 (404 매핑 대상)."""
-
-
-class MemberAlreadyActiveError(Exception):
-    """이미 활성 상태인 멤버에 대한 복원 시도 (400 매핑 대상)."""
+from app.core.exceptions import MemberNotFoundError, MemberAlreadyActiveError  # noqa: F401  (재export — 하위호환)
 
 
 def _apply_keyword_filter(query, db: Session, field: str, keyword: str):

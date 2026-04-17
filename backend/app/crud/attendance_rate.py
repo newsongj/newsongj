@@ -11,7 +11,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models import AttendanceRecord, Member
-from app.core.date_utils import count_saturdays_between, nth_saturday_before
+from app.core.date_utils import saturdays_between, nth_saturday_before
 from app.crud.query_builders import (
     by_status,
     by_worship_date_range,
@@ -84,7 +84,7 @@ def update_rates_for_members(
         return
 
     n_map = {
-        mid: count_saturdays_between(start, today)
+        mid: len(saturdays_between(start, today))
         for mid, start in enrolled_map.items()
     }
 
