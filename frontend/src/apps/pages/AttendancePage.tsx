@@ -9,11 +9,12 @@ import { Snackbar } from '@components/common/Snackbar';
 import { Chip } from '@components/common/Chip';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
+import { fetchAttendanceRecords, saveAttendanceBatch } from '@/api/attendance';
+import { AbsentReason, AttendanceMemberRow } from '@/models/attendance.types';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT';
-type AbsentReason = '학교/학원' | '회사' | '알바' | '가족모임' | '개인일정' | '아픔' | '기타' | null;
 
 interface AttendanceRow {
   memberId: number;
@@ -24,7 +25,7 @@ interface AttendanceRow {
   team: number;
   groupNo: number;
   status: AttendanceStatus;
-  absentReason: AbsentReason;
+  absentReason: AbsentReason | null;
 }
 
 interface FilterState {
@@ -71,26 +72,19 @@ const GROUP_OPTIONS = [
   ...Array.from({ length: 4 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}그룹` })),
 ];
 
-// ── Mock Members ──────────────────────────────────────────────────────────
-
-const MOCK_MEMBERS: Omit<AttendanceRow, 'status' | 'absentReason'>[] = [
-  { memberId: 1,  name: '김민서', generation: '37기', leaderNames: ['팀장'],          gyogu: 1, team: 1,  groupNo: 1 },
-  { memberId: 2,  name: '이준호', generation: '38기', leaderNames: ['그룹장'],         gyogu: 1, team: 1,  groupNo: 2 },
-  { memberId: 3,  name: '박지현', generation: '39기', leaderNames: [],               gyogu: 1, team: 1,  groupNo: 3 },
-  { memberId: 4,  name: '최수아', generation: '40기', leaderNames: ['PLT'],           gyogu: 1, team: 2,  groupNo: 1 },
-  { memberId: 5,  name: '정민준', generation: '37기', leaderNames: [],               gyogu: 1, team: 2,  groupNo: 2 },
-  { memberId: 6,  name: '한예지', generation: '41기', leaderNames: ['부팀장'],         gyogu: 1, team: 3,  groupNo: 1 },
-  { memberId: 7,  name: '강태양', generation: '39기', leaderNames: ['임원단'], gyogu: 2, team: 5,  groupNo: 1 },
-  { memberId: 8,  name: '윤서연', generation: '42기', leaderNames: [],               gyogu: 2, team: 5,  groupNo: 2 },
-  { memberId: 9,  name: '임도현', generation: '38기', leaderNames: ['그룹장'],         gyogu: 2, team: 6,  groupNo: 1 },
-  { memberId: 10, name: '오하은', generation: '40기', leaderNames: ['임원단'],         gyogu: 2, team: 6,  groupNo: 3 },
-  { memberId: 11, name: '신재원', generation: '43기', leaderNames: ['부서장'],         gyogu: 3, team: 9,  groupNo: 1 },
-  { memberId: 12, name: '유나리', generation: '41기', leaderNames: ['임원단'],         gyogu: 3, team: 9,  groupNo: 2 },
-  { memberId: 13, name: '백지훈', generation: '44기', leaderNames: ['팀장'],          gyogu: 3, team: 10, groupNo: 1 },
-  { memberId: 14, name: '조은별', generation: '42기', leaderNames: ['새큼터'],         gyogu: 3, team: 10, groupNo: 4 },
-];
-
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+const toAttendanceRow = (item: AttendanceMemberRow, filters: FilterState): AttendanceRow => ({
+  memberId: item.member_id,
+  name: item.name,
+  generation: `${item.generation}기`,
+  leaderNames: item.leader_names,
+  gyogu: filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0,
+  team: filters.team ? Number(filters.team) : 0,
+  groupNo: filters.groupNo ? Number(filters.groupNo) : 0,
+  status: item.status ?? 'PRESENT',
+  absentReason: item.absent_reason,
+});
 
 const getMostRecentSaturday = (): Date => {
   const today = new Date();
@@ -112,20 +106,6 @@ const formatWorshipDate = (date: Date): string => {
   const m = date.getMonth() + 1;
   const d = date.getDate();
   return `${y}년 ${m}월 ${d}일 (토)`;
-};
-
-const generateMockAttendance = (
-  member: Omit<AttendanceRow, 'status' | 'absentReason'>,
-  date: Date,
-): AttendanceRow => {
-  const seed = (member.memberId * 7 + date.getDate() + date.getMonth() * 31) % 10;
-  const isPresent = seed > 2;
-  const REASONS: AbsentReason[] = ['학교/학원', '회사', '알바', '가족모임', '개인일정', '아픔', '기타'];
-  return {
-    ...member,
-    status: isPresent ? 'PRESENT' : 'ABSENT',
-    absentReason: isPresent ? null : REASONS[seed % REASONS.length],
-  };
 };
 
 const buildCalendarGrid = (year: number, month: number): (Date | null)[] => {
@@ -310,6 +290,7 @@ const AttendancePage: React.FC = () => {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [savedRows, setSavedRows] = useState<AttendanceRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
   // 페이징 상태
   const [page, setPage] = useState(0);
@@ -350,32 +331,45 @@ const AttendancePage: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  // 필터 또는 주차 변경 시 데이터 로드 + 페이지 초기화
+  // 필터 또는 주차 변경 시 페이지 초기화
+  useEffect(() => {
+    setPage(0);
+  }, [filters.gyogu, filters.team, filters.groupNo, worshipDate, rowsPerPage]);
+
+  // 필터·주차·페이지 변경 시 데이터 로드
   useEffect(() => {
     if (!filters.gyogu) {
       setRows([]);
       setSavedRows([]);
-      setPage(0);
+      setTotalCount(0);
       return;
     }
-    const filtered = MOCK_MEMBERS.filter((m) => {
-      if (filters.gyogu === '임원단') return m.leaderNames.includes('임원단');
-      if (String(m.gyogu) !== filters.gyogu) return false;
-      if (filters.team && String(m.team) !== filters.team) return false;
-      if (filters.groupNo && String(m.groupNo) !== filters.groupNo) return false;
-      return true;
-    });
-    const loaded = filtered.map((m) => generateMockAttendance(m, worshipDate));
-    setRows(loaded);
-    setSavedRows(loaded.map((r) => ({ ...r })));
-    setPage(0);
-  }, [filters.gyogu, filters.team, filters.groupNo, worshipDate]);
+    const gyogu_no = filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0;
+    const is_imwondan = filters.gyogu === '임원단';
+    fetchAttendanceRecords({
+      worship_date: worshipDate.toISOString().split('T')[0],
+      gyogu_no,
+      team_no: filters.team ? Number(filters.team) : undefined,
+      group_no: filters.groupNo ? Number(filters.groupNo) : undefined,
+      is_imwondan,
+      page: page + 1,
+      page_size: rowsPerPage,
+    })
+      .then((res) => {
+        const loaded = res.items.map((item) => toAttendanceRow(item, filters));
+        setRows(loaded);
+        setSavedRows(loaded.map((r) => ({ ...r })));
+        setTotalCount(res.meta.total_items);
+      })
+      .catch(() => {
+        setRows([]);
+        setSavedRows([]);
+        setTotalCount(0);
+      });
+  }, [filters.gyogu, filters.team, filters.groupNo, worshipDate, page, rowsPerPage]);
 
-  // 현재 페이지에 표시할 행
-  const pagedRows = useMemo(
-    () => rows.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
-    [rows, page, rowsPerPage]
-  );
+  // 서버 사이드 페이징이므로 rows가 이미 현재 페이지 데이터
+  const pagedRows = rows;
 
   const presentCount = useMemo(() => rows.filter((r) => r.status === 'PRESENT').length, [rows]);
 
@@ -433,8 +427,24 @@ const AttendancePage: React.FC = () => {
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      // TODO: 변경된 rows만 추출해 API 호출 (POST/PUT)
-      await new Promise<void>((resolve) => setTimeout(resolve, 600));
+      const changedRows = rows.filter((row) => {
+        const orig = savedRows.find((r) => r.memberId === row.memberId);
+        if (!orig) return true;
+        return row.status !== orig.status || row.absentReason !== orig.absentReason;
+      });
+      const validRecords = changedRows
+        .filter((row) => row.status === 'PRESENT' || row.absentReason !== null)
+        .map((row) => ({
+          member_id: row.memberId,
+          status: row.status,
+          absent_reason: row.status === 'ABSENT' ? (row.absentReason as AbsentReason) : null,
+        }));
+      if (validRecords.length > 0) {
+        await saveAttendanceBatch({
+          worship_date: worshipDate.toISOString().split('T')[0],
+          records: validRecords,
+        });
+      }
       setSavedRows(rows.map((r) => ({ ...r })));
       showSnackbar('출석 정보가 저장되었습니다.', 'success');
     } catch {
@@ -442,7 +452,7 @@ const AttendancePage: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [rows, showSnackbar]);
+  }, [rows, savedRows, worshipDate, showSnackbar]);
 
   // 달력 열기/닫기
   const handleWeekLabelClick = useCallback(
@@ -504,21 +514,21 @@ const AttendancePage: React.FC = () => {
         label: '교구',
         minWidth: 80,
         align: 'center',
-        render: (_v, row) => `${row.gyogu}교구`,
+        render: (_v, row) => row.gyogu === 0 ? '임원단' : `${row.gyogu}교구`,
       },
       {
         id: 'team',
         label: '팀',
         minWidth: 70,
         align: 'center',
-        render: (_v, row) => `${row.team}팀`,
+        render: (_v, row) => row.team === 0 ? '-' : `${row.team}팀`,
       },
       {
         id: 'groupNo',
         label: '그룹',
         minWidth: 80,
         align: 'center',
-        render: (_v, row) => `${row.groupNo}그룹`,
+        render: (_v, row) => row.groupNo === 0 ? '-' : `${row.groupNo}그룹`,
       },
       {
         id: 'leaderNames',
@@ -673,14 +683,14 @@ const AttendancePage: React.FC = () => {
             pagination={{
               page,
               rowsPerPage,
-              totalCount: rows.length,
+              totalCount,
               onPageChange: setPage,
               onRowsPerPageChange: (newSize) => { setRowsPerPage(newSize); setPage(0); },
             }}
           />
           <SaveFooter>
             <CountLabel>
-              총 {rows.length}명&nbsp;&nbsp;|&nbsp;&nbsp;출석 {presentCount}명&nbsp;&nbsp;|&nbsp;&nbsp;결석 {rows.length - presentCount}명
+              총 {totalCount}명&nbsp;&nbsp;|&nbsp;&nbsp;출석 {presentCount}명&nbsp;&nbsp;|&nbsp;&nbsp;결석 {presentCount > 0 ? rows.length - presentCount : 0}명
             </CountLabel>
             <Button
               variant="filled"

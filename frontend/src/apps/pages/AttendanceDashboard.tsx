@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import {
   Bar,
@@ -17,6 +17,14 @@ import {
   YAxis,
 } from 'recharts';
 import { Users, TrendingUp, CalendarCheck } from 'lucide-react';
+import {
+  fetchAttendanceAbsentReason,
+  fetchAttendanceDimension,
+  fetchAttendanceGyoguStatus,
+  fetchAttendanceKpi,
+  fetchAttendanceTrend,
+} from '@/api/attendance';
+import { AttendanceKpiResponse, DimensionItem, GyoguStatusItem } from '@/models/attendance.types';
 import StatCard from '@components/common/StatCard';
 import ChartWithSelect from '@components/common/ChartWithSelect';
 import ChartContainer from '@components/common/ChartContainer';
@@ -27,37 +35,10 @@ import { Select } from '@components/common/Select';
 type PeriodUnit = 'weekly' | 'monthly' | 'yearly' | '3years' | 'custom';
 type DimensionKey = 'gyogu' | 'team' | 'generation' | 'gender';
 
-// ── Mock Data ──────────────────────────────────────────────────────────────
+// ── Chart Config ───────────────────────────────────────────────────────────
 
-// 출석 추이 — 전체(교구별 3선) / 교구 선택 시 단일선
-const TREND_WEEKLY = [
-  { period: '12/21', gyogu1: 25, gyogu2: 22, gyogu3: 21, present: 68 },
-  { period: '12/28', gyogu1: 22, gyogu2: 20, gyogu3: 20, present: 62 },
-  { period: '1/4',   gyogu1: 27, gyogu2: 23, gyogu3: 21, present: 71 },
-  { period: '1/11',  gyogu1: 25, gyogu2: 21, gyogu3: 21, present: 67 },
-  { period: '1/18',  gyogu1: 28, gyogu2: 25, gyogu3: 21, present: 74 },
-  { period: '1/25',  gyogu1: 27, gyogu2: 24, gyogu3: 21, present: 72 },
-  { period: '2/1',   gyogu1: 26, gyogu2: 23, gyogu3: 21, present: 70 },
-  { period: '2/8',   gyogu1: 29, gyogu2: 26, gyogu3: 22, present: 77 },
-  { period: '2/15',  gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
-  { period: '2/22',  gyogu1: 30, gyogu2: 27, gyogu3: 22, present: 79 },
-  { period: '3/1',   gyogu1: 29, gyogu2: 25, gyogu3: 22, present: 76 },
-  { period: '3/8',   gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
-];
-
-const TREND_MONTHLY = [
-  { period: '1월', gyogu1: 26, gyogu2: 23, gyogu3: 21, present: 70 },
-  { period: '2월', gyogu1: 28, gyogu2: 25, gyogu3: 21, present: 74 },
-  { period: '3월', gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
-];
-
-
-const TREND_YEARLY = [
-  { period: '2022년', gyogu1: 21, gyogu2: 20, gyogu3: 17, present: 58 },
-  { period: '2023년', gyogu1: 24, gyogu2: 21, gyogu3: 18, present: 63 },
-  { period: '2024년', gyogu1: 26, gyogu2: 23, gyogu3: 20, present: 69 },
-  { period: '2025년', gyogu1: 28, gyogu2: 25, gyogu3: 20, present: 73 },
-  { period: '2026년', gyogu1: 28, gyogu2: 25, gyogu3: 22, present: 75 },
+const ABSENT_REASON_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#6b7280',
 ];
 
 const GYOGU_LINE_CONFIG = [
@@ -65,41 +46,6 @@ const GYOGU_LINE_CONFIG = [
   { key: 'gyogu2', label: '2교구', color: '#10b981' },
   { key: 'gyogu3', label: '3교구', color: '#f59e0b' },
 ] as const;
-
-// 차원별 — Y축: 인원 수
-const DIM_GYOGU      = [
-  { name: '1교구', present: 36, absent: 10 },
-  { name: '2교구', present: 28, absent: 11 },
-  { name: '3교구', present: 18, absent:  6 },
-  { name: '임원단', present: 12, absent:  2 },
-];
-const DIM_TEAM = Array.from({ length: 12 }, (_, i) => ({
-  name: `${i + 1}팀`,
-  present: 8 + Math.round(Math.abs(Math.sin(i * 1.3)) * 6),
-  absent:  1 + Math.round(Math.abs(Math.cos(i * 1.1)) * 3),
-}));
-const DIM_GEN = [
-  { name: '37기', present: 22, absent: 5 },
-  { name: '38기', present: 20, absent: 6 },
-  { name: '39기', present: 17, absent: 7 },
-  { name: '40기', present: 19, absent: 6 },
-  { name: '41기', present: 15, absent: 7 },
-  { name: '42기', present: 13, absent: 8 },
-];
-const DIM_GENDER = [
-  { name: '남', present: 38, absent: 14 },
-  { name: '여', present: 44, absent: 13 },
-];
-// 결석사유 분포
-const ABSENT_REASON_DATA = [
-  { name: '학교/학원', value: 28, fill: '#3b82f6' },
-  { name: '알바',     value: 22, fill: '#10b981' },
-  { name: '회사',     value: 15, fill: '#f59e0b' },
-  { name: '개인일정',  value: 18, fill: '#8b5cf6' },
-  { name: '가족모임',  value: 10, fill: '#ef4444' },
-  { name: '아픔',     value:  5, fill: '#06b6d4' },
-  { name: '기타',     value:  2, fill: '#6b7280' },
-];
 
 // ── Select Options ─────────────────────────────────────────────────────────
 
@@ -283,6 +229,15 @@ const AttendanceDashboard: React.FC = () => {
   const [customStart, setCustomStart] = useState('');
   const [customEnd,   setCustomEnd]   = useState('');
 
+  // ── KPI 상태 ──────────────────────────────────────────────────────────
+  const [kpi, setKpi] = useState<AttendanceKpiResponse | null>(null);
+
+  // ── 차트 데이터 상태 ──────────────────────────────────────────────────
+  const [trendChartData, setTrendChartData] = useState<Record<string, string | number>[]>([]);
+  const [dimensionChartData, setDimensionChartData] = useState<DimensionItem[]>([]);
+  const [absentReasonChartData, setAbsentReasonChartData] = useState<{ name: string; value: number; fill: string }[]>([]);
+  const [gyoguStatusChartData, setGyoguStatusChartData] = useState<GyoguStatusItem[]>([]);
+
   // ── 세부 필터 상태 ────────────────────────────────────────────────────
   const [gyogu, setGyogu] = useState('');
   const [team,  setTeam]  = useState('');
@@ -294,12 +249,84 @@ const AttendanceDashboard: React.FC = () => {
     setGyogu(String(val)); setTeam('');
   };
 
-  // ── 추이 데이터 ───────────────────────────────────────────────────────
-  const trendData = useMemo(() => {
-    if (periodUnit === 'monthly') return TREND_MONTHLY;
-    if (periodUnit === 'yearly' || periodUnit === 'custom') return TREND_YEARLY;
-    return TREND_WEEKLY;
-  }, [periodUnit]);
+  // ── start_date / end_date 계산 ────────────────────────────────────────
+  const { startDate, endDate } = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    if (periodUnit === 'weekly') {
+      const s = fmt(weekSaturday);
+      return { startDate: s, endDate: s };
+    }
+    if (periodUnit === 'monthly') {
+      const y = Number(selectedYear);
+      const m = Number(selectedMonth);
+      const start = `${y}-${String(m).padStart(2, '0')}-01`;
+      const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
+      return { startDate: start, endDate: end };
+    }
+    if (periodUnit === 'yearly') {
+      return { startDate: `${selectedYearOnly}-01-01`, endDate: `${selectedYearOnly}-12-31` };
+    }
+    if (periodUnit === '3years') {
+      const endY = Number(selectedYearOnly);
+      return { startDate: `${endY - 2}-01-01`, endDate: `${endY}-12-31` };
+    }
+    if (periodUnit === 'custom' && customStart && customEnd) {
+      return { startDate: customStart, endDate: customEnd };
+    }
+    return { startDate: null, endDate: null };
+  }, [periodUnit, weekSaturday, selectedYear, selectedMonth, selectedYearOnly, customStart, customEnd]);
+
+  // ── KPI API 호출 ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
+    const is_imwondan = gyogu === '임원단';
+    const team_no = team ? Number(team) : undefined;
+    fetchAttendanceKpi({ start_date: startDate, end_date: endDate, gyogu_no, team_no, is_imwondan })
+      .then(setKpi)
+      .catch(() => setKpi(null));
+  }, [startDate, endDate, gyogu, team]);
+
+  // ── 추이 데이터 (API) ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!startDate || !endDate || periodUnit === '3years') {
+      setTrendChartData([]);
+      return;
+    }
+    const periodMap: Record<string, 'weekly' | 'monthly' | 'yearly'> = {
+      weekly: 'weekly',
+      monthly: 'monthly',
+      yearly: 'yearly',
+      custom: 'monthly',
+    };
+    const period_unit = periodMap[periodUnit];
+    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
+    const is_imwondan = gyogu === '임원단';
+    const team_no = team ? Number(team) : undefined;
+
+    if (!gyogu) {
+      Promise.all([
+        fetchAttendanceTrend({ period_unit, start_date: startDate, end_date: endDate, gyogu_no: 1 }),
+        fetchAttendanceTrend({ period_unit, start_date: startDate, end_date: endDate, gyogu_no: 2 }),
+        fetchAttendanceTrend({ period_unit, start_date: startDate, end_date: endDate, gyogu_no: 3 }),
+      ])
+        .then(([d1, d2, d3]) => {
+          const merged = d1.map((item, i) => ({
+            period: item.period,
+            gyogu1: item.present,
+            gyogu2: d2[i]?.present ?? 0,
+            gyogu3: d3[i]?.present ?? 0,
+            present: item.present + (d2[i]?.present ?? 0) + (d3[i]?.present ?? 0),
+          }));
+          setTrendChartData(merged);
+        })
+        .catch(() => setTrendChartData([]));
+    } else {
+      fetchAttendanceTrend({ period_unit, start_date: startDate, end_date: endDate, gyogu_no, team_no, is_imwondan })
+        .then(data => setTrendChartData(data as unknown as Record<string, string | number>[]))
+        .catch(() => setTrendChartData([]));
+    }
+  }, [startDate, endDate, periodUnit, gyogu, team]);
 
   // ── 3개년 비교 데이터: 4개 주 × 교구별 막대 + 3개년 라인 ──────────────
   const yearLineConfig = useMemo(() => {
@@ -336,24 +363,51 @@ const AttendanceDashboard: React.FC = () => {
     }));
   }, [yearLineConfig, mostRecentSat]);
 
-  // ── 차원별 데이터 ─────────────────────────────────────────────────────
-  const dimensionData = useMemo(() => {
-    switch (dimension) {
-      case 'team':       return DIM_TEAM;
-      case 'generation': return DIM_GEN;
-      case 'gender':     return DIM_GENDER;
-      default:           return DIM_GYOGU;
-    }
-  }, [dimension]);
+  // ── 차원별 데이터 (API) ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
+    const is_imwondan = gyogu === '임원단';
+    const team_no = team ? Number(team) : undefined;
+    fetchAttendanceDimension({ dimension, start_date: startDate, end_date: endDate, gyogu_no, team_no, is_imwondan })
+      .then(setDimensionChartData)
+      .catch(() => setDimensionChartData([]));
+  }, [startDate, endDate, gyogu, team, dimension]);
 
-  // ── KPI ───────────────────────────────────────────────────────────────
-  const kpiAvgPresent   = 75;   // 기간 평균 출석 인원
-  const kpiTotal        = 109;  // 전체 인원
-  const kpiGen45Present = 22;   // 45기 출석 인원
-  const kpiGen45Total   = 26;   // 45기 전체 인원
-  const kpiGen46Present = 18;   // 46기 출석 인원
-  const kpiGen46Total   = 23;   // 46기 전체 인원
-  const kpiTopAbsentReason = ABSENT_REASON_DATA.reduce((a, b) => a.value >= b.value ? a : b);
+  // ── 결석사유 데이터 (API) ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
+    const is_imwondan = gyogu === '임원단';
+    const team_no = team ? Number(team) : undefined;
+    fetchAttendanceAbsentReason({ start_date: startDate, end_date: endDate, gyogu_no, team_no, is_imwondan })
+      .then(items =>
+        setAbsentReasonChartData(
+          items
+            .filter((item) => item.count > 0)
+            .map((item, i) => ({
+              name: item.reason,
+              value: item.count,
+              fill: ABSENT_REASON_COLORS[i % ABSENT_REASON_COLORS.length],
+            }))
+        )
+      )
+      .catch(() => setAbsentReasonChartData([]));
+  }, [startDate, endDate, gyogu, team]);
+
+  // ── 교구별 현황 데이터 (API) ──────────────────────────────────────────
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
+    const is_imwondan = gyogu === '임원단';
+    fetchAttendanceGyoguStatus({ start_date: startDate, end_date: endDate, gyogu_no, is_imwondan })
+      .then(setGyoguStatusChartData)
+      .catch(() => setGyoguStatusChartData([]));
+  }, [startDate, endDate, gyogu]);
+
+  // ── KPI 파생값 ────────────────────────────────────────────────────────
+  const gen45 = kpi?.by_gen.find(g => g.gen === 45);
+  const gen46 = kpi?.by_gen.find(g => g.gen === 46);
 
   // ── 기간 설명 텍스트 ──────────────────────────────────────────────────
   const periodDesc = useMemo(() => {
@@ -462,33 +516,33 @@ const AttendanceDashboard: React.FC = () => {
       {/* ── KPI 카드 ── */}
       <KpiGrid>
         <StatCard
-          label="기간 평균 출석 인원"
-          value={`${kpiAvgPresent}명`}
-          change={`전체 ${kpiTotal}명 기준`}
+          label="기간 출석 인원"
+          value={kpi ? `${kpi.all.present}명` : '-'}
+          change={kpi ? `전체 ${kpi.all.total}명 기준` : ''}
           isPositive={true}
           icon={<CalendarCheck size={24} />}
           iconBgColor="#e0f2fe"
         />
         <StatCard
           label="45기 출석 인원"
-          value={`${kpiGen45Present}명`}
-          change={`전체 ${kpiGen45Total}명 중`}
+          value={gen45 ? `${gen45.present}명` : '-'}
+          change={gen45 ? `전체 ${gen45.total}명 중` : ''}
           isPositive={true}
           icon={<Users size={24} />}
           iconBgColor="#dcfce7"
         />
         <StatCard
           label="46기 출석 인원"
-          value={`${kpiGen46Present}명`}
-          change={`전체 ${kpiGen46Total}명 중`}
+          value={gen46 ? `${gen46.present}명` : '-'}
+          change={gen46 ? `전체 ${gen46.total}명 중` : ''}
           isPositive={true}
           icon={<Users size={24} />}
           iconBgColor="#f3e8ff"
         />
         <StatCard
           label="최다 결석 사유"
-          value={kpiTopAbsentReason.name}
-          change={`${kpiTopAbsentReason.value}명`}
+          value={kpi?.top_reason?.reason ?? '-'}
+          change={kpi?.top_reason ? `${kpi.top_reason.count}명` : ''}
           isPositive={false}
           icon={<TrendingUp size={24} />}
           iconBgColor="#fef9c3"
@@ -537,7 +591,7 @@ const AttendanceDashboard: React.FC = () => {
               </ComposedChart>
             ) : (
               // 주간/월간/연간/직접입력: 기존 라인차트
-              <LineChart data={trendData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
+              <LineChart data={trendChartData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
                 <XAxis
                   dataKey="period"
@@ -584,7 +638,7 @@ const AttendanceDashboard: React.FC = () => {
           onSelectChange={(v) => setDimension(v as DimensionKey)}
         >
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dimensionData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
+            <BarChart data={dimensionChartData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
               <XAxis
                 dataKey="name"
@@ -612,7 +666,7 @@ const AttendanceDashboard: React.FC = () => {
             <ResponsiveContainer width="55%" height={300}>
               <PieChart>
                 <Pie
-                  data={ABSENT_REASON_DATA}
+                  data={absentReasonChartData}
                   cx="50%"
                   cy="50%"
                   innerRadius={70}
@@ -620,7 +674,7 @@ const AttendanceDashboard: React.FC = () => {
                   paddingAngle={2}
                   dataKey="value"
                 >
-                  {ABSENT_REASON_DATA.map((entry, idx) => (
+                  {absentReasonChartData.map((entry, idx) => (
                     <Cell key={idx} fill={entry.fill} />
                   ))}
                 </Pie>
@@ -631,7 +685,7 @@ const AttendanceDashboard: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-              {ABSENT_REASON_DATA.map((entry) => (
+              {absentReasonChartData.map((entry) => (
                 <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: entry.fill, flexShrink: 0 }} />
                   <span style={{ color: '#374151', flex: 1 }}>{entry.name}</span>
@@ -646,7 +700,7 @@ const AttendanceDashboard: React.FC = () => {
         <ChartContainer title="교구별 출석 현황" description="교구별 출석 / 결석 인원 현황">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart
-              data={DIM_GYOGU}
+              data={gyoguStatusChartData}
               margin={{ top: 8, right: 18, left: 0, bottom: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
