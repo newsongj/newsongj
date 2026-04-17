@@ -2,16 +2,16 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, String
 from app.models import Member, MemberProfile, Leader
-from app.schemas.members import MemberDeleteRequest, MemberRequest
+from app.schemas.members import MemberDeleteRequest, MemberCreate, MemberUpdate
 from app.crud.member_profile import insert_profile, upsert_profile_on_date
 from app.crud.query_builders import (
     active_now,
     by_gyogu, by_team, by_group_no, by_leader, by_member_type, by_year_range,
     build_active_members_query, build_deleted_members_query,
 )
-from fastapi import HTTPException
 import datetime
 from app.core.timezone import now_kst, today_kst
+from app.core.exceptions import MemberNotFoundError, MemberAlreadyActiveError  # noqa: F401  (재export — 하위호환)
 
 
 def _apply_keyword_filter(query, db: Session, field: str, keyword: str):
@@ -109,12 +109,12 @@ def get_deleted_member(db: Session, member_id: int):
     ).first()
 
     if not row:
-        raise HTTPException(status_code=404, detail="삭제된 멤버를 찾을 수 없습니다.")
+        raise MemberNotFoundError("삭제된 멤버를 찾을 수 없습니다.")
 
     return row  # (Member, MemberProfile) 튜플
 
 
-def create_member(db: Session, data: MemberRequest) -> tuple[Member, MemberProfile | None]:
+def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfile | None]:
     """멤버 생성 (Member + MemberProfile)"""
     member = Member(
         name=data.name,
@@ -153,7 +153,7 @@ def create_member(db: Session, data: MemberRequest) -> tuple[Member, MemberProfi
 def update_member(
     db: Session,
     member_id: int,
-    data: MemberRequest,
+    data: MemberUpdate,
     profile_year: datetime.date | None = None,
 ) -> int:
     """멤버 정보 수정 (Member + 최신 MemberProfile)
@@ -163,7 +163,7 @@ def update_member(
     """
     member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
     if not member:
-        raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
+        raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
 
     # Member 기본 정보 업데이트
     member.name = data.name
@@ -197,7 +197,7 @@ def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Mem
     """멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)"""
     member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
     if not member:
-        raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
+        raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
 
     member.deleted_at = now_kst()  # 삭제 시각은 서버 기준 자동
     member.deleted_reason = data.deleted_reason
@@ -210,9 +210,9 @@ def restore_member(db: Session, member_id: int) -> Member:
     """삭제된 멤버 복원 (deleted_at, deleted_reason 초기화)"""
     member = db.query(Member).filter(Member.member_id == member_id).first()
     if not member:
-        raise HTTPException(status_code=404, detail="멤버를 찾을 수 없습니다.")
+        raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
     if member.deleted_at is None:
-        raise HTTPException(status_code=400, detail="삭제되지 않은 멤버입니다.")
+        raise MemberAlreadyActiveError("삭제되지 않은 멤버입니다.")
 
     member.deleted_at = None
     member.deleted_reason = None

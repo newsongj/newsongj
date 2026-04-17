@@ -13,7 +13,6 @@ class PeriodUnit(str, Enum):
     weekly = "weekly"
     monthly = "monthly"
     yearly = "yearly"
-    three_year = "three_year"
 
 
 class DimensionType(str, Enum):
@@ -40,7 +39,7 @@ def get_kpi(
 
 @router.get("/trend", response_model=list[TrendItem], summary="출석 추이 조회")
 def get_trend(
-    period_unit: PeriodUnit = Query(..., description="집계 단위 (weekly|monthly|yearly|three_year)"),
+    period_unit: PeriodUnit = Query(..., description="집계 단위 (weekly|monthly|yearly)"),
     start_date: datetime.date = Query(..., description="시작일 (YYYY-MM-DD)"),
     end_date: datetime.date = Query(..., description="종료일 (YYYY-MM-DD)"),
     gyogu_no: Optional[int] = Query(None, description="교구 번호 (미지정 시 전체)"),

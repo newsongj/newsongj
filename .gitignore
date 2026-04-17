@@ -21,10 +21,17 @@ frontend/.env.*.local
 
 # --- Docs ---
 mds/
+MDs/
+
+# --- Claude Code Harness (개인 전용) ---
+/CLAUDE.md
+/backend/CLAUDE.md
+.claude/
 
 # --- Root ---
 .env
 !frontend/.env
+REVIEW_REPORT.md
 
 # --- Global Ignore ---
 *.log

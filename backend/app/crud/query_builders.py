@@ -9,6 +9,7 @@
 
 3. 출석/대시보드 공통 필터 & 조회
    - apply_attendance_filters
+   - AttendanceRecord 체이너 (by_status, by_worship_date_range, by_worship_date_lte, by_member_ids)
    - get_worship_dates_in_range
    - get_records_by_dates
    - build_attendance_records_query
@@ -139,15 +140,14 @@ def _base_query_as_of(db: Session, as_of_date: datetime.date) -> Query:
     """특정 날짜 기준 활성 멤버의 유효 profile 기반 쿼리 (MemberProfile 반환).
 
     - active_now 적용 (deleted_at IS NULL)
+    - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
     """
-    sq = _latest_as_of_sq(db, as_of_date)
+    max_year_sq = _latest_as_of_sq(db, as_of_date)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
     return active_now(
         db.query(MemberProfile)
-        .join(sq, and_(
-            MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.updated_at == sq.c.max_year,
-        ))
+        .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
 
@@ -156,15 +156,14 @@ def _base_query_in_year(db: Session, year_int: int) -> Query:
     """특정 연도 내 활성 멤버의 최신 profile 기반 쿼리 (MemberProfile 반환).
 
     - active_now 적용 (deleted_at IS NULL)
+    - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
     """
-    sq = _latest_in_year_sq(db, year_int)
+    max_year_sq = _latest_in_year_sq(db, year_int)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
     return active_now(
         db.query(MemberProfile)
-        .join(sq, and_(
-            MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.updated_at == sq.c.max_year,
-        ))
+        .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
 
@@ -242,16 +241,15 @@ def build_members_as_of_query(db: Session, as_of_date: datetime.date) -> Query:
     """특정 날짜 기준 활성 멤버와 유효 profile을 (Member, MemberProfile) 튜플로 반환하는 기반 쿼리.
 
     - active_as_of 적용 (deleted_at IS NULL OR deleted_at > as_of_date)
+    - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 출석 API용 — worship_date 기준 소속 확정
     """
-    sq = _latest_as_of_sq(db, as_of_date)
+    max_year_sq = _latest_as_of_sq(db, as_of_date)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
     q = (
         db.query(Member, MemberProfile)
-        .join(sq, and_(
-            MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.updated_at == sq.c.max_year,
-        ))
-        .join(Member, Member.member_id == MemberProfile.member_id)
+        .join(latest_sq, Member.member_id == latest_sq.c.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
     )
     return active_as_of(q, as_of_date)
 
@@ -288,6 +286,29 @@ def get_profiles_in_year(
     if team     is not None: q = by_team(q, team)
     if group_no is not None: q = by_group_no(q, group_no)
     return q.all()
+
+
+# ---------------------------------------------------------------------------
+# AttendanceRecord 필터 체이너
+# ---------------------------------------------------------------------------
+
+def by_status(q: Query, status: str) -> Query:
+    return q.filter(AttendanceRecord.status == status)
+
+
+def by_worship_date_range(q: Query, start: datetime.date, end: datetime.date) -> Query:
+    return q.filter(
+        AttendanceRecord.worship_date >= start,
+        AttendanceRecord.worship_date <= end,
+    )
+
+
+def by_worship_date_lte(q: Query, end: datetime.date) -> Query:
+    return q.filter(AttendanceRecord.worship_date <= end)
+
+
+def by_member_ids(q: Query, member_ids: list[int]) -> Query:
+    return q.filter(AttendanceRecord.member_id.in_(member_ids))
 
 
 # ---------------------------------------------------------------------------
@@ -333,17 +354,67 @@ def build_attendance_records_query(db: Session, worship_date: datetime.date) -> 
 
     (AttendanceRecord, Member, MemberProfile) 튜플로 반환.
     - worship_date 기준 가장 최신 profile 사용 (updated_at <= worship_date)
+    - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 소프트 삭제 필터 없음 — 출석 기록은 삭제 여부와 무관한 역사적 사실
     - by_gyogu/by_team/by_leader 등 필터 체이너로 조건 추가 후 .all() 실행
     """
-    sq = _latest_as_of_sq(db, worship_date)
+    max_year_sq = _latest_as_of_sq(db, worship_date)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
     return (
         db.query(AttendanceRecord, Member, MemberProfile)
         .join(Member, Member.member_id == AttendanceRecord.member_id)
-        .join(sq, sq.c.member_id == AttendanceRecord.member_id)
-        .join(MemberProfile, and_(
-            MemberProfile.member_id == sq.c.member_id,
-            MemberProfile.updated_at == sq.c.max_year,
-        ))
+        .join(latest_sq, latest_sq.c.member_id == AttendanceRecord.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .filter(AttendanceRecord.worship_date == worship_date)
+    )
+
+
+def build_attendance_records_range_query(
+    db: Session,
+    start_date: datetime.date,
+    end_date: datetime.date,
+) -> Query:
+    """기간 내 모든 출석 기록 + 각 record 시점의 유효 profile + member를 단일 쿼리로 반환.
+
+    (AttendanceRecord, Member, MemberProfile) 튜플로 반환.
+    - 각 attendance_record에 대해 worship_date 시점 가장 최신 profile 사용
+      (mp.updated_at <= ar.worship_date)
+    - 동률 시 MAX(profile_id)로 dedup (ROW_NUMBER + ORDER BY updated_at DESC, profile_id DESC)
+    - 소프트 삭제 필터 없음 — 출석 기록은 삭제 여부와 무관한 역사적 사실
+    - by_gyogu/by_team/by_leader 등 필터 체이너로 조건 추가 후 .all() 실행
+
+    대시보드 집계처럼 기간 단위로 record를 한번에 조회할 때 사용.
+    날짜별 루프 + build_attendance_records_query 호출 패턴(N+1)을 대체한다.
+    """
+    ranked = (
+        db.query(
+            AttendanceRecord.attendance_id.label("aid"),
+            MemberProfile.profile_id.label("pid"),
+            func.row_number().over(
+                partition_by=AttendanceRecord.attendance_id,
+                order_by=[
+                    MemberProfile.updated_at.desc(),
+                    MemberProfile.profile_id.desc(),
+                ],
+            ).label("rn"),
+        )
+        .join(MemberProfile, and_(
+            MemberProfile.member_id == AttendanceRecord.member_id,
+            MemberProfile.updated_at <= AttendanceRecord.worship_date,
+        ))
+        .filter(AttendanceRecord.worship_date.between(start_date, end_date))
+        .subquery()
+    )
+
+    picked = (
+        db.query(ranked.c.aid, ranked.c.pid)
+        .filter(ranked.c.rn == 1)
+        .subquery()
+    )
+
+    return (
+        db.query(AttendanceRecord, Member, MemberProfile)
+        .join(picked, picked.c.aid == AttendanceRecord.attendance_id)
+        .join(MemberProfile, MemberProfile.profile_id == picked.c.pid)
+        .join(Member, Member.member_id == AttendanceRecord.member_id)
     )
