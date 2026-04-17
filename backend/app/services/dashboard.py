@@ -129,12 +129,11 @@ def build_absent_reason_response(
     is_imwondan: bool,
 ) -> list[AbsentReasonItem]:
     stats = get_absent_reason_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
-    n = stats["n"]
 
     return [
         AbsentReasonItem(
             reason=r,
-            count=round(sum(stats["buckets"][r]) / n) if n > 0 else 0,
+            count=sum(stats["buckets"][r]),
         )
         for r in ABSENT_REASONS
     ]
