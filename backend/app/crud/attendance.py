@@ -10,21 +10,8 @@ from app.crud.query_builders import (
 )
 from app.crud.attendance_rate import update_rates_for_members
 from app.core.timezone import now_kst, today_kst
+from app.core.exceptions import InvalidMemberIdsError, InvalidEnrolledError  # noqa: F401  (재export — 하위호환)
 import datetime
-
-
-class InvalidMemberIdsError(Exception):
-    """존재하지 않거나 삭제된 멤버 ID 목록 포함 (404 매핑 대상)."""
-    def __init__(self, ids: list[int]):
-        self.ids = ids
-        super().__init__(f"존재하지 않거나 삭제된 멤버입니다: {ids}")
-
-
-class InvalidEnrolledError(Exception):
-    """등록일(enrolled_at)이 없거나 미래인 멤버 포함 (400 매핑 대상)."""
-    def __init__(self, ids: list[int]):
-        self.ids = ids
-        super().__init__(f"등록일이 없거나 미래인 멤버: {ids}")
 
 
 def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:

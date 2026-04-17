@@ -3,18 +3,8 @@ import datetime
 from collections import defaultdict
 from sqlalchemy.orm import Session
 from app.crud.dashboard import get_kpi_stats, get_trend_stats, get_dimension_stats, get_absent_reason_stats, get_gyogu_status_stats, ABSENT_REASONS, GYOGU_KEYS
+from app.core.date_utils import saturdays_between
 from app.schemas.dashboard import KpiResponse, AttendanceStats, GenStats, TopReason, TrendItem, DimensionItem, AbsentReasonItem, GyoguStatusItem
-
-
-def _saturdays_in_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
-    """기간 내 모든 토요일 목록 반환."""
-    # 첫 토요일 찾기 (토요일 = weekday 5)
-    d = start + datetime.timedelta(days=(5 - start.weekday()) % 7)
-    result = []
-    while d <= end:
-        result.append(d)
-        d += datetime.timedelta(days=7)
-    return result
 
 
 def _empty_gen_stats(end_date) -> list[GenStats]:
@@ -81,7 +71,7 @@ def build_trend_response(
 
     if period_unit == "weekly":
         # 기간 내 모든 일요일 생성, 데이터 없으면 0
-        saturdays = _saturdays_in_range(start_date, end_date)
+        saturdays = saturdays_between(start_date, end_date)
         return [
             TrendItem(period=f"{d.month}/{d.day}", present=date_present.get(d, 0))
             for d in saturdays

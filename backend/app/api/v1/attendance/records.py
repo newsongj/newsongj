@@ -1,15 +1,12 @@
 """출석 기록 API"""
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
+
 from app.core.database import get_db
 from app.schemas.attendance import AttendanceBatchRequest, AttendanceBatchResponse, AttendanceListResponse
-from app.crud.attendance import (
-    upsert_attendance_batch, get_attendance_records,
-    InvalidMemberIdsError, InvalidEnrolledError,
-)
-from app.services.attendance import build_attendance_list
+from app.services.attendance import build_attendance_list_response, save_attendance_batch
 
 router = APIRouter(prefix="/api/attendance", tags=["출석"])
 
@@ -29,8 +26,9 @@ def list_attendance_records(
     page_size: int = Query(20, description="페이지당 건수"),
     db: Session = Depends(get_db),
 ):
-    rows, total = get_attendance_records(db, worship_date, gyogu_no, team_no, group_no, is_imwondan, page, page_size)
-    return build_attendance_list(rows, total, page, page_size, db)
+    return build_attendance_list_response(
+        db, worship_date, gyogu_no, team_no, group_no, is_imwondan, page, page_size,
+    )
 
 
 @router.post(
@@ -39,10 +37,4 @@ def list_attendance_records(
     summary="출석 기록 일괄 저장 (upsert)",
 )
 def batch_save_attendance(body: AttendanceBatchRequest, db: Session = Depends(get_db)):
-    try:
-        saved = upsert_attendance_batch(db, body)
-    except InvalidMemberIdsError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except InvalidEnrolledError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return AttendanceBatchResponse(saved_count=saved)
+    return save_attendance_batch(db, body)

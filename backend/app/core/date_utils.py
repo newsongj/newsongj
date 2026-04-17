@@ -12,14 +12,16 @@ def last_saturday_on_or_before(d: datetime.date) -> datetime.date:
     return d - datetime.timedelta(days=(d.weekday() - SATURDAY) % 7)
 
 
-def count_saturdays_between(start: datetime.date, end: datetime.date) -> int:
-    """start <= d <= end 범위 내 토요일 수. end < start면 0."""
+def saturdays_between(start: datetime.date, end: datetime.date) -> list[datetime.date]:
+    """start <= d <= end 범위의 모든 토요일 리스트. end < start면 []."""
     if end < start:
-        return 0
-    first = first_saturday_on_or_after(start)
-    if first > end:
-        return 0
-    return (end - first).days // 7 + 1
+        return []
+    d = first_saturday_on_or_after(start)
+    result: list[datetime.date] = []
+    while d <= end:
+        result.append(d)
+        d += datetime.timedelta(days=7)
+    return result
 
 
 def nth_saturday_before(end: datetime.date, n: int) -> datetime.date:

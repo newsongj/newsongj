@@ -26,9 +26,7 @@ MDs/
 # --- Claude Code Harness (개인 전용) ---
 /CLAUDE.md
 /backend/CLAUDE.md
-.claude/settings.json
-.claude/hooks/
-.claude/skills/
+.claude/
 
 # --- Root ---
 .env
