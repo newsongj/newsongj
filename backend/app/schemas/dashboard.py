@@ -3,19 +3,19 @@ from typing import Optional
 
 
 class AttendanceStats(BaseModel):
-    present: int
-    total: int
+    present: float
+    total: float
 
 
 class GenStats(BaseModel):
     gen: int
-    present: int
-    total: int
+    present: float
+    total: float
 
 
 class TopReason(BaseModel):
     reason: str
-    count: int
+    count: float
 
 
 class KpiResponse(BaseModel):
@@ -26,20 +26,20 @@ class KpiResponse(BaseModel):
 
 class TrendItem(BaseModel):
     period: str
-    present: int
+    present: float
 
 
 class DimensionItem(BaseModel):
     name: str
-    present: int
+    present: float
 
 
 class AbsentReasonItem(BaseModel):
     reason: str
-    count: int
+    count: float
 
 
 class GyoguStatusItem(BaseModel):
     name: str
-    present: int
-    absent: int
+    present: float
+    absent: float
