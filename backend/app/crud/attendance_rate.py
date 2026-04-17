@@ -31,6 +31,17 @@ def compute_rate(present: int, denom: int) -> Decimal:
     )
 
 
+def compute_grade(rate: Decimal) -> str:
+    """출석률 → 등급 매핑: ≥80 A, ≥60 B, ≥40 C, <40 D."""
+    if rate >= 80:
+        return "A"
+    if rate >= 60:
+        return "B"
+    if rate >= 40:
+        return "C"
+    return "D"
+
+
 # ── DB 조회 ────────────────────────────────
 def _count_present_with_member_start(
     db: Session, member_ids: list[int], end: datetime.date,
@@ -67,6 +78,7 @@ def _set_rate_on_latest_profile(
     profile = get_profile_as_of(db, member_id, today)
     if profile is not None:
         profile.attendance_rate = rate
+        profile.attendance_grade = compute_grade(rate)
 
 
 # ── 오케스트레이션 ────────────────────────

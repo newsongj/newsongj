@@ -35,23 +35,23 @@ def build_kpi_response(
     n = stats["n"]
 
     top = stats["reason_counter"].most_common(1)
-    top_reason = TopReason(reason=top[0][0], count=top[0][1]) if top else None
+    top_reason = TopReason(reason=top[0][0], count=round(top[0][1] / n, 1)) if top else None
 
     return KpiResponse(
         all=AttendanceStats(
-            present=round(stats["total_present"] / n),
-            total=round(stats["total_members"] / n),
+            present=round(stats["total_present"] / n, 1),
+            total=round(stats["total_members"] / n, 1),
         ),
         by_gen=[
             GenStats(
                 gen=stats["gen_prev"],
-                present=round(stats["gen_stats"][stats["gen_prev"]]["present"] / n),
-                total=round(stats["gen_stats"][stats["gen_prev"]]["total"] / n),
+                present=round(stats["gen_stats"][stats["gen_prev"]]["present"] / n, 1),
+                total=round(stats["gen_stats"][stats["gen_prev"]]["total"] / n, 1),
             ),
             GenStats(
                 gen=stats["gen_curr"],
-                present=round(stats["gen_stats"][stats["gen_curr"]]["present"] / n),
-                total=round(stats["gen_stats"][stats["gen_curr"]]["total"] / n),
+                present=round(stats["gen_stats"][stats["gen_curr"]]["present"] / n, 1),
+                total=round(stats["gen_stats"][stats["gen_curr"]]["total"] / n, 1),
             ),
         ],
         top_reason=top_reason,
@@ -73,7 +73,7 @@ def build_trend_response(
         # 기간 내 모든 일요일 생성, 데이터 없으면 0
         saturdays = saturdays_between(start_date, end_date)
         return [
-            TrendItem(period=f"{d.month}/{d.day}", present=date_present.get(d, 0))
+            TrendItem(period=f"{d.month}/{d.day}", present=float(date_present.get(d, 0)))
             for d in saturdays
         ]
 
@@ -82,7 +82,7 @@ def build_trend_response(
         y, m = start_date.year, start_date.month
         while (y, m) <= (end_date.year, end_date.month):
             vals = [p for d, p in date_present.items() if d.year == y and d.month == m]
-            present = round(sum(vals) / len(vals)) if vals else 0
+            present = round(sum(vals) / len(vals), 1) if vals else 0.0
             items.append(TrendItem(period=f"{m}월", present=present))
             m += 1
             if m > 12:
@@ -94,7 +94,7 @@ def build_trend_response(
     items = []
     for y in range(start_date.year, end_date.year + 1):
         vals = [p for d, p in date_present.items() if d.year == y]
-        present = round(sum(vals) / len(vals)) if vals else 0
+        present = round(sum(vals) / len(vals), 1) if vals else 0.0
         items.append(TrendItem(period=f"{y}년", present=present))
     return items
 
@@ -114,7 +114,7 @@ def build_dimension_response(
     return [
         DimensionItem(
             name=key,
-            present=round(sum(stats["buckets"][key]) / n) if n > 0 else 0,
+            present=round(sum(stats["buckets"][key]) / n, 1) if n > 0 else 0.0,
         )
         for key in stats["keys"]
     ]
@@ -129,11 +129,12 @@ def build_absent_reason_response(
     is_imwondan: bool,
 ) -> list[AbsentReasonItem]:
     stats = get_absent_reason_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    n = stats["n"]
 
     return [
         AbsentReasonItem(
             reason=r,
-            count=sum(stats["buckets"][r]),
+            count=round(sum(stats["buckets"][r]) / n, 1) if n > 0 else 0.0,
         )
         for r in ABSENT_REASONS
     ]
@@ -152,8 +153,8 @@ def build_gyogu_status_response(
     return [
         GyoguStatusItem(
             name=k,
-            present=round(sum(stats["present"][k]) / n) if n > 0 else 0,
-            absent=round(sum(stats["absent"][k]) / n) if n > 0 else 0,
+            present=round(sum(stats["present"][k]) / n, 1) if n > 0 else 0.0,
+            absent=round(sum(stats["absent"][k]) / n, 1) if n > 0 else 0.0,
         )
         for k in GYOGU_KEYS
     ]
