@@ -4,6 +4,7 @@ import {
   DashboardOutlined,
   PeopleOutlined,
   DescriptionOutlined,
+  DirectionsRunOutlined,
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
 import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
@@ -35,6 +36,9 @@ const getPageInfo = (path: string) => {
     '/permission/users': { title: '사용자 관리', breadcrumb: '권한관리 > 사용자 관리' },
     '/attendance': { title: '출석 관리', breadcrumb: '교적관리 > 출석 관리' },
     '/attendance-dashboard': { title: '출석 대시보드', breadcrumb: '교적관리 > 출석 대시보드' },
+    '/retreat/dashboard': { title: '수련회 대시보드', breadcrumb: '수련회 > 수련회 대시보드' },
+    '/retreat/create': { title: '수련회 생성', breadcrumb: '수련회 > 수련회 생성' },
+    '/retreat/suspended-meal': { title: '서스펜디드밀', breadcrumb: '수련회 > 서스펜디드밀' },
   };
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
 };
@@ -71,7 +75,17 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
         { id: 'student-members', label: '사용자 목록', path: '/members' },
         { id: 'student-deleted-members', label: '삭제 명단', path: '/deleted-members' },
       ],
-    }
+    },
+    {
+      id: 'retreat',
+      label: '수련회',
+      icon: <DirectionsRunOutlined />,
+      subItems: [
+        { id: 'retreat-create', label: '수련회 생성', path: '/retreat/create' },
+        { id: 'retreat-dashboard', label: '수련회 대시보드', path: '/retreat/dashboard' },
+        { id: 'retreat-suspended-meal', label: '서스펜디드밀', path: '/retreat/suspended-meal' },
+      ],
+    },
   ];
 
   const handleMenuClick = (path: string) => {

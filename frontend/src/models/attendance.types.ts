@@ -16,7 +16,7 @@ export interface AttendanceMemberRow {
   name: string;
   generation: number;
   leader_names: string[];
-  status: AttendanceStatus | null;
+  status: AttendanceStatus;
   absent_reason: AbsentReason | null;
 }
 
