@@ -38,6 +38,12 @@ const Sidebar: React.FC<SidebarProps> = ({ menuItems, selectedPath, onMenuClick 
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
             case 'student-attendance-dashboard':
               return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
+            case 'retreat-dashboard':
+              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
+            case 'retreat-create':
+              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
+            case 'retreat-suspended-meal':
+              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
             default:
               return false; // 정의되지 않은 subItem은 일단 표시
           }

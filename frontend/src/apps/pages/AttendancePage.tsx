@@ -82,7 +82,7 @@ const toAttendanceRow = (item: AttendanceMemberRow, filters: FilterState): Atten
   gyogu: filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0,
   team: filters.team ? Number(filters.team) : 0,
   groupNo: filters.groupNo ? Number(filters.groupNo) : 0,
-  status: item.status ?? 'PRESENT',
+  status: item.status,
   absentReason: item.absent_reason,
 });
 
