@@ -5,4 +5,5 @@ pymysql  # mysqlclient 대신 이거!
 pydantic
 pydantic-settings  # BaseSettings로 환경변수 관리
 python-dotenv
+python-jose[cryptography]
 # alembic
