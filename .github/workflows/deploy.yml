@@ -103,6 +103,12 @@ jobs:
             services:
               mariadb:
                 image: mariadb:10.11
+                restart: unless-stopped
+                mem_limit: 384m
+                command: >
+                  --innodb-buffer-pool-size=96M
+                  --max-connections=50
+                  --performance-schema=OFF
                 environment:
                   MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
                   MYSQL_DATABASE: newsongj
@@ -120,6 +126,7 @@ jobs:
 
               backend:
                 image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
+                restart: unless-stopped
                 ports:
                   - "8000:8000"
                 env_file:
@@ -130,6 +137,7 @@ jobs:
 
               frontend:
                 image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+                restart: unless-stopped
                 ports:
                   - "80:80"
                 depends_on:
