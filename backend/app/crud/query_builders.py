@@ -179,16 +179,29 @@ def apply_attendance_filters(
     team_no: int | None = None,
     is_imwondan: bool = False,
 ) -> Query | None:
-    """gyogu/team/임원단 필터를 한 번에 적용. 임원단 leader가 없으면 None 반환."""
+    """gyogu/team/임원단 필터를 한 번에 적용.
+
+    is_imwondan 의미 (2026-04-25 변경):
+        False (기본) — 임원단 직분 보유자를 결과에서 **제외**.
+                       (대시보드의 "임원단" 분류 행은 자연스럽게 0이 됨.)
+        True         — 임원단 포함, 즉 추가 필터 없음 (전체 데이터).
+
+    None 반환은 더 이상 발생하지 않음 (호출부의 None 체크는 하위 호환용으로 남겨둘 것).
+    """
     if gyogu_no is not None:
         q = by_gyogu(q, gyogu_no)
     if team_no is not None:
         q = by_team(q, team_no)
-    if is_imwondan:
+    if not is_imwondan:
         leader_id = get_leader_id(db, "임원단")
-        if not leader_id:
-            return None
-        q = by_leader(q, leader_id)
+        if leader_id:
+            # leader_ids JSON에 임원단 id가 들어있는 행 제외
+            # leader_ids가 NULL이면 임원단 아님 → 유지
+            q = q.filter(or_(
+                MemberProfile.leader_ids.is_(None),
+                ~MemberProfile.leader_ids.like(f'%"{leader_id}"%'),
+            ))
+        # 임원단 직분 자체가 없으면 제외할 게 없으므로 그대로 반환
     return q
 
 
