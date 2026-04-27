@@ -1,7 +1,6 @@
 import React, { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  DashboardOutlined,
   PeopleOutlined,
   DescriptionOutlined,
   DirectionsRunOutlined,
@@ -49,12 +48,6 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
   const navigate = useNavigate();
 
   const menuItems: MenuItem[] = [
-    {
-      id: 'dashboard',
-      label: '대시보드',
-      icon: <DashboardOutlined />,
-      path: '/dashboard',
-    },
     {
       id: 'permission',
       label: '권한관리',

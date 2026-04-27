@@ -5,7 +5,6 @@ import { LoadingFallback } from '@components/common/LoadingFallback';
 import PermissionGuard from '@components/common/PermissionGuard';
 import { MENU_CODES } from '@/constants/permissions';
 
-const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const MemberListPage = React.lazy(() => import('./pages/MemberListPage'));
 const DeletedMemberPage = React.lazy(() => import('./pages/DeletedMemberPage'));
 const PermissionManagementPage = React.lazy(() => import('./pages/PermissionManagementPage'));
@@ -21,9 +20,8 @@ const Orchestrator: React.FC = () => {
     <Container>
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/attendance-dashboard" replace />} />
 
-          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/members" element={<MemberListPage />} />
           <Route path="/deleted-members" element={<DeletedMemberPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
