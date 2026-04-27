@@ -3,7 +3,7 @@ import { UserListRow, UserSearchRow } from '@/models/admin.types';
 import { Page } from '@/models/common.types';
 
 /**
- * 사용자 목록 조회
+ * 사용자 명단 조회
  */
 export async function fetchUsers(page: number = 1, pageSize: number = 20): Promise<Page<UserListRow>> {
   return get<Page<UserListRow>>('/api/v1/users', { page, pageSize });

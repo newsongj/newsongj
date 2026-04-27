@@ -2,7 +2,7 @@ import { atom } from 'recoil';
 import { UserResponse, UserCreateRequest } from '@/models/user.types';
 import { PageMeta } from '@/models/common.types';
 
-// 사용자 목록 상태
+// 사용자 명단 상태
 export const usersState = atom({
   key: 'usersState',
   default: {

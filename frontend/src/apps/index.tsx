@@ -10,6 +10,7 @@ const DeletedMemberPage = React.lazy(() => import('./pages/DeletedMemberPage'));
 const PermissionManagementPage = React.lazy(() => import('./pages/PermissionManagementPage'));
 const UserManagementPage = React.lazy(() => import('./pages/UserManagementPage'));
 const AttendancePage = React.lazy(() => import('./pages/AttendancePage'));
+const NewFamilyMemberPage = React.lazy(() => import('./pages/NewFamilyMemberPage'));
 const AttendanceDashboard = React.lazy(() => import('./pages/AttendanceDashboard'));
 const RetreatDashboard = React.lazy(() => import('./pages/RetreatDashboard'));
 const SuspendedMealPage = React.lazy(() => import('./pages/SuspendedMealPage'));
@@ -23,6 +24,7 @@ const Orchestrator: React.FC = () => {
           <Route path="/" element={<Navigate to="/attendance-dashboard" replace />} />
 
           <Route path="/members" element={<MemberListPage />} />
+          <Route path="/members/new-family" element={<NewFamilyMemberPage />} />
           <Route path="/deleted-members" element={<DeletedMemberPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance-dashboard" element={<AttendanceDashboard />} />
