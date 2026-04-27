@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   PeopleOutlined,
-  DescriptionOutlined,
+  ContactsOutlined,
   DirectionsRunOutlined,
 } from '@mui/icons-material';
 import { useRecoilValue } from 'recoil';
@@ -29,12 +29,13 @@ interface ContainerProps {
 const getPageInfo = (path: string) => {
   const menuMap: Record<string, { title: string; breadcrumb: string }> = {
     '/dashboard': { title: '대시보드', breadcrumb: '대시보드' },
-    '/members': { title: '사용자 목록', breadcrumb: '교적관리 > 사용자 목록' },
+    '/members': { title: '사용자 명단', breadcrumb: '교적관리 > 사용자 명단' },
     '/deleted-members': { title: '삭제 명단', breadcrumb: '교적관리 > 삭제 명단' },
     '/permission/management': { title: '권한 관리', breadcrumb: '권한관리 > 권한 관리' },
     '/permission/users': { title: '사용자 관리', breadcrumb: '권한관리 > 사용자 관리' },
     '/attendance': { title: '출석 관리', breadcrumb: '교적관리 > 출석 관리' },
     '/attendance-dashboard': { title: '출석 대시보드', breadcrumb: '교적관리 > 출석 대시보드' },
+    '/members/new-family': { title: '미등반 새가족 명단', breadcrumb: '교적관리 > 미등반 새가족 명단' },
     '/retreat/dashboard': { title: '수련회 대시보드', breadcrumb: '수련회 > 수련회 대시보드' },
     '/retreat/create': { title: '수련회 생성', breadcrumb: '수련회 > 수련회 생성' },
     '/retreat/suspended-meal': { title: '서스펜디드밀', breadcrumb: '수련회 > 서스펜디드밀' },
@@ -60,12 +61,13 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
     {
       id: 'student-management',
       label: '교적관리',
-      icon: <DescriptionOutlined />,
+      icon: <ContactsOutlined />,
       path: '/attendance-dashboard',
       subItems: [
         { id: 'student-attendance-dashboard', label: '출석 대시보드', path: '/attendance-dashboard' },
         { id: 'student-attendance', label: '출석 관리', path: '/attendance' },
-        { id: 'student-members', label: '사용자 목록', path: '/members' },
+        { id: 'student-members', label: '사용자 명단', path: '/members' },
+        { id: 'student-new-family-members', label: '미등반 새가족 명단', path: '/members/new-family' },
         { id: 'student-deleted-members', label: '삭제 명단', path: '/deleted-members' },
       ],
     },

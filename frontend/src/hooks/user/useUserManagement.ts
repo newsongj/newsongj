@@ -40,7 +40,7 @@ export const useUserManagement = () => {
     rowsPerPage: 10
   });
 
-  // 사용자 목록 로드 (File 패턴과 동일한 구조)
+  // 사용자 명단 로드
   const loadUsers = useCallback(async (page: number = 1, pageSize: number = 10) => {
     setUsersData(prev => ({ ...prev, loading: true }));
 
@@ -56,7 +56,7 @@ export const useUserManagement = () => {
     }
   }, [setUsersData]);
 
-  // 사용자 검색 (File 패턴과 동일한 구조)
+  // 사용자 검색
   const searchUserList = useCallback(async (
     attribute: string,
     keyword: string,
@@ -85,7 +85,7 @@ export const useUserManagement = () => {
     }
   }, [setUsersData]);
 
-  // 페이지 변경 핸들러 (File 패턴과 동일)
+  // 페이지 변경 핸들러
   const handlePageChange = useCallback(async (newPage: number) => {
     const { hasSearch, keyword, field, rowsPerPage } = searchState;
     
@@ -132,7 +132,7 @@ export const useUserManagement = () => {
     }
   }, [searchState.rowsPerPage, searchUserList, loadUsers]);
 
-  // 모달 관리 (File 패턴과 동일)
+  // 모달 관리
   const openCreateModal = useCallback(() => {
     setCreateModal({ open: true });
   }, [setCreateModal]);
@@ -150,7 +150,7 @@ export const useUserManagement = () => {
     setDetailModal({ open: false, userData: null });
   }, [setDetailModal]);
 
-  // 삭제 다이얼로그 관리 (File 패턴과 동일)
+  // 삭제 다이얼로그 관리
   const openDeleteDialog = useCallback((target: 'single' | 'multiple', userId?: number) => {
     setDeleteDialog({ open: true, target, userId });
   }, [setDeleteDialog]);
@@ -159,7 +159,7 @@ export const useUserManagement = () => {
     setDeleteDialog({ open: false, target: 'single', userId: undefined });
   }, [setDeleteDialog]);
 
-  // 삭제 액션 (File 패턴과 동일한 구조)
+  // 삭제 액션
   const deleteUser = useCallback(async (userId: number): Promise<boolean> => {
     try {
       await deleteUserAPI(userId);
@@ -181,12 +181,12 @@ export const useUserManagement = () => {
     }
   }, [selectedIds, loadUsers, searchState]);
 
-  // 벌크 삭제 핸들러 (File 패턴과 동일)
+  // 벌크 삭제 핸들러
   const handleBulkDelete = useCallback(() => {
     openDeleteDialog('multiple');
   }, [openDeleteDialog]);
 
-  // 사용자 생성 (File 패턴과 유사한 구조)
+  // 사용자 생성
   const createNewUser = useCallback(async (userData: UserCreateRequest): Promise<boolean> => {
     try {
       await createUser(userData);
@@ -197,7 +197,7 @@ export const useUserManagement = () => {
     }
   }, [loadUsers, searchState.rowsPerPage]);
 
-  // 사용자 상세 정보 로드 (File 패턴과 유사한 구조)
+  // 사용자 상세 정보 로드
   const loadUserDetail = useCallback(async (userId: number) => {
     setUserDetailData(prev => ({ ...prev, loading: true }));
     try {
@@ -212,7 +212,7 @@ export const useUserManagement = () => {
     }
   }, [setUserDetailData]);
 
-  // 사용자 업데이트 (File 패턴과 유사한 구조)
+  // 사용자 업데이트
   const updateUserData = useCallback(async (userId: number, userData: any): Promise<boolean> => {
     try {
       await updateUser(userId, userData);
@@ -224,7 +224,7 @@ export const useUserManagement = () => {
     }
   }, [loadUserDetail, loadUsers, searchState]);
 
-  // 반환값 (File 패턴과 동일한 구조)
+  // 반환값
   return {
     // 데이터
     users: usersData.users,

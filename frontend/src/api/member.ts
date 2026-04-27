@@ -76,3 +76,8 @@ export async function deleteMember(memberId: number, deletedReason: string): Pro
 export async function restoreMember(memberId: number): Promise<{ member_id: number }> {
   return post<{ member_id: number }>(`/api/v1/gyojeok/members/restore/${memberId}`);
 }
+
+/** 새가족 등반 처리 */
+export async function enrollMember(memberId: number, enrolledAt: string): Promise<{ member_id: number }> {
+  return put<{ member_id: number }>(`/api/v1/gyojeok/members/${memberId}/enroll`, { enrolled_at: enrolledAt });
+}

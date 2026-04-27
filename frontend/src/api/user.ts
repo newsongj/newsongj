@@ -21,7 +21,7 @@ export async function fetchUserInfo(): Promise<UserInfo> {
 }
 
 /**
- * 사용자 목록 조회
+ * 사용자 명단 조회
  */
 export async function fetchUsers(page: number = 1, pageSize: number = 20): Promise<Page<UserResponse>> {
   return get<Page<UserResponse>>('/api/v1/users', { page, pageSize });
