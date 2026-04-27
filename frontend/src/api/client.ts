@@ -33,8 +33,8 @@ client.interceptors.response.use(
   (response) => response,
   (error: any) => {
     if (error.response?.status === 401) {
-      // 로그인 엔드포인트의 401은 "잘못된 비밀번호"이므로 호출부로 그대로 전달
-      if (error.config?.url?.includes('/local/login')) {
+      // 로그인/인증 초기화 엔드포인트의 401은 호출부에서 직접 처리
+      if (error.config?.url?.includes('/local/login') || error.config?.url?.includes('/me')) {
         return Promise.reject(error);
       }
       removeAccessToken();
