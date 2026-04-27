@@ -33,11 +33,14 @@ client.interceptors.response.use(
   (response) => response,
   (error: any) => {
     if (error.response?.status === 401) {
-      // 401 Unauthorized 에러 처리
-      removeAccessToken(); // 토큰 삭제
+      // 로그인 엔드포인트의 401은 "잘못된 비밀번호"이므로 호출부로 그대로 전달
+      if (error.config?.url?.includes('/local/login')) {
+        return Promise.reject(error);
+      }
+      removeAccessToken();
       alert('세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.');
-      window.location.href = '/login'; // 로그인 페이지로 리디렉션
-      return Promise.reject(new Error('Unauthorized')); // 에러 전파 중단
+      window.location.href = '/login';
+      return Promise.reject(new Error('Unauthorized'));
     }
 
     if (error.response?.status === 400 && error.response?.data?.detail) {

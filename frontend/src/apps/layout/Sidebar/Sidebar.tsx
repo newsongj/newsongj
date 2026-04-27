@@ -1,77 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { IconButton, Collapse } from '@mui/material';
-import { useRecoilState, useRecoilValue } from 'recoil';
+import { useRecoilState } from 'recoil';
 import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
-import { userPermissionsState } from '@/recoil/auth/atoms';
 import { Divider } from '@components/common/Divider';
-import { MENU_CODES, hasPermission } from '@/constants/permissions';
 import { SidebarProps, SubMenuItem } from './Sidebar.types';
 import * as S from './Sidebar.styles';
 
 const Sidebar: React.FC<SidebarProps> = ({ menuItems, selectedPath, onMenuClick }) => {
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
   const [isCollapsed, setIsCollapsed] = useRecoilState(orchestratorSidebarCollapsedState);
-  const userPermissions = useRecoilValue(userPermissionsState);
   const prevSelectedPathRef = useRef<string | undefined>();
 
-  // 권한 기반 메뉴 필터링
-  const filterMenuByPermissions = (items: any[]) => {
-    return items.map(item => {
-      // subItems가 있는 경우 하위 메뉴 필터링
-      if (item.subItems) {
-        const filteredSubItems = item.subItems.filter((subItem: any) => {
-          switch (subItem.id) {
-            case 'user-management':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'permission-management':
-              return hasPermission(userPermissions, [MENU_CODES.PERMISSION_MANAGEMENT]);
-            case 'cost-settings':
-              return hasPermission(userPermissions, [MENU_CODES.COST_SETTINGS_MANAGEMENT]);
-            case 'cost-monitoring':
-              return hasPermission(userPermissions, [MENU_CODES.COST_MONITORING_MANAGEMENT]);
-            case 'student-members':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'student-deleted-members':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'student-attendance':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'student-attendance-dashboard':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'retreat-dashboard':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'retreat-create':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            case 'retreat-suspended-meal':
-              return hasPermission(userPermissions, [MENU_CODES.USER_MANAGEMENT]);
-            default:
-              return false; // 정의되지 않은 subItem은 일단 표시
-          }
-        });
-
-        // 필터링된 subItems가 있으면 메뉴 유지, 없으면 메뉴 숨김
-        if (filteredSubItems.length > 0) {
-          return { ...item, subItems: filteredSubItems };
-        } else {
-          return null; // 하위 메뉴가 모두 필터링되면 상위 메뉴도 숨김
-        }
-      }
-
-      // subItems가 없는 단일 메뉴 처리
-      switch (item.id) {
-        case 'file':
-          return hasPermission(userPermissions, [...MENU_CODES.FILE_MANAGEMENT]) ? item : null;
-        case 'dashboard':
-          return hasPermission(userPermissions, [MENU_CODES.DASHBOARD]) ? item : null;
-        case 'term-dictionary':
-          return hasPermission(userPermissions, [MENU_CODES.TERM_DICTIONARY]) ? item : null;
-        default:
-          return null;
-      }
-    }).filter(Boolean); // null 제거
-  };
-
-  const filteredMenuItems = filterMenuByPermissions(menuItems);
+  const filteredMenuItems = menuItems;
 
   // 현재 경로에 따라 서브 메뉴 자동 열기
   useEffect(() => {

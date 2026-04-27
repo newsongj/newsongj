@@ -7,7 +7,7 @@ const TOKEN_KEY = 'access_token';
  */
 export const setAccessToken = (token: string): void => {
   Cookies.set(TOKEN_KEY, token, { 
-    expires: 1/24, // 1시간 후 만료 (1일의 1/24)
+    expires: 1, // 24시간 후 만료 (JWT와 동일)
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'
   });

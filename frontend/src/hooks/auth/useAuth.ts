@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import { setAccessToken, getAccessToken, removeAccessToken } from '@/utils/auth';
 import { authState, userPermissionsState } from '@/recoil/auth/atoms';
-import { checkAuth, exchangeTicket, getMe, localLogin, changePassword as changePasswordApi, logout as logoutApi } from '@/api/auth.ts';
+import { exchangeTicket, getMe, localLogin, changePassword as changePasswordApi, logout as logoutApi } from '@/api/auth.ts';
 import { LoginRequest, LoginResponse, PasswordChangeRequest, MeResponse } from '@/models/auth.types';
 import { CommonResponse } from '@/models/common.types';
 import { APP_CONFIG } from '@/constants/config.ts';
@@ -114,34 +114,25 @@ export const useAuth = () => {
     }
 
     const accessToken = getAccessToken();
-    // TODO: 인증 API 구현 후 아래 두 줄 제거
     if (!accessToken && isBypassAuth) return applyOfflineAuth();
-    if (!accessToken) return null;
+    if (!accessToken) {
+      setAuth({ isAuthenticated: false, user: null, isLoading: false });
+      return null;
+    }
 
     try {
-      const response = await checkAuth();
-      if (response) {
-        setAuth({
-          isAuthenticated: true,
-          user: response,
-          isLoading: false,
-        });
-        const menuCodes = response.menus || [];
-        setPermissions(menuCodes);
-        return response;
-      }
-      return null;
+      const userInfo = await getMe();
+      const menuCodes = userInfo.menus.map(menu => menu.code);
+      setAuth({ isAuthenticated: true, user: userInfo, isLoading: false });
+      setPermissions(menuCodes);
+      return userInfo;
     } catch (error) {
       removeAccessToken();
-      setAuth({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-      });
+      setAuth({ isAuthenticated: false, user: null, isLoading: false });
       setPermissions([]);
       return null;
     }
-  }, [setAuth, setPermissions, isBackendEnabled, applyOfflineAuth]);
+  }, [setAuth, setPermissions, isBackendEnabled, isBypassAuth, applyOfflineAuth]);
 
   const login = useCallback(async (loginRequest: LoginRequest) => {
     if (!isBackendEnabled) {
@@ -176,21 +167,14 @@ export const useAuth = () => {
       if (isBackendEnabled) {
         await logoutApi();
       }
-
+    } catch {
+      // 로그아웃 API 실패해도 클라이언트 정리는 반드시 진행
+    } finally {
       removeAccessToken();
-
-      setAuth({
-        isAuthenticated: false,
-        user: null,
-        isLoading: false,
-      });
-
+      setAuth({ isAuthenticated: false, user: null, isLoading: false });
       setPermissions([]);
-
-    } catch (error) {
-      return;
+      window.location.href = '/login';
     }
-
   }, [setAuth, setPermissions, isBackendEnabled]);
 
   return {

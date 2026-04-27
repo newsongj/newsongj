@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@components/common/Button';
 import { TextField } from '@components/common/TextField';
-import { Divider } from '@components/common/Divider';
 import { PasswordChangeModal } from '@components/user/PasswordChangeModal';
 import { useAuth } from '@/hooks/auth/useAuth';
 import * as S from './LoginPage.styles';
@@ -10,10 +9,7 @@ import newsongjLogo from '@assets/J_logo.png';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const {
-    redirectToSSO,
-    login,
-    setAuthStatus } = useAuth();
+  const { login, setAuthStatus } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -77,14 +73,10 @@ const LoginPage: React.FC = () => {
       }
 
     } catch (error: any) {
-      setError(error.response?.data?.message || '로그인에 실패했습니다.');
+      setError(error.response?.data?.detail || error.message || '로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDWPLogin = () => {
-    redirectToSSO();
   };
 
   const handlePasswordChangeSuccess = () => {
@@ -94,25 +86,17 @@ const LoginPage: React.FC = () => {
   return (
     <S.StyledContainer>
       <S.StyledLogo>
-        AKeeON
+        <img src={newsongjLogo} alt="NewsongJ" height="40" style={{ marginBottom: 8 }} />
         <br />
-        Orchestrator
+        NEWSONGJ ADMIN
       </S.StyledLogo>
 
       <S.StyledLoginCard>
-        <Button
-          variant="outlined"
-          onClick={handleDWPLogin}
-          fullWidth
-          startIcon={<img src={newsongjLogo} alt="newsongJ Logo" width="20" height="20" />}>
-          DWP 계정으로 로그인
-        </Button>
-        <Divider> 또는 직접 입력하기 </Divider>
         <S.StyledForm onSubmit={handleLogin}>
           <S.StyledInputGroup>
             <TextField
               label="이메일"
-              type="email"
+              type="text"
               value={formData.email}
               onChange={handleInputChange('email')}
               placeholder="이메일을 입력하세요"
