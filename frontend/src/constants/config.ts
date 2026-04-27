@@ -2,7 +2,7 @@ export const APP_CONFIG = {
     name: 'NewsongJ',
     version: '1.0.0',
     backend: {
-        enabled: import.meta.env.VITE_ENABLE_BACKEND === 'true',
+        enabled: import.meta.env.VITE_ENABLE_BACKEND !== 'false',
         bypassAuth: import.meta.env.VITE_BYPASS_AUTH === 'true',
     },
     api: {
