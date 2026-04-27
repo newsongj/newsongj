@@ -521,7 +521,7 @@ const AttendanceDashboard: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
                 <XAxis
                   dataKey="period"
-                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tick={{ fontSize: 12, fill: '#475569' }} 
                   tickLine={false}
                   axisLine={{ stroke: '#e5e7eb' }}
                 />
