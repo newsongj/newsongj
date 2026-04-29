@@ -31,6 +31,8 @@ def resolve_leader_names(leader_ids_json: str | None, leader_map: dict) -> list[
         ids = json.loads(leader_ids_json)
     except (json.JSONDecodeError, TypeError):
         return []
+    if not isinstance(ids, list):
+        ids = [ids]
     return [leader_map[str(id)] for id in ids if str(id) in leader_map]
 
 
