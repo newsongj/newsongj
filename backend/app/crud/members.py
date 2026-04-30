@@ -8,7 +8,9 @@ from app.crud.query_builders import (
     active_now,
     by_gyogu, by_team, by_group_no, by_leader, by_member_type, by_year_range,
     build_active_members_query, build_deleted_members_query,
+    NEWCOMER_TYPE,
 )
+from sqlalchemy import desc
 import datetime
 from app.core.timezone import now_kst, today_kst
 from app.core.exceptions import MemberNotFoundError, MemberAlreadyActiveError  # noqa: F401  (재export — 하위호환)
@@ -60,6 +62,18 @@ def _apply_filters(query, gyogu=None, team=None, group_no=None, generation=None)
     return query
 
 
+def _is_newcomer(db: Session, member_id: int) -> bool:
+    """대상 멤버의 최신 profile member_type이 '새가족'인지 — 일반 API는 새가족을 없는 사람 취급"""
+    latest_type = (
+        db.query(MemberProfile.member_type)
+        .filter(MemberProfile.member_id == member_id)
+        .order_by(desc(MemberProfile.updated_at), desc(MemberProfile.profile_id))
+        .limit(1)
+        .scalar()
+    )
+    return latest_type == NEWCOMER_TYPE
+
+
 def _paginate(query, page: int, page_size: int):
     """공통 페이징 처리"""
     total = query.count()
@@ -68,22 +82,28 @@ def _paginate(query, page: int, page_size: int):
     return rows, total
 
 
-def get_members(db: Session, page: int, page_size: int, year: int, gyogu=None, team=None, group_no=None, generation=None, field=None, keyword=None):
-    """활성 멤버 목록 조회 — 드롭다운 필터 + 키워드 검색 통합 (deleted_at IS NULL)"""
-    query = build_active_members_query(db, year)
+def _finish_member_list(db, query, page, page_size, gyogu, team, group_no, generation, field, keyword):
+    """필터/검색/페이징 공통 마무리 — get_members / get_newcomer_members 공용"""
     query = _apply_filters(query, gyogu, team, group_no, generation)
-
     if field and keyword:
         query, empty = _apply_keyword_filter(query, db, field, keyword)
         if empty:
             return [], 0
-
     return _paginate(query, page, page_size)
 
 
+def get_members(db: Session, page: int, page_size: int, year: int, gyogu=None, team=None, group_no=None, generation=None, field=None, keyword=None):
+    """활성 멤버 목록 조회 — 드롭다운 필터 + 키워드 검색 통합 (deleted_at IS NULL, 새가족 제외)"""
+    query = build_active_members_query(db, year)
+    return _finish_member_list(db, query, page, page_size, gyogu, team, group_no, generation, field, keyword)
+
+
 def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu=None, team=None, group_no=None, generation=None, deleted_from=None, deleted_to=None, field=None, keyword=None):
-    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL)"""
-    query = build_deleted_members_query(db)
+    """삭제된 멤버 목록 조회 (deleted_at IS NOT NULL) — 최신 profile이 새가족인 멤버 제외"""
+    from sqlalchemy import or_
+    query = build_deleted_members_query(db).filter(
+        or_(MemberProfile.member_type.is_(None), MemberProfile.member_type != NEWCOMER_TYPE)
+    )
 
     if deleted_from is not None:
         query = query.filter(Member.deleted_at >= deleted_from)
@@ -103,19 +123,23 @@ def get_deleted_members(db: Session, page: int, page_size: int, year=None, gyogu
 
 
 def get_deleted_member(db: Session, member_id: int):
-    """삭제된 멤버 단건 상세 조회 (최신 프로필 조인)"""
+    """삭제된 멤버 단건 상세 조회 (최신 프로필 조인) — 새가족 제외"""
     row = build_deleted_members_query(db).filter(
         Member.member_id == member_id,
     ).first()
 
-    if not row:
+    if not row or _is_newcomer(db, member_id):
         raise MemberNotFoundError("삭제된 멤버를 찾을 수 없습니다.")
 
     return row  # (Member, MemberProfile) 튜플
 
 
 def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfile | None]:
-    """멤버 생성 (Member + MemberProfile)"""
+    """멤버 생성 (Member + MemberProfile) — 일반 멤버용. member_type='새가족'은 별도 도메인에서 처리."""
+    if data.member_type == NEWCOMER_TYPE:
+        from app.core.exceptions import ConflictError
+        raise ConflictError("새가족은 미등반새가족 전용 API로 생성하세요.")
+
     member = Member(
         name=data.name,
         gender=data.gender,
@@ -162,7 +186,7 @@ def update_member(
                   미래 날짜 지정이 필요한 경우 명시적으로 전달.
     """
     member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
-    if not member:
+    if not member or _is_newcomer(db, member_id):
         raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
 
     # Member 기본 정보 업데이트
@@ -196,7 +220,7 @@ def update_member(
 def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Member:
     """멤버 소프트 삭제 (deleted_at, deleted_reason 세팅)"""
     member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
-    if not member:
+    if not member or _is_newcomer(db, member_id):
         raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
 
     member.deleted_at = now_kst()  # 삭제 시각은 서버 기준 자동
@@ -209,7 +233,7 @@ def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Mem
 def restore_member(db: Session, member_id: int) -> Member:
     """삭제된 멤버 복원 (deleted_at, deleted_reason 초기화)"""
     member = db.query(Member).filter(Member.member_id == member_id).first()
-    if not member:
+    if not member or _is_newcomer(db, member_id):
         raise MemberNotFoundError("멤버를 찾을 수 없습니다.")
     if member.deleted_at is None:
         raise MemberAlreadyActiveError("삭제되지 않은 멤버입니다.")
