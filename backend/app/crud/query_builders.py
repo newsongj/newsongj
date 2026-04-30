@@ -46,6 +46,28 @@ def deleted_only(q: Query) -> Query:
 
 
 # ---------------------------------------------------------------------------
+# 새가족 필터 체이너 — member_type='새가족' 인 사람은 "미등반" 상태로,
+# 일반 멤버 API에서는 보이지 않아야 함. 새가족 전용 화면에서만 노출.
+# ---------------------------------------------------------------------------
+
+NEWCOMER_TYPE = "새가족"
+
+
+def exclude_newcomers(q: Query) -> Query:
+    """새가족(미등반) 제외 — 모든 일반 멤버 조회의 기본
+    (MemberProfile.member_type != '새가족')
+    """
+    return q.filter(MemberProfile.member_type != NEWCOMER_TYPE)
+
+
+def newcomers_only(q: Query) -> Query:
+    """새가족(미등반)만 — 미등반 새가족 화면용
+    (MemberProfile.member_type == '새가족')
+    """
+    return q.filter(MemberProfile.member_type == NEWCOMER_TYPE)
+
+
+# ---------------------------------------------------------------------------
 # MemberProfile 필터 체이너
 # ---------------------------------------------------------------------------
 
@@ -136,36 +158,50 @@ def _latest_profile_id_sq(db: Session, max_year_sq):
 # 내부 기반 쿼리 빌더
 # ---------------------------------------------------------------------------
 
-def _base_query_as_of(db: Session, as_of_date: datetime.date) -> Query:
+def _base_query_as_of(
+    db: Session,
+    as_of_date: datetime.date,
+    include_newcomers: bool = False,
+) -> Query:
     """특정 날짜 기준 활성 멤버의 유효 profile 기반 쿼리 (MemberProfile 반환).
 
     - active_now 적용 (deleted_at IS NULL)
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
-    - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
+    - 기본: 새가족(미등반) 제외
     """
     max_year_sq = _latest_as_of_sq(db, as_of_date)
     latest_sq = _latest_profile_id_sq(db, max_year_sq)
-    return active_now(
+    q = active_now(
         db.query(MemberProfile)
         .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q
 
 
-def _base_query_in_year(db: Session, year_int: int) -> Query:
+def _base_query_in_year(
+    db: Session,
+    year_int: int,
+    include_newcomers: bool = False,
+) -> Query:
     """특정 연도 내 활성 멤버의 최신 profile 기반 쿼리 (MemberProfile 반환).
 
     - active_now 적용 (deleted_at IS NULL)
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
-    - 필터 체이너(by_*)로 조건 추가 후 .all() 실행
+    - 기본: 새가족(미등반) 제외
     """
     max_year_sq = _latest_in_year_sq(db, year_int)
     latest_sq = _latest_profile_id_sq(db, max_year_sq)
-    return active_now(
+    q = active_now(
         db.query(MemberProfile)
         .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .join(Member, Member.member_id == MemberProfile.member_id)
     )
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q
 
 
 # ---------------------------------------------------------------------------
@@ -209,21 +245,29 @@ def apply_attendance_filters(
 # 공개 쿼리 빌더 — (Member, MemberProfile) 튜플 반환
 # ---------------------------------------------------------------------------
 
-def build_active_members_query(db: Session, year_int: int) -> Query:
+def build_active_members_query(
+    db: Session,
+    year_int: int,
+    include_newcomers: bool = False,
+) -> Query:
     """특정 연도 내 활성 멤버와 최신 profile을 (Member, MemberProfile) 튜플로 반환하는 기반 쿼리.
 
     - 해당 연도 범위 내 profile row가 있는 멤버만 포함 (inner join)
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - active_now 적용 (deleted_at IS NULL)
+    - 기본: 새가족(미등반) 제외. 새가족 전용 화면에서만 include_newcomers=True
     """
     max_year_sq = _latest_in_year_sq(db, year_int)
     latest_sq = _latest_profile_id_sq(db, max_year_sq)
 
-    return active_now(
+    q = active_now(
         db.query(Member, MemberProfile)
         .join(latest_sq, Member.member_id == latest_sq.c.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
     )
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q
 
 
 def build_deleted_members_query(db: Session) -> Query:
@@ -250,12 +294,17 @@ def build_deleted_members_query(db: Session) -> Query:
     )
 
 
-def build_members_as_of_query(db: Session, as_of_date: datetime.date) -> Query:
+def build_members_as_of_query(
+    db: Session,
+    as_of_date: datetime.date,
+    include_newcomers: bool = False,
+) -> Query:
     """특정 날짜 기준 활성 멤버와 유효 profile을 (Member, MemberProfile) 튜플로 반환하는 기반 쿼리.
 
     - active_as_of 적용 (deleted_at IS NULL OR deleted_at > as_of_date)
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 출석 API용 — worship_date 기준 소속 확정
+    - 기본: 새가족(미등반) 제외
     """
     max_year_sq = _latest_as_of_sq(db, as_of_date)
     latest_sq = _latest_profile_id_sq(db, max_year_sq)
@@ -264,7 +313,10 @@ def build_members_as_of_query(db: Session, as_of_date: datetime.date) -> Query:
         .join(latest_sq, Member.member_id == latest_sq.c.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
     )
-    return active_as_of(q, as_of_date)
+    q = active_as_of(q, as_of_date)
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q
 
 
 # ---------------------------------------------------------------------------
@@ -277,9 +329,10 @@ def get_profiles_as_of(
     gyogu: int | None = None,
     team: int | None = None,
     group_no: int | None = None,
+    include_newcomers: bool = False,
 ) -> list[MemberProfile]:
-    """특정 날짜 기준 유효 소속 profile 목록. 필터는 선택."""
-    q = _base_query_as_of(db, as_of_date)
+    """특정 날짜 기준 유효 소속 profile 목록. 필터는 선택. 기본: 새가족 제외."""
+    q = _base_query_as_of(db, as_of_date, include_newcomers=include_newcomers)
     if gyogu    is not None: q = by_gyogu(q, gyogu)
     if team     is not None: q = by_team(q, team)
     if group_no is not None: q = by_group_no(q, group_no)
@@ -292,9 +345,10 @@ def get_profiles_in_year(
     gyogu: int | None = None,
     team: int | None = None,
     group_no: int | None = None,
+    include_newcomers: bool = False,
 ) -> list[MemberProfile]:
-    """특정 연도 기준 최신 소속 profile 목록. 필터는 선택."""
-    q = _base_query_in_year(db, year_int)
+    """특정 연도 기준 최신 소속 profile 목록. 필터는 선택. 기본: 새가족 제외."""
+    q = _base_query_in_year(db, year_int, include_newcomers=include_newcomers)
     if gyogu    is not None: q = by_gyogu(q, gyogu)
     if team     is not None: q = by_team(q, team)
     if group_no is not None: q = by_group_no(q, group_no)
@@ -362,30 +416,38 @@ def get_records_by_dates(
     }
 
 
-def build_attendance_records_query(db: Session, worship_date: datetime.date) -> Query:
+def build_attendance_records_query(
+    db: Session,
+    worship_date: datetime.date,
+    include_newcomers: bool = False,
+) -> Query:
     """특정 예배일의 출석 기록을 member + 당시 profile과 함께 반환.
 
     (AttendanceRecord, Member, MemberProfile) 튜플로 반환.
     - worship_date 기준 가장 최신 profile 사용 (updated_at <= worship_date)
     - 같은 날 row 중복 시 MAX(profile_id)로 단일 row 확정
     - 소프트 삭제 필터 없음 — 출석 기록은 삭제 여부와 무관한 역사적 사실
-    - by_gyogu/by_team/by_leader 등 필터 체이너로 조건 추가 후 .all() 실행
+    - 기본: 새가족(미등반) 제외
     """
     max_year_sq = _latest_as_of_sq(db, worship_date)
     latest_sq = _latest_profile_id_sq(db, max_year_sq)
-    return (
+    q = (
         db.query(AttendanceRecord, Member, MemberProfile)
         .join(Member, Member.member_id == AttendanceRecord.member_id)
         .join(latest_sq, latest_sq.c.member_id == AttendanceRecord.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
         .filter(AttendanceRecord.worship_date == worship_date)
     )
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q
 
 
 def build_attendance_records_range_query(
     db: Session,
     start_date: datetime.date,
     end_date: datetime.date,
+    include_newcomers: bool = False,
 ) -> Query:
     """기간 내 모든 출석 기록 + 각 record 시점의 유효 profile + member를 단일 쿼리로 반환.
 
@@ -425,9 +487,12 @@ def build_attendance_records_range_query(
         .subquery()
     )
 
-    return (
+    q = (
         db.query(AttendanceRecord, Member, MemberProfile)
         .join(picked, picked.c.aid == AttendanceRecord.attendance_id)
         .join(MemberProfile, MemberProfile.profile_id == picked.c.pid)
         .join(Member, Member.member_id == AttendanceRecord.member_id)
     )
+    if not include_newcomers:
+        q = exclude_newcomers(q)
+    return q

@@ -1,71 +1,22 @@
 # newsongj
 
-사내 관리 대시보드 프로젝트입니다.
+> **명성교회 대학부 HRM** — 교적·출석·새가족을 한 곳에서 관리하는 사역자 전용 운영 도구.
+
+엑셀 기반으로 흩어져 있던 교인 정보·출석부·새가족 명단을 단일 웹 대시보드로 통합. 연도별 소속 이력, 주별 출석 추이, 미등반 새가족 추적까지 한 화면에서 처리할 수 있도록 설계했습니다.
 
 ---
 
-## 시작하기 (로컬 실행)
+## 기능
 
-**1. 환경변수 설정**
-
-루트에 `.env` 파일을 만들어 DB 접속 정보를 입력하세요.
-파일 형식은 팀원에게 요청하세요.
-
-**2. 실행**
-
-```bash
-docker compose up --build
-```
-
-켜지면:
-- http://localhost:8000 → 백엔드 API
-- http://localhost:8000/docs → Swagger (API 문서)
-- http://localhost:80 → 프론트엔드
-
-> **참고:** MariaDB는 서버에 별도 운영 중입니다. `.env`에 서버 DB 접속 정보를 넣어야 정상 동작합니다.
+- **교적 관리** — 멤버 등록·수정·삭제·복원, 연도별 소속 이력 추적
+- **출석 관리** — 주별 출석 체크, 결석 사유 분류, 기간별 통계 대시보드
+- **미등반 새가족** — 별도 도메인으로 관리, 등반 처리 시 일반 멤버로 전환
+- **인증** — JWT 기반 로그인
 
 ---
 
-## 코드 수정 후 반영
+## 스택
 
-```bash
-# 전체 재빌드
-docker compose up --build
-
-# 백엔드 코드만 바꿨을 때 (--reload로 자동 반영되지 않는 경우)
-docker compose restart backend
-
-# 로그 보기
-docker compose logs -f backend
-```
-
----
-
-## 배포
-
-`main` 브랜치에 머지하면 GitHub Actions가 자동으로 서버에 배포합니다.
-
-```bash
-git push origin main  # PR → 머지 → 자동 배포
-```
-
-변경된 서비스(backend / frontend)만 골라서 재빌드하므로,
-frontend만 바꿨으면 frontend 이미지만 새로 올라갑니다.
-
----
-
-## 문제가 생겼을 때
-
-```bash
-# 직전 커밋으로 되돌리기
-git revert HEAD
-git push origin main
-```
-
----
-
-## 더 자세한 내용
-
-| 문서 | 내용 |
-|------|------|
-| `frontend/COMMON_UI_GUIDE.md` | 프론트 공통 컴포넌트 사용법 |
+- **Backend** — FastAPI · SQLAlchemy · MariaDB
+- **Frontend** — React · TypeScript · MUI · Recoil · Vite
+- **Infra** — Docker Compose · AWS Lightsail · GitHub Actions

@@ -1,12 +1,15 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.models import AttendanceRecord, Member
+from app.models import AttendanceRecord, Member, MemberProfile
 from app.schemas.attendance import AttendanceBatchRequest
 from app.crud.query_builders import (
     active_as_of,
     build_members_as_of_query,
     by_group_no,
     apply_attendance_filters,
+    exclude_newcomers,
+    _latest_as_of_sq,
+    _latest_profile_id_sq,
 )
 from app.crud.attendance_rate import update_rates_for_members
 from app.core.timezone import now_kst, today_kst
@@ -17,13 +20,20 @@ import datetime
 def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
     request_ids = {item.member_id for item in req.records}
 
+    # worship_date 시점 유효 profile join → 새가족(미등반) 제외
+    max_year_sq = _latest_as_of_sq(db, req.worship_date)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
+    base_q = (
+        db.query(Member.member_id, Member.enrolled_at)
+        .join(latest_sq, latest_sq.c.member_id == Member.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
+        .filter(Member.member_id.in_(request_ids))
+    )
+    base_q = exclude_newcomers(active_as_of(base_q, req.worship_date))
+
     valid_map: dict[int, datetime.date | None] = {
         row.member_id: (row.enrolled_at.date() if row.enrolled_at else None)
-        for row in active_as_of(
-            db.query(Member.member_id, Member.enrolled_at)
-              .filter(Member.member_id.in_(request_ids)),
-            req.worship_date,
-        ).all()
+        for row in base_q.all()
     }
     valid_ids = set(valid_map)
 

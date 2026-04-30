@@ -33,6 +33,9 @@ MDs/
 !frontend/.env
 REVIEW_REPORT.md
 
+# --- 개인 작업 폴더 (잡동사니, 메모, 임시 파일) ---
+/_scratch/
+
 # --- Global Ignore ---
 *.log
 npm-debug.log*
