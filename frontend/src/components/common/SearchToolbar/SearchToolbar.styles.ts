@@ -4,11 +4,18 @@ import { IconButton, MenuItem, Select, FormControl, InputLabel, Typography } fro
 export const StyledContainer = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
   gap: theme.custom.spacing.lg,
   padding: theme.custom.spacing.md,
   backgroundColor: theme.custom.colors.neutral._99,
   borderRadius: theme.custom.borderRadius,
-  height: '90px',
+  minHeight: '90px',
+  '@media (max-width: 720px)': {
+    alignItems: 'stretch',
+    gap: theme.custom.spacing.sm,
+    minHeight: 'auto',
+    padding: theme.custom.spacing.sm,
+  },
 }));
 
 export const StyledQueriesSection = styled('div')(({ theme }) => ({
@@ -16,12 +23,26 @@ export const StyledQueriesSection = styled('div')(({ theme }) => ({
   alignItems: 'center',
   gap: theme.custom.spacing.md,
   flex: 1,
+  minWidth: 0,
+  '@media (max-width: 720px)': {
+    width: '100%',
+    flexWrap: 'wrap',
+    gap: theme.custom.spacing.sm,
+  },
 }));
 
 export const StyledActionsSection = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
   gap: theme.custom.spacing.lg,
+  '@media (max-width: 720px)': {
+    width: '100%',
+    gap: theme.custom.spacing.sm,
+    '& > *': {
+      flex: '1 1 auto',
+    },
+  },
 }));
 
 export const StyledIconButton = styled(IconButton)(({ theme }) => ({

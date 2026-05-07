@@ -39,6 +39,10 @@ const FormGrid = styled('div')(({ theme }) => ({
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: theme.custom.spacing.md,
   padding: theme.custom.spacing.lg,
+  '@media (max-width: 720px)': {
+    gridTemplateColumns: '1fr',
+    padding: theme.custom.spacing.md,
+  },
 }));
 
 const FieldBlock = styled('div')(({ theme }) => ({

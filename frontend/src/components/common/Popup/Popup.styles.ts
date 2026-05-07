@@ -29,7 +29,8 @@ export const Overlay = styled.div<{ state: 'entering' | 'entered' | 'exiting' }>
 `
 
 export const PopupWrapper = styled.div`
-    width: 496px;
+    width: min(496px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
     border-radius: ${({ theme }) => theme.custom.borderRadius};
     background-color: ${({ theme }) => theme.custom.colors.neutral._100};
     padding: ${({ theme }) => theme.custom.spacing.xl};
@@ -38,6 +39,12 @@ export const PopupWrapper = styled.div`
     justify-content: space-between;
     box-sizing: border-box;
     z-index: 10001;
+    overflow: auto;
+
+    @media (max-width: 600px) {
+        width: calc(100vw - 24px);
+        padding: ${({ theme }) => theme.custom.spacing.lg};
+    }
 `
 
 export const Content = styled.div<{ hasInput: boolean }>`
@@ -98,7 +105,18 @@ export const Count = styled.div`
 export const Actions = styled.div`
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: ${({ theme }) => theme.custom.spacing.xl};
+
+    @media (max-width: 600px) {
+        justify-content: stretch;
+        gap: ${({ theme }) => theme.custom.spacing.md};
+
+        & > * {
+            flex: 1 1 100%;
+            text-align: center;
+        }
+    }
 `
 
 export const ButtonText = styled.button<{ variant?: 'third' | 'error' }>`

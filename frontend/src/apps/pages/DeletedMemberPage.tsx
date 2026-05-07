@@ -91,15 +91,26 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
-const FilterHeader = styled('div')({
+const FilterHeader = styled('div')(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-});
+  gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+}));
 
 const FilterActions = styled('div')(({ theme }) => ({
   display: 'flex',
+  flexWrap: 'wrap',
   gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    '& > *': {
+      flex: '1 1 100%',
+    },
+  },
 }));
 
 const FilterGrid = styled('div')(({ theme }) => ({
@@ -113,6 +124,10 @@ const DetailGrid = styled('div')(({ theme }) => ({
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: theme.custom.spacing.md,
   padding: theme.custom.spacing.lg,
+  '@media (max-width: 720px)': {
+    gridTemplateColumns: '1fr',
+    padding: theme.custom.spacing.md,
+  },
 }));
 
 const HighlightText = styled('span')(({ theme }) => ({

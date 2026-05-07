@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { useRecoilValue } from 'recoil';
+import { useRecoilState, useRecoilValue } from 'recoil';
 import { Avatar } from '@components/common/Avatar';
 import { Menu } from '@components/common/Menu';
 import { useAuth } from '@/hooks/auth';
 import { authState } from '@/recoil/auth/atoms';
+import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
 import { HeaderProps } from './Header.types';
 import * as S from './Header.styles';
 import { MenuItemData } from '@components/common/Menu/Menu.types';
-import { Logout } from '@mui/icons-material';
+import { Logout, Menu as MenuIcon } from '@mui/icons-material';
 
 const Header: React.FC<HeaderProps> = ({
   title = 'Admin Page',
@@ -15,6 +16,7 @@ const Header: React.FC<HeaderProps> = ({
   userImage
 }) => {
   const auth = useRecoilValue(authState);
+  const [isCollapsed, setIsCollapsed] = useRecoilState(orchestratorSidebarCollapsedState);
   const { logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -35,6 +37,10 @@ const Header: React.FC<HeaderProps> = ({
     handleClose();
   };
 
+  const handleSidebarToggle = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   const menuItems: MenuItemData[] = [
     {
       id: 'logout',
@@ -47,6 +53,9 @@ const Header: React.FC<HeaderProps> = ({
     <S.StyledAppBar>
       <S.StyledToolbar>
         <S.LeftPanel>
+          <S.MobileMenuButton onClick={handleSidebarToggle} aria-label="Open sidebar">
+            <MenuIcon />
+          </S.MobileMenuButton>
           <S.Logo />
           <S.Title>{title}</S.Title>
         </S.LeftPanel>

@@ -17,10 +17,13 @@ export const StyledWrapper = styled('div')(({ theme }) => ({
   borderRadius: theme.custom.borderRadius,
   border: `1px solid ${theme.custom.colors.primary.outline}`,
   overflow: 'hidden',
+  width: '100%',
 }));
 
 export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
   backgroundColor: theme.custom.colors.white,
+  overflowX: 'auto',
+  WebkitOverflowScrolling: 'touch',
 }));
 
 export const StyledTable = styled(Table)(({ theme }) => ({
@@ -94,11 +97,27 @@ export const StyledSelectedActions = styled(Box)(({ theme }) => ({
 
 export const StyledPagination = styled(TablePagination)(({ theme }) => ({
   '& .MuiTablePagination-toolbar': {
-    padding: 0,
+    padding: `0 ${theme.custom.spacing.sm}`,
+    flexWrap: 'wrap',
+    rowGap: theme.custom.spacing.xs,
+    justifyContent: 'flex-start',
+    columnGap: theme.custom.spacing.sm,
   },
   '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
     fontSize: theme.custom.typography.body2.fontSize,
     color: theme.custom.colors.text.medium,
+    margin: 0,
+  },
+  '& .MuiTablePagination-actions': {
+    marginLeft: 0,
+  },
+  '@media (max-width: 600px)': {
+    '& .MuiTablePagination-toolbar': {
+      justifyContent: 'flex-start',
+    },
+    '& .MuiTablePagination-spacer': {
+      display: 'none',
+    },
   },
 }));
 
@@ -123,6 +142,9 @@ export const StyledFooterRow = styled(TableRow)(({ theme }) => ({
   '& .MuiTableCell-root': {
     borderBottom: 'none',
     padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.md}`,
+    '@media (max-width: 600px)': {
+      padding: theme.custom.spacing.sm,
+    },
   },
 }));
 

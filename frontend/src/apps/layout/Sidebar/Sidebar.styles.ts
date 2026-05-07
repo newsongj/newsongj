@@ -20,6 +20,16 @@ export const StyledDrawer = styled(Drawer, {
       borderRight: 'none',
       transition: 'width 0.3s ease',
       overflow: 'hidden',
+      '@media (max-width: 900px)': {
+        width: 'min(82vw, 280px)',
+        transform: $collapsed ? 'translateX(-100%)' : 'translateX(0)',
+        transition: 'transform 0.25s ease',
+        boxShadow: $collapsed ? 'none' : '0 16px 40px rgba(0, 0, 0, 0.18)',
+        overflowY: 'auto',
+      },
+    },
+    '@media (max-width: 900px)': {
+      width: 0,
     },
   };
 });

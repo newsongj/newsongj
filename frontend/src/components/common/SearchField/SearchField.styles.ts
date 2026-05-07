@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 export const StyledContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'stretch',
+  width: '100%',
   border: `1px solid ${theme.custom.colors.primary.outline}`,
   borderRadius: theme.custom.borderRadius,
   background: theme.custom.colors.white,
@@ -12,6 +13,9 @@ export const StyledContainer = styled(Box)(({ theme }) => ({
     borderColor: theme.custom.colors.primary._500,
     borderWidth: '2px',
   },
+  '@media (max-width: 600px)': {
+    flexWrap: 'wrap',
+  },
 }));
 
 export const StyledSelectContainer = styled('div')(({ theme }) => ({
@@ -19,6 +23,11 @@ export const StyledSelectContainer = styled('div')(({ theme }) => ({
   borderRight: `1px solid ${theme.custom.colors.primary.outline}`,
   display: 'flex',
   alignItems: 'center',
+  '@media (max-width: 600px)': {
+    width: '100%',
+    borderRight: 'none',
+    borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+  },
 
   '& .MuiFormControl-root': {
     '& .MuiOutlinedInput-root': {
@@ -66,6 +75,14 @@ export const StyledTextFieldContainer = styled(Box)({
 
 export const StyledSearchButtonContainer = styled(Box)(({ theme }) => ({
   borderLeft: `1px solid ${theme.custom.colors.primary.outline}`,
+  '@media (max-width: 600px)': {
+    width: '100%',
+    borderLeft: 'none',
+    borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
+    '& button': {
+      width: '100%',
+    },
+  },
   '& button': {
     borderRadius: 0,
     border: 'none',
