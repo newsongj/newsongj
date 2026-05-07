@@ -8,6 +8,8 @@ export const StatCard = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 
@@ -15,30 +17,45 @@ export const StatCard = styled.div`
     transform: translateY(-1px);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   }
+
+  @media (max-width: 720px) {
+    padding: 16px;
+    gap: 12px;
+  }
 `;
 
 export const StatContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 `;
 
 export const StatLabel = styled.span`
   font-size: 12px;
   color: #6b7280;
   font-weight: 600;
+  line-height: 1.4;
+  word-break: keep-all;
 `;
 
 export const StatValue = styled.span`
   font-size: 32px;
   font-weight: 800;
   color: #0f172a;
+  line-height: 1.1;
+
+  @media (max-width: 720px) {
+    font-size: 26px;
+  }
 `;
 
 export const StatChange = styled.span<{ $isPositive: boolean }>`
   font-size: 12px;
   color: ${(props) => (props.$isPositive ? '#16a34a' : '#dc2626')};
   font-weight: 600;
+  line-height: 1.4;
+  word-break: keep-all;
 `;
 
 export const StatChangeWrapper = styled.div<{ $hasTooltip: boolean }>`
@@ -93,4 +110,9 @@ export const IconWrapper = styled.div<{ $bgColor: string }>`
   color: white;
   flex-shrink: 0;
   box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
+
+  @media (max-width: 720px) {
+    width: 42px;
+    height: 42px;
+  }
 `;

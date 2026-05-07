@@ -108,15 +108,32 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
-const FilterHeader = styled('div')({
+const FilterHeader = styled('div')(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-});
+  gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+}));
 
 const FilterActions = styled('div')(({ theme }) => ({
   display: 'flex',
+  flexWrap: 'wrap',
   gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    '& > *': {
+      flex: '1 1 calc(50% - 8px)',
+      width: '100%',
+    },
+  },
+  '@media (max-width: 560px)': {
+    '& > *': {
+      flex: '1 1 100%',
+    },
+  },
 }));
 
 const FilterGrid = styled('div')(({ theme }) => ({

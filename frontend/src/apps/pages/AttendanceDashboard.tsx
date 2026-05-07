@@ -132,6 +132,16 @@ const FilterLabel = styled('span')(({ theme }) => ({
   whiteSpace: 'nowrap',
 }));
 
+const FilterField = styled('div')(({ theme }) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: theme.custom.spacing.xs,
+  minWidth: 0,
+  '@media (max-width: 600px)': {
+    width: '100%',
+  },
+}));
+
 const WeekNavWrap = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
@@ -428,16 +438,20 @@ const AttendanceDashboard: React.FC = () => {
         <FilterDivider />
 
         {/* 교구 / 팀 */}
-        <FilterLabel>교구</FilterLabel>
-        <Select value={gyogu} options={GYOGU_OPTIONS} onChange={handleGyoguChange} width={110} />
-        <FilterLabel>팀</FilterLabel>
-        <Select
-          value={team}
-          options={TEAM_OPTIONS}
-          onChange={(v) => setTeam(String(v))}
-          disabled={!gyogu || gyogu === '임원단'}
-          width={100}
-        />
+        <FilterField>
+          <FilterLabel>교구</FilterLabel>
+          <Select value={gyogu} options={GYOGU_OPTIONS} onChange={handleGyoguChange} width={110} />
+        </FilterField>
+        <FilterField>
+          <FilterLabel>팀</FilterLabel>
+          <Select
+            value={team}
+            options={TEAM_OPTIONS}
+            onChange={(v) => setTeam(String(v))}
+            disabled={!gyogu || gyogu === '임원단'}
+            width={100}
+          />
+        </FilterField>
       </FilterPanel>
 
       {/* ── KPI 카드 ── */}

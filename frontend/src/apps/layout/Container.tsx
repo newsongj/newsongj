@@ -1,11 +1,11 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   PeopleOutlined,
   ContactsOutlined,
   DirectionsRunOutlined,
 } from '@mui/icons-material';
-import { useRecoilValue } from 'recoil';
+import { useRecoilState } from 'recoil';
 import { orchestratorSidebarCollapsedState } from '@/recoil/atoms';
 import { Header } from './Header';
 import { Sidebar, MenuItem } from './Sidebar';
@@ -20,6 +20,9 @@ const VerticalDividerContainer = styled('div')<{ $collapsed?: boolean }>(({ $col
   height: 'calc(100vh - 66px)',
   zIndex: 1200,
   transition: 'left 0.3s ease',
+  '@media (max-width: 900px)': {
+    display: 'none',
+  },
 }));
 
 interface ContainerProps {
@@ -44,9 +47,22 @@ const getPageInfo = (path: string) => {
 };
 
 export const Container: React.FC<ContainerProps> = ({ children }) => {
-  const isCollapsed = useRecoilValue(orchestratorSidebarCollapsedState);
+  const [isCollapsed, setIsCollapsed] = useRecoilState(orchestratorSidebarCollapsedState);
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 900px)');
+
+    const syncSidebarMode = (event?: MediaQueryListEvent) => {
+      setIsCollapsed(event ? event.matches : mediaQuery.matches);
+    };
+
+    syncSidebarMode();
+    mediaQuery.addEventListener('change', syncSidebarMode);
+
+    return () => mediaQuery.removeEventListener('change', syncSidebarMode);
+  }, [setIsCollapsed]);
 
   const menuItems: MenuItem[] = [
     {
@@ -85,6 +101,9 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
 
   const handleMenuClick = (path: string) => {
     navigate(path);
+    if (window.innerWidth <= 900) {
+      setIsCollapsed(true);
+    }
   };
 
   const pageInfo = getPageInfo(location.pathname);

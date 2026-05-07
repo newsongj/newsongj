@@ -4,7 +4,7 @@ import { ReactComponent as NewsongLogo } from '@assets/icons/NewsongJ_logo.svg';
 
 export const StyledAppBar = styled(AppBar)(({ theme }) => ({
   backgroundColor: theme.custom?.colors?.primary?._900 || '#021730',
-  height: 'px',
+  height: '66px',
   boxShadow: 'none',
   position: 'fixed',
 }));
@@ -15,17 +15,36 @@ export const StyledToolbar = styled(Toolbar)({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
+  '@media (max-width: 600px)': {
+    padding: '0 12px',
+  },
 });
 
 export const LeftPanel = styled('div')({
   display: 'flex',
   alignItems: 'center',
   gap: '16px',
+  minWidth: 0,
 });
+
+export const MobileMenuButton = styled(IconButton)(({ theme }) => ({
+  display: 'none',
+  color: theme.custom?.colors?.on?.primary || '#FFFFFF',
+  padding: '6px',
+  marginLeft: '-6px',
+  '@media (max-width: 900px)': {
+    display: 'inline-flex',
+  },
+}));
 
 export const Logo = styled(NewsongLogo)({
   width: '120px',
   height: '28px',
+  flexShrink: 0,
+  '@media (max-width: 600px)': {
+    width: '96px',
+    height: '24px',
+  },
 });
 
 export const Title = styled(Typography)(({ theme }) => ({
@@ -34,12 +53,22 @@ export const Title = styled(Typography)(({ theme }) => ({
   lineHeight: theme.custom?.typography?.h3?.lineHeight || '1.5em',
   letterSpacing: '-0.04em',
   color: theme.custom?.colors?.on?.primary || '#FFFFFF',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  '@media (max-width: 600px)': {
+    fontSize: '16px',
+  },
 }));
 
 export const RightPanel = styled('div')({
   display: 'flex',
   alignItems: 'center',
   gap: '16px',
+  flexShrink: 0,
+  '@media (max-width: 600px)': {
+    gap: '8px',
+  },
 });
 
 export const NotificationButton = styled(IconButton)(({ theme }) => ({

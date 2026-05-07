@@ -149,6 +149,12 @@ const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(3, minmax(160px, 210px))',
   gap: theme.custom.spacing.sm,
+  '@media (max-width: 900px)': {
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  },
+  '@media (max-width: 600px)': {
+    gridTemplateColumns: '1fr',
+  },
 }));
 
 const WeekNavBar = styled('div')(({ theme }) => ({

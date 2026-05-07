@@ -19,9 +19,9 @@ import {
   MEMBER_MEMBER_TYPE_OPTIONS,
   MEMBER_PLT_OPTIONS,
 } from '@components/user/memberForm.types';
-import { useMembers } from '@/hooks/member';
+import { useNewcomers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
-import { createMember, updateMember, deleteMember, enrollMember, MemberCreateBody } from '@/api/member';
+import { createNewcomer, deleteNewcomer, enrollNewcomer, NewcomerBody, updateNewcomer } from '@/api/newcomer';
 import { fetchLeaders, LeaderOption } from '@/api/meta';
 
 // 교구·팀·그룹은 새가족 단계에서 필수 아님
@@ -137,15 +137,31 @@ const FilterTitle = styled('h3')(({ theme }) => ({
   color: theme.custom.colors.text.high,
 }));
 
-const FilterHeader = styled('div')({
+const FilterHeader = styled('div')(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-});
+  gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+}));
 
 const FilterActions = styled('div')(({ theme }) => ({
   display: 'flex',
+  flexWrap: 'wrap',
   gap: theme.custom.spacing.sm,
+  '@media (max-width: 720px)': {
+    '& > *': {
+      flex: '1 1 calc(50% - 8px)',
+    },
+  },
+  '@media (max-width: 560px)': {
+    '& > *': {
+      flex: '1 1 100%',
+    },
+  },
 }));
 
 const FilterGrid = styled('div')(({ theme }) => ({
@@ -159,6 +175,10 @@ const FormGrid = styled('div')(({ theme }) => ({
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: theme.custom.spacing.md,
   padding: theme.custom.spacing.lg,
+  '@media (max-width: 720px)': {
+    gridTemplateColumns: '1fr',
+    padding: theme.custom.spacing.md,
+  },
 }));
 
 const FieldBlock = styled('div')(({ theme }) => ({
@@ -261,26 +281,27 @@ const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
 });
 
 const parseIntField = (val: string): number | undefined => {
-  const n = parseInt(val);
+  const n = parseInt(val, 10);
   return isNaN(n) ? undefined : n;
 };
 
-const toApiBody = (form: MemberFormValue): MemberCreateBody => ({
+const toApiBody = (form: MemberFormValue): NewcomerBody => ({
   name: form.name,
   gender: form.gender,
-  generation: parseInt(form.generation),
+  generation: parseInt(form.generation, 10),
   phone_number: form.phone || undefined,
   birthdate: form.birthDate || undefined,
-  gyogu: parseIntField(form.parish),
-  team: parseIntField(form.team),
-  group_no: parseIntField(form.group),
-  leader_ids: form.roles.length > 0 ? JSON.stringify(form.roles) : undefined,
-  member_type: form.memberType || undefined,
-  attendance_grade: form.attendanceGrade || undefined,
-  plt_status: form.pltCompleted || undefined,
+  gyogu: parseIntField(form.parish) as number,
+  team: parseIntField(form.team) as number,
+  group_no: parseIntField(form.group) as number,
   v8pid: form.pid || undefined,
   school_work: form.schoolWork || undefined,
   major: form.major || undefined,
+});
+
+const toEnrollPayload = (date: string, memberType: string) => ({
+  enrolled_at: `${date}T00:00:00`,
+  member_type: memberType,
 });
 
 interface NewFamilyCreateModalProps {
@@ -771,7 +792,7 @@ const NewFamilyMemberPage: React.FC = () => {
     handleFilterChange,
     handleSearch,
     setSelectedIds,
-  } = useMembers();
+  } = useNewcomers();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -779,6 +800,7 @@ const NewFamilyMemberPage: React.FC = () => {
   const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
   const [singleEnrollOpen, setSingleEnrollOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [enrollMemberType] = useState(MEMBER_MEMBER_TYPE_OPTIONS[0]);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -801,7 +823,7 @@ const NewFamilyMemberPage: React.FC = () => {
   const handleCreate = async (form: MemberFormValue) => {
     setIsSubmitting(true);
     try {
-      await createMember(toApiBody(form));
+      await createNewcomer(toApiBody(form));
       showSnackbar('새가족이 추가되었습니다.', 'success');
       setCreateOpen(false);
       await loadMembers(page, rowsPerPage, filters);
@@ -816,7 +838,7 @@ const NewFamilyMemberPage: React.FC = () => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      await updateMember(selectedRow.id, toApiBody(form));
+      await updateNewcomer(selectedRow.id, toApiBody(form));
       showSnackbar('새가족 정보가 수정되었습니다.', 'success');
       setEditOpen(false);
       await loadMembers(page, rowsPerPage, filters);
@@ -831,7 +853,7 @@ const NewFamilyMemberPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const count = selectedIds.length;
-      await Promise.all(selectedIds.map((id) => enrollMember(parseInt(id), todayStr)));
+      await Promise.all(selectedIds.map((id) => enrollNewcomer(parseInt(id, 10), toEnrollPayload(todayStr, enrollMemberType))));
       setSelectedIds([]);
       setBulkEnrollOpen(false);
       showSnackbar(`${count}명의 새가족이 등반 처리되었습니다. (${todayStr})`, 'success');
@@ -847,7 +869,7 @@ const NewFamilyMemberPage: React.FC = () => {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      await enrollMember(selectedRow.id, todayStr);
+      await enrollNewcomer(selectedRow.id, toEnrollPayload(todayStr, enrollMemberType));
       setSingleEnrollOpen(false);
       setEditOpen(false);
       showSnackbar(`등반 처리되었습니다. (${todayStr})`, 'success');
@@ -864,7 +886,7 @@ const NewFamilyMemberPage: React.FC = () => {
     try {
       const deletedCount = selectedIds.length;
       await Promise.all(
-        selectedIds.map((id) => deleteMember(parseInt(id), deleteReason?.trim() || ''))
+        selectedIds.map((id) => deleteNewcomer(parseInt(id, 10)))
       );
       setSelectedIds([]);
       setDeleteOpen(false);

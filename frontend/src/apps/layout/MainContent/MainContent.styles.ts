@@ -6,19 +6,27 @@ export const ContentContainer = styled(Box, {
 })<{ $collapsed?: boolean }>(({ theme, $collapsed }) => ({
   marginLeft: $collapsed ? '56px' : '256px',
   marginTop: '66px',
-  height: 'calc(100vh - 66px)',
+  minHeight: 'calc(100vh - 66px)',
   display: 'flex',
   flexDirection: 'column',
   backgroundColor: theme.custom?.colors?.surface || '#FFFFFF',
   transition: 'margin-left 0.3s ease',
   overflow: 'hidden',
+  '@media (max-width: 900px)': {
+    marginLeft: 0,
+    width: '100%',
+  },
 }));
 
 export const ContentHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
   gap: theme.custom?.spacing?.md || '16px',
   padding: theme.custom?.spacing?.md || '16px',
+  '@media (max-width: 600px)': {
+    padding: theme.custom?.spacing?.sm || '12px',
+  },
 }));
 
 export const ContentTitle = styled(Typography)(({ theme }) => ({
@@ -34,6 +42,7 @@ export const ContentBreadcrumb = styled(Typography)(({ theme }) => ({
   fontWeight: theme.custom?.typography?.body2?.fontWeight || 400,
   lineHeight: `${theme.custom?.typography?.body2?.lineHeight || 18}px`,
   color: theme.custom?.colors?.neutral._50 || 'rgba(0, 0, 0, 0.6)',
+  wordBreak: 'break-word',
 }));
 
 export const ContentBody = styled(Box)(({ theme }) => ({
@@ -41,4 +50,7 @@ export const ContentBody = styled(Box)(({ theme }) => ({
   backgroundColor: theme.custom?.colors?.surface || '#FFFFFF',
   padding: theme.custom?.spacing?.md || '16px',
   overflow: 'auto',
+  '@media (max-width: 600px)': {
+    padding: theme.custom?.spacing?.sm || '12px',
+  },
 }));

@@ -37,13 +37,19 @@ const PageWrapper = styled('div')(({ theme }) => ({
 
 const TabBar = styled('div')(({ theme }) => ({
   display: 'flex',
+  flexWrap: 'wrap',
   gap: 4,
   borderBottom: `2px solid ${theme.custom.colors.primary.outline}`,
+  '@media (max-width: 640px)': {
+    gap: 8,
+    borderBottom: 'none',
+  },
 }));
 
 const TabButton = styled('button')<{ $active: boolean }>(({ theme, $active }) => ({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: 6,
   padding: '10px 20px',
   border: 'none',
@@ -55,8 +61,15 @@ const TabButton = styled('button')<{ $active: boolean }>(({ theme, $active }) =>
   fontWeight: $active ? 600 : 400,
   color: $active ? theme.custom.colors.primary._500 : theme.custom.colors.text.medium,
   transition: 'all 0.15s ease',
+  whiteSpace: 'nowrap',
   '&:hover': {
     color: theme.custom.colors.primary._500,
+  },
+  '@media (max-width: 640px)': {
+    flex: '1 1 100%',
+    marginBottom: 0,
+    border: `1px solid ${$active ? theme.custom.colors.primary._500 : theme.custom.colors.primary.outline}`,
+    borderRadius: 999,
   },
 }));
 
@@ -71,6 +84,7 @@ const StatsGrid = styled('div')({
   gridTemplateColumns: 'repeat(4, 1fr)',
   gap: 20,
   '@media (max-width: 1024px)': { gridTemplateColumns: 'repeat(2, 1fr)' },
+  '@media (max-width: 640px)': { gridTemplateColumns: '1fr' },
 });
 
 const StatsGrid3 = styled('div')({
@@ -78,6 +92,7 @@ const StatsGrid3 = styled('div')({
   gridTemplateColumns: 'repeat(3, 1fr)',
   gap: 20,
   '@media (max-width: 1024px)': { gridTemplateColumns: 'repeat(2, 1fr)' },
+  '@media (max-width: 640px)': { gridTemplateColumns: '1fr' },
 });
 
 const FilterRow = styled('div')(({ theme }) => ({

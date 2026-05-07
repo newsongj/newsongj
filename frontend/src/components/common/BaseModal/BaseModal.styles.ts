@@ -9,6 +9,7 @@ export const StyledDialog = styled(Dialog, {
     ...MODAL_SIZES[size],
     borderRadius: theme.custom.borderRadius,
     boxShadow: theme.custom.shadows.dp24,
+    margin: '12px',
   },
 }));
 
@@ -31,6 +32,13 @@ export const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
   borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
   gap: theme.custom.spacing.sm,
   justifyContent: 'flex-end',
+  flexWrap: 'wrap',
+  '@media (max-width: 600px)': {
+    padding: theme.custom.spacing.md,
+    '& > *': {
+      flex: '1 1 100%',
+    },
+  },
 }));
 
 export const StyledLoadingContainer = styled('div')({

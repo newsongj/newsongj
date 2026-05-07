@@ -83,7 +83,7 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
           attributeValue={attributeValue}
           onAttributeChange={onAttributeChange}
           attributeOptions={attributeOptions}
-          width="600px"
+          width="100%"
         />
       </S.StyledQueriesSection>
 

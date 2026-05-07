@@ -21,6 +21,7 @@ export const StyledButton = styled(Button, {
   boxShadow: 'none',
   position: 'relative',
   overflow: 'hidden',
+  whiteSpace: 'nowrap',
 
   // Size variants
   ...($size === 'small' && {
