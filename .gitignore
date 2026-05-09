@@ -28,6 +28,12 @@ MDs/
 /backend/CLAUDE.md
 .claude/
 
+# --- Codex Harness (개인 전용) ---
+/AGENTS.md
+/backend/AGENTS.md
+.agents/
+.codex/
+
 # --- Root ---
 .env
 !frontend/.env

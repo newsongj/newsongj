@@ -3,10 +3,11 @@
 정책 SSoT: `MDs/reference/newcomers.md`
 공통 요소(목록 조회 등)는 `crud/members.py`의 헬퍼를 재사용한다.
 """
+from sqlalchemy import String, cast, func
 from sqlalchemy.orm import Session
 from app.models import Member, MemberProfile
 from app.schemas.newcomers import NewcomerCreate, NewcomerUpdate, EnrollRequest
-from app.crud.member_profile import insert_profile, upsert_profile_on_date, get_latest_profile
+from app.crud.member_profile import insert_profile, upsert_profile_on_date
 from app.crud.query_builders import (
     active_now,
     build_active_members_query,
@@ -100,7 +101,18 @@ def enroll_newcomer(db: Session, member_id: int, data: EnrollRequest) -> int:
     if not member or not _is_newcomer(db, member_id):
         raise MemberNotFoundError("새가족 멤버를 찾을 수 없습니다.")
 
-    latest = get_latest_profile(db, member_id)
+    latest = (
+        db.query(
+            MemberProfile.gyogu,
+            MemberProfile.team,
+            MemberProfile.group_no,
+            MemberProfile.leader_ids,
+            cast(func.nullif(MemberProfile.plt_status, ""), String).label("plt_status"),
+        )
+        .filter(MemberProfile.member_id == member_id)
+        .order_by(MemberProfile.updated_at.desc(), MemberProfile.profile_id.desc())
+        .first()
+    )
     assert latest is not None, "_is_newcomer가 True면 profile이 반드시 존재"
 
     upsert_profile_on_date(

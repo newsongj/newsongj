@@ -27,7 +27,7 @@ class MemberProfile(Base):
     updated_at       = Column(Date, nullable=False)
     member_type      = Column(Enum('토요예배', '주일예배', '래사랑', '군지체', '해외지체', '새가족'), nullable=False)
     attendance_rate  = Column(Numeric(5, 2), nullable=True)
-    attendance_grade = Column(Enum('A', 'B', 'C', 'D'), nullable=True)
+    attendance_grade = Column(Enum('A', 'B', 'C', 'D', 'E'), nullable=True)
     gyogu            = Column(SmallInteger, nullable=False)
     team             = Column(SmallInteger, nullable=False)
     group_no         = Column(SmallInteger, nullable=False)

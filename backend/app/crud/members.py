@@ -163,7 +163,9 @@ def create_member(db: Session, data: MemberCreate) -> tuple[Member, MemberProfil
             team=data.team,            # type: ignore[arg-type]
             group_no=data.group_no,    # type: ignore[arg-type]
             member_type=data.member_type,  # type: ignore[arg-type]
-            leader_ids=data.leader_ids, plt_status=data.plt_status,
+            leader_ids=data.leader_ids,
+            attendance_grade=data.attendance_grade,
+            plt_status=data.plt_status,
         )
 
     db.commit()
@@ -210,7 +212,9 @@ def update_member(
             team=data.team,            # type: ignore[arg-type]
             group_no=data.group_no,    # type: ignore[arg-type]
             member_type=data.member_type,  # type: ignore[arg-type]
-            leader_ids=data.leader_ids, plt_status=data.plt_status,
+            leader_ids=data.leader_ids,
+            attendance_grade=data.attendance_grade,
+            plt_status=data.plt_status,
         )
 
     db.commit()

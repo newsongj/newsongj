@@ -91,6 +91,33 @@ def test_enroll_newcomer_promotes_to_regular(client, seed_members, db):
     assert m.enrolled_at is not None
 
 
+def test_enroll_newcomer_normalizes_blank_profile_enums(client, seed_members, db):
+    _, newcomer_id = seed_members
+
+    from app.models import MemberProfile
+
+    profile = db.query(MemberProfile).filter(MemberProfile.member_id == newcomer_id).first()
+    profile.attendance_grade = ""
+    profile.plt_status = ""
+    db.commit()
+
+    r = client.put(
+        f"/api/v1/gyojeok/members/{newcomer_id}/enroll",
+        json={"enrolled_at": "2026-05-01T10:00:00", "member_type": "토요예배"},
+    )
+    assert r.status_code == 200
+
+    latest = (
+        db.query(MemberProfile)
+        .filter(MemberProfile.member_id == newcomer_id)
+        .order_by(MemberProfile.updated_at.desc(), MemberProfile.profile_id.desc())
+        .first()
+    )
+    assert latest.member_type == "토요예배"
+    assert latest.attendance_grade is None
+    assert latest.plt_status is None
+
+
 def test_enroll_on_regular_member_returns_404(client, seed_members):
     regular_id, _ = seed_members
     r = client.put(
