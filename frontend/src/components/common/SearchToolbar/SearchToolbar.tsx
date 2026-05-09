@@ -21,6 +21,10 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
   onDeleteSelected,
   showActionsWhenSelected = false,
 }) => {
+  const hasActions = actions.length > 0;
+  const hasSelectedActionArea =
+    (showActionsWhenSelected && hasActions) || (!showActionsWhenSelected && Boolean(onDeleteSelected));
+
   const renderActionButton = (action: ActionButton, index: number) => {
     const button = (
       <Button
@@ -55,14 +59,16 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
           </S.StyledTypography>
         </S.StyledQueriesSection>
 
-        <S.StyledActionsSection>
-          {showActionsWhenSelected && actions.map((action, index) => renderActionButton(action, index))}
-          {!showActionsWhenSelected && onDeleteSelected && (
-            <Button variant="destructive" onClick={onDeleteSelected} startIcon={<DeleteIcon />}>
-              삭제
-            </Button>
-          )}
-        </S.StyledActionsSection>
+        {hasSelectedActionArea && (
+          <S.StyledActionsSection>
+            {showActionsWhenSelected && actions.map((action, index) => renderActionButton(action, index))}
+            {!showActionsWhenSelected && onDeleteSelected && (
+              <Button variant="destructive" onClick={onDeleteSelected} startIcon={<DeleteIcon />}>
+                삭제
+              </Button>
+            )}
+          </S.StyledActionsSection>
+        )}
       </S.StyledContainer>
     );
   }
@@ -87,9 +93,11 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
         />
       </S.StyledQueriesSection>
 
-      <S.StyledActionsSection>
-        {actions.map((action, index) => renderActionButton(action, index))}
-      </S.StyledActionsSection>
+      {hasActions && (
+        <S.StyledActionsSection>
+          {actions.map((action, index) => renderActionButton(action, index))}
+        </S.StyledActionsSection>
+      )}
     </S.StyledContainer>
   );
 };

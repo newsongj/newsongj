@@ -6,6 +6,10 @@ export const ChartCard = styled.div`
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  @media (max-width: 760px) {
+    padding: 16px;
+  }
 `;
 
 export const ChartTitle = styled.h3`
@@ -19,4 +23,8 @@ export const ChartDesc = styled.p`
   font-size: 12px;
   color: #999;
   margin-bottom: 24px;
+
+  @media (max-width: 760px) {
+    margin-bottom: 16px;
+  }
 `;

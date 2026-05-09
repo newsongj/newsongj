@@ -255,7 +255,7 @@ const MemberEditPage: React.FC<MemberEditPageProps> = ({ open, value, onClose, o
               onChange={(value) => setForm((prev) => ({ ...prev, group: String(value) }))}
               options={[
                 { value: '', label: '선택' },
-                ...Array.from({ length: 4 }, (_, index) => ({ value: `${index + 1}그룹`, label: `${index + 1}그룹` })),
+                ...Array.from({ length: 5 }, (_, index) => ({ value: `${index}그룹`, label: `${index}그룹` })),
               ]}
               error={Boolean(errors.group)}
               helperText={errors.group}

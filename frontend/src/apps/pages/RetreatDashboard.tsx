@@ -100,6 +100,12 @@ const FilterRow = styled('div')(({ theme }) => ({
   alignItems: 'center',
   gap: theme.custom.spacing.sm,
   flexWrap: 'wrap',
+  '@media (max-width: 760px)': {
+    alignItems: 'stretch',
+    '& .MuiFormControl-root': {
+      width: '100% !important',
+    },
+  },
 }));
 
 const FilterLabel = styled('span')(({ theme }) => ({
@@ -117,6 +123,11 @@ const DayTotalBadge = styled('div')(({ theme }) => ({
   color: '#fff',
   borderRadius: 8,
   padding: '6px 14px',
+  '@media (max-width: 760px)': {
+    marginLeft: 0,
+    width: '100%',
+    justifyContent: 'center',
+  },
 }));
 
 const DayTotalLabel = styled('span')({
@@ -390,13 +401,16 @@ const VehiclePanel = styled('div')(({ theme }) => ({
   backgroundColor: theme.custom.colors.neutral._99,
 }));
 
-const VehiclePanelHeader = styled('div')({
+const VehiclePanelHeader = styled('div')(() => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 12,
   flexWrap: 'wrap',
-});
+  '@media (max-width: 760px)': {
+    alignItems: 'stretch',
+  },
+}));
 
 const VehiclePanelTitle = styled('span')(({ theme }) => ({
   fontSize: 15,
@@ -409,6 +423,15 @@ const VehiclePanelFilters = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.custom.spacing.sm,
+  flexWrap: 'wrap',
+  '@media (max-width: 760px)': {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    '& .MuiFormControl-root': {
+      width: '100% !important',
+    },
+  },
 }));
 
 const SlotList = styled('div')(({ theme }) => ({
@@ -598,6 +621,9 @@ const FilterDivider = styled('div')(({ theme }) => ({
   height: 28,
   backgroundColor: theme.custom.colors.primary.outline,
   alignSelf: 'center',
+  '@media (max-width: 760px)': {
+    display: 'none',
+  },
 }));
 
 const AccommodationTab: React.FC = () => {

@@ -32,6 +32,7 @@ const StatsGrid = styled('div')({
   gridTemplateColumns: 'repeat(4, 1fr)',
   gap: 20,
   '@media (max-width: 1024px)': { gridTemplateColumns: 'repeat(2, 1fr)' },
+  '@media (max-width: 640px)': { gridTemplateColumns: '1fr' },
 });
 
 const FilterRow = styled('div')(({ theme }) => ({
@@ -40,17 +41,47 @@ const FilterRow = styled('div')(({ theme }) => ({
   justifyContent: 'space-between',
   flexWrap: 'wrap',
   gap: theme.custom.spacing.sm,
+  '@media (max-width: 760px)': {
+    alignItems: 'stretch',
+  },
 }));
 
 const FilterControls = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.custom.spacing.sm,
+  minWidth: 0,
+  '@media (max-width: 760px)': {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    '& .MuiFormControl-root': {
+      width: '100% !important',
+    },
+  },
 }));
 
 const FilterActions = styled('div')(({ theme }) => ({
   display: 'flex',
   gap: theme.custom.spacing.sm,
+  flexWrap: 'wrap',
+  '& > *': {
+    flex: '1 1 140px',
+    minWidth: 140,
+  },
+  '@media (max-width: 760px)': {
+    width: '100%',
+    '& > *': {
+      flex: '1 1 calc(50% - 8px)',
+      minWidth: 0,
+    },
+  },
+  '@media (max-width: 560px)': {
+    flexDirection: 'column',
+    '& > *': {
+      width: '100%',
+    },
+  },
 }));
 
 const FilterLabel = styled('span')(({ theme }) => ({
@@ -109,6 +140,12 @@ const ModalActions = styled('div')({
   gap: 8,
   justifyContent: 'flex-end',
   flexWrap: 'wrap',
+  '@media (max-width: 560px)': {
+    width: '100%',
+    '& > *': {
+      width: '100%',
+    },
+  },
 });
 
 const SUSPENDED_MEAL_MOCK: SuspendedMealApplication[] = [

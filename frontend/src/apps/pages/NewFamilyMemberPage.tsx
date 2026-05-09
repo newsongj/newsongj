@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, HowToReg as HowToRegIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  HowToReg as HowToRegIcon,
+} from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
 import { Button } from '@components/common/Button';
 import { Select } from '@components/common/Select';
@@ -9,23 +14,21 @@ import Popup from '@components/common/Popup';
 import { BaseCreateModal } from '@components/common/BaseCreateModal';
 import { BaseDetailModal } from '@components/common/BaseDetailModal';
 import { TextField } from '@components/common/TextField';
-import { SearchableSelect } from '@components/common/SearchableSelect';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { SearchOption } from '@components/common/SearchToolbar/SearchToolbar.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
-import {
-  MemberFormValue,
-  MEMBER_ATTENDANCE_OPTIONS,
-  MEMBER_MEMBER_TYPE_OPTIONS,
-  MEMBER_PLT_OPTIONS,
-} from '@components/user/memberForm.types';
+import { MemberFormValue, MEMBER_MEMBER_TYPE_OPTIONS } from '@components/user/memberForm.types';
 import { useNewcomers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
-import { createNewcomer, deleteNewcomer, enrollNewcomer, NewcomerBody, updateNewcomer } from '@/api/newcomer';
-import { fetchLeaders, LeaderOption } from '@/api/meta';
+import {
+  createNewcomer,
+  deleteNewcomer,
+  enrollNewcomer,
+  NewcomerBody,
+  updateNewcomer,
+} from '@/api/newcomer';
 
-// 교구·팀·그룹은 새가족 단계에서 필수 아님
-const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation'];
+const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team'];
 
 const INITIAL_FORM: MemberFormValue = {
   name: '',
@@ -67,18 +70,23 @@ interface DisplayRow {
   pid: string;
 }
 
+const formatLeaderIds = (leaderIds: MemberRow['leader_ids']) => {
+  if (Array.isArray(leaderIds)) return leaderIds.join(', ');
+  return leaderIds || '-';
+};
+
 const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   id: item.member_id,
-  year: item.year ? `${item.year.slice(0, 4)}년` : '-',
+  year: item.year ? item.year.slice(0, 4) : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
   team: item.team ? `${item.team}팀` : '-',
-  group: item.group_no ? `${item.group_no}그룹` : '-',
+  group: item.group_no !== null && item.group_no !== undefined ? `${item.group_no}그룹` : '-',
   name: item.name,
   gender: item.gender,
   generation: `${item.generation}기`,
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
-  role: item.leader_ids || '-',
+  role: formatLeaderIds(item.leader_ids),
   createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
@@ -166,8 +174,21 @@ const FilterActions = styled('div')(({ theme }) => ({
 
 const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
   gap: theme.custom.spacing.sm,
+  '& > *': {
+    minWidth: 0,
+    width: '100%',
+  },
+  '@media (max-width: 1100px)': {
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  },
+  '@media (max-width: 760px)': {
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  },
+  '@media (max-width: 560px)': {
+    gridTemplateColumns: '1fr',
+  },
 }));
 
 const FormGrid = styled('div')(({ theme }) => ({
@@ -186,10 +207,6 @@ const FieldBlock = styled('div')(({ theme }) => ({
   flexDirection: 'column',
   gap: theme.custom.spacing.xs,
 }));
-
-const FullWidthBlock = styled(FieldBlock)({
-  gridColumn: '1 / -1',
-});
 
 const FieldLabel = styled('label')(({ theme }) => ({
   fontSize: theme.custom.typography.body2.fontSize,
@@ -239,27 +256,28 @@ const getPhoneDigits = (value: string) => value.replace(/\D/g, '');
 const isBirthDateFormat = (value: string) => {
   if (!value) return true;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
   const [year, month, day] = value.split('-').map(Number);
   const parsed = new Date(year, month - 1, day);
-  return (
-    parsed.getFullYear() === year &&
-    parsed.getMonth() === month - 1 &&
-    parsed.getDate() === day
-  );
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 };
 
 const useFormValidation = (form: MemberFormValue, birthDateTouched: boolean) =>
   useMemo(() => {
     const next: Partial<Record<keyof MemberFormValue, string>> = {};
+
     REQUIRED_KEYS.forEach((key) => {
       const value = form[key];
       if (typeof value === 'string' && !value.trim()) next[key] = '필수 입력 항목입니다.';
     });
+
     if (!isBirthDateFormat(form.birthDate)) next.birthDate = '생년월일은 YYYY-MM-DD 형식으로 입력해 주세요.';
+
     const phoneDigits = getPhoneDigits(form.phone);
-    if (phoneDigits.length > 0 && phoneDigits.length !== 11) next.phone = '연락처는 11자로 입력해 주세요.';
+    if (phoneDigits.length > 0 && phoneDigits.length !== 11) next.phone = '연락처는 11자리로 입력해 주세요.';
+
     return next;
-  }, [form, birthDateTouched]);
+  }, [birthDateTouched, form]);
 
 const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   name: row.name,
@@ -280,9 +298,9 @@ const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
   pid: row.pid === '-' ? '' : row.pid,
 });
 
-const parseIntField = (val: string): number | undefined => {
-  const n = parseInt(val, 10);
-  return isNaN(n) ? undefined : n;
+const parseIntField = (value: string): number | undefined => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
 };
 
 const toApiBody = (form: MemberFormValue): NewcomerBody => ({
@@ -311,14 +329,14 @@ interface NewFamilyCreateModalProps {
   isSubmitting: boolean;
 }
 
-const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClose, onSubmit, isSubmitting }) => {
+const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({
+  open,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}) => {
   const [form, setForm] = useState<MemberFormValue>(INITIAL_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
-  const [leaderOptions, setLeaderOptions] = useState<LeaderOption[]>([]);
-
-  useEffect(() => {
-    fetchLeaders().then(setLeaderOptions).catch(() => {});
-  }, []);
 
   const errors = useFormValidation(form, birthDateTouched);
   const canSubmit = Object.keys(errors).length === 0;
@@ -336,8 +354,6 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClo
     setForm(INITIAL_FORM);
     setBirthDateTouched(false);
   };
-
-  const roleOptions = leaderOptions.map((l) => ({ id: String(l.leader_id), label: l.leader_name, value: String(l.leader_id) }));
 
   return (
     <BaseCreateModal
@@ -397,23 +413,39 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClo
         </FieldBlock>
 
         <FieldBlock>
-          <FieldLabel>교구</FieldLabel>
-          <Select
-            value={form.parish}
-            onChange={(value) => setForm((prev) => ({ ...prev, parish: String(value) }))}
-            options={[{ value: '', label: '선택' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
-            fullWidth
-          />
+          <FieldLabel>교구<Required>*</Required></FieldLabel>
+          <ErrorSelectWrapper $error={Boolean(errors.parish)}>
+            <Select
+              value={form.parish}
+              onChange={(value) => setForm((prev) => ({ ...prev, parish: String(value) }))}
+              options={[
+                { value: '', label: '선택' },
+                { value: '1교구', label: '1교구' },
+                { value: '2교구', label: '2교구' },
+                { value: '3교구', label: '3교구' },
+              ]}
+              error={Boolean(errors.parish)}
+              helperText={errors.parish}
+              fullWidth
+            />
+          </ErrorSelectWrapper>
         </FieldBlock>
 
         <FieldBlock>
-          <FieldLabel>팀</FieldLabel>
-          <Select
-            value={form.team}
-            onChange={(value) => setForm((prev) => ({ ...prev, team: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...Array.from({ length: 12 }, (_, i) => ({ value: `${i + 1}팀`, label: `${i + 1}팀` }))]}
-            fullWidth
-          />
+          <FieldLabel>팀<Required>*</Required></FieldLabel>
+          <ErrorSelectWrapper $error={Boolean(errors.team)}>
+            <Select
+              value={form.team}
+              onChange={(value) => setForm((prev) => ({ ...prev, team: String(value) }))}
+              options={[
+                { value: '', label: '선택' },
+                ...Array.from({ length: 12 }, (_, i) => ({ value: `${i + 1}팀`, label: `${i + 1}팀` })),
+              ]}
+              error={Boolean(errors.team)}
+              helperText={errors.team}
+              fullWidth
+            />
+          </ErrorSelectWrapper>
         </FieldBlock>
 
         <FieldBlock>
@@ -421,7 +453,10 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClo
           <Select
             value={form.group}
             onChange={(value) => setForm((prev) => ({ ...prev, group: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...Array.from({ length: 4 }, (_, i) => ({ value: `${i + 1}그룹`, label: `${i + 1}그룹` }))]}
+            options={[
+              { value: '', label: '선택' },
+              ...Array.from({ length: 5 }, (_, i) => ({ value: `${i}그룹`, label: `${i}그룹` })),
+            ]}
             fullWidth
           />
         </FieldBlock>
@@ -453,48 +488,6 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClo
           </ErrorTextFieldWrapper>
         </FieldBlock>
 
-        <FullWidthBlock>
-          <FieldLabel>직분(다중 선택)</FieldLabel>
-          <SearchableSelect
-            multiple
-            value={form.roles}
-            onChange={(value) => setForm((prev) => ({ ...prev, roles: Array.isArray(value) ? value : [] }))}
-            options={roleOptions}
-            placeholder="직분을 선택하세요"
-            fullWidth
-          />
-        </FullWidthBlock>
-
-        <FieldBlock>
-          <FieldLabel>교인구분</FieldLabel>
-          <Select
-            value={form.memberType}
-            onChange={(value) => setForm((prev) => ({ ...prev, memberType: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_MEMBER_TYPE_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>출석등급</FieldLabel>
-          <Select
-            value={form.attendanceGrade}
-            onChange={(value) => setForm((prev) => ({ ...prev, attendanceGrade: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_ATTENDANCE_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>PLT 수료여부</FieldLabel>
-          <Select
-            value={form.pltCompleted}
-            onChange={(value) => setForm((prev) => ({ ...prev, pltCompleted: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_PLT_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
         <FieldBlock>
           <FieldLabel>학교 및 직장</FieldLabel>
           <TextField
@@ -512,15 +505,6 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({ open, onClo
             fullWidth
           />
         </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>V8 PID</FieldLabel>
-          <TextField
-            value={form.pid}
-            onChange={(e) => setForm((prev) => ({ ...prev, pid: e.target.value }))}
-            fullWidth
-          />
-        </FieldBlock>
       </FormGrid>
     </BaseCreateModal>
   );
@@ -535,14 +519,16 @@ interface NewFamilyEditModalProps {
   isSubmitting: boolean;
 }
 
-const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, onClose, onSubmit, onEnroll, isSubmitting }) => {
+const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({
+  open,
+  value,
+  onClose,
+  onSubmit,
+  onEnroll,
+  isSubmitting,
+}) => {
   const [form, setForm] = useState<MemberFormValue>(INITIAL_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
-  const [leaderOptions, setLeaderOptions] = useState<LeaderOption[]>([]);
-
-  useEffect(() => {
-    fetchLeaders().then(setLeaderOptions).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (open) {
@@ -553,10 +539,8 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
 
   const errors = useFormValidation(form, birthDateTouched);
   const canSubmit = Object.keys(errors).length === 0;
-  const roleOptions = leaderOptions.map((l) => ({ id: String(l.leader_id), label: l.leader_name, value: String(l.leader_id) }));
 
   return (
-    <>
     <BaseDetailModal
       open={open}
       title="새가족 수정"
@@ -586,7 +570,10 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
             sx={{
               color: '#52c41a',
               borderColor: 'rgba(82, 196, 26, 0.25)',
-              '&:hover': { borderColor: 'rgba(82, 196, 26, 0.25)', backgroundColor: 'rgba(82, 196, 26, 0.08)' },
+              '&:hover': {
+                borderColor: 'rgba(82, 196, 26, 0.25)',
+                backgroundColor: 'rgba(82, 196, 26, 0.08)',
+              },
               '&.Mui-disabled': { borderColor: 'rgba(0,0,0,0.12)' },
             }}
           >
@@ -594,7 +581,11 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
           </Button>
           <Button
             variant="filled"
-            onClick={async () => { setBirthDateTouched(true); if (!canSubmit) return; await onSubmit(form); }}
+            onClick={async () => {
+              setBirthDateTouched(true);
+              if (!canSubmit) return;
+              await onSubmit(form);
+            }}
             disabled={!canSubmit || isSubmitting}
           >
             저장
@@ -648,23 +639,39 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
         </FieldBlock>
 
         <FieldBlock>
-          <FieldLabel>교구</FieldLabel>
-          <Select
-            value={form.parish}
-            onChange={(value) => setForm((prev) => ({ ...prev, parish: String(value) }))}
-            options={[{ value: '', label: '선택' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
-            fullWidth
-          />
+          <FieldLabel>교구<Required>*</Required></FieldLabel>
+          <ErrorSelectWrapper $error={Boolean(errors.parish)}>
+            <Select
+              value={form.parish}
+              onChange={(value) => setForm((prev) => ({ ...prev, parish: String(value) }))}
+              options={[
+                { value: '', label: '선택' },
+                { value: '1교구', label: '1교구' },
+                { value: '2교구', label: '2교구' },
+                { value: '3교구', label: '3교구' },
+              ]}
+              error={Boolean(errors.parish)}
+              helperText={errors.parish}
+              fullWidth
+            />
+          </ErrorSelectWrapper>
         </FieldBlock>
 
         <FieldBlock>
-          <FieldLabel>팀</FieldLabel>
-          <Select
-            value={form.team}
-            onChange={(value) => setForm((prev) => ({ ...prev, team: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...Array.from({ length: 12 }, (_, i) => ({ value: `${i + 1}팀`, label: `${i + 1}팀` }))]}
-            fullWidth
-          />
+          <FieldLabel>팀<Required>*</Required></FieldLabel>
+          <ErrorSelectWrapper $error={Boolean(errors.team)}>
+            <Select
+              value={form.team}
+              onChange={(value) => setForm((prev) => ({ ...prev, team: String(value) }))}
+              options={[
+                { value: '', label: '선택' },
+                ...Array.from({ length: 12 }, (_, i) => ({ value: `${i + 1}팀`, label: `${i + 1}팀` })),
+              ]}
+              error={Boolean(errors.team)}
+              helperText={errors.team}
+              fullWidth
+            />
+          </ErrorSelectWrapper>
         </FieldBlock>
 
         <FieldBlock>
@@ -672,7 +679,10 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
           <Select
             value={form.group}
             onChange={(value) => setForm((prev) => ({ ...prev, group: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...Array.from({ length: 4 }, (_, i) => ({ value: `${i + 1}그룹`, label: `${i + 1}그룹` }))]}
+            options={[
+              { value: '', label: '선택' },
+              ...Array.from({ length: 5 }, (_, i) => ({ value: `${i}그룹`, label: `${i}그룹` })),
+            ]}
             fullWidth
           />
         </FieldBlock>
@@ -704,48 +714,6 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
           </ErrorTextFieldWrapper>
         </FieldBlock>
 
-        <FullWidthBlock>
-          <FieldLabel>직분(다중 선택)</FieldLabel>
-          <SearchableSelect
-            multiple
-            value={form.roles}
-            onChange={(value) => setForm((prev) => ({ ...prev, roles: Array.isArray(value) ? value : [] }))}
-            options={roleOptions}
-            placeholder="직분을 선택하세요"
-            fullWidth
-          />
-        </FullWidthBlock>
-
-        <FieldBlock>
-          <FieldLabel>교인구분</FieldLabel>
-          <Select
-            value={form.memberType}
-            onChange={(value) => setForm((prev) => ({ ...prev, memberType: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_MEMBER_TYPE_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>출석등급</FieldLabel>
-          <Select
-            value={form.attendanceGrade}
-            onChange={(value) => setForm((prev) => ({ ...prev, attendanceGrade: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_ATTENDANCE_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>PLT 수료여부</FieldLabel>
-          <Select
-            value={form.pltCompleted}
-            onChange={(value) => setForm((prev) => ({ ...prev, pltCompleted: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_PLT_OPTIONS.map((o) => ({ value: o, label: o }))]}
-            fullWidth
-          />
-        </FieldBlock>
-
         <FieldBlock>
           <FieldLabel>학교 및 직장</FieldLabel>
           <TextField
@@ -763,18 +731,8 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({ open, value, on
             fullWidth
           />
         </FieldBlock>
-
-        <FieldBlock>
-          <FieldLabel>V8 PID</FieldLabel>
-          <TextField
-            value={form.pid}
-            onChange={(e) => setForm((prev) => ({ ...prev, pid: e.target.value }))}
-            fullWidth
-          />
-        </FieldBlock>
       </FormGrid>
     </BaseDetailModal>
-    </>
   );
 };
 
@@ -803,8 +761,8 @@ const NewFamilyMemberPage: React.FC = () => {
   const [enrollMemberType] = useState(MEMBER_MEMBER_TYPE_OPTIONS[0]);
 
   const todayStr = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }, []);
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
@@ -836,6 +794,7 @@ const NewFamilyMemberPage: React.FC = () => {
 
   const handleEdit = async (form: MemberFormValue) => {
     if (!selectedRow) return;
+
     setIsSubmitting(true);
     try {
       await updateNewcomer(selectedRow.id, toApiBody(form));
@@ -853,7 +812,9 @@ const NewFamilyMemberPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const count = selectedIds.length;
-      await Promise.all(selectedIds.map((id) => enrollNewcomer(parseInt(id, 10), toEnrollPayload(todayStr, enrollMemberType))));
+      await Promise.all(
+        selectedIds.map((id) => enrollNewcomer(parseInt(id, 10), toEnrollPayload(todayStr, enrollMemberType)))
+      );
       setSelectedIds([]);
       setBulkEnrollOpen(false);
       showSnackbar(`${count}명의 새가족이 등반 처리되었습니다. (${todayStr})`, 'success');
@@ -867,6 +828,7 @@ const NewFamilyMemberPage: React.FC = () => {
 
   const handleSingleEnroll = async () => {
     if (!selectedRow) return;
+
     setIsSubmitting(true);
     try {
       await enrollNewcomer(selectedRow.id, toEnrollPayload(todayStr, enrollMemberType));
@@ -885,9 +847,7 @@ const NewFamilyMemberPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const deletedCount = selectedIds.length;
-      await Promise.all(
-        selectedIds.map((id) => deleteNewcomer(parseInt(id, 10)))
-      );
+      await Promise.all(selectedIds.map((id) => deleteNewcomer(parseInt(id, 10))));
       setSelectedIds([]);
       setDeleteOpen(false);
       showSnackbar(
@@ -929,7 +889,10 @@ const NewFamilyMemberPage: React.FC = () => {
               sx={{
                 color: '#52c41a',
                 borderColor: 'rgba(82, 196, 26, 0.25)',
-                '&:hover': { borderColor: 'rgba(82, 196, 26, 0.25)', backgroundColor: 'rgba(82, 196, 26, 0.08)' },
+                '&:hover': {
+                  borderColor: 'rgba(82, 196, 26, 0.25)',
+                  backgroundColor: 'rgba(82, 196, 26, 0.08)',
+                },
                 '&.Mui-disabled': { borderColor: 'rgba(0,0,0,0.12)' },
               }}
             >
@@ -949,27 +912,44 @@ const NewFamilyMemberPage: React.FC = () => {
           <Select
             value={filters.year}
             onChange={(value) => handleFilterChange('year', String(value))}
-            options={[{ value: '', label: '년도' }, { value: '2026년', label: '2026년' }]}
+            options={[
+              { value: '', label: '연도' },
+              { value: '2026년', label: '2026년' },
+            ]}
           />
           <Select
             value={filters.gyogu}
             onChange={(value) => handleFilterChange('gyogu', String(value))}
-            options={[{ value: '', label: '교구' }, { value: '1교구', label: '1교구' }, { value: '2교구', label: '2교구' }, { value: '3교구', label: '3교구' }]}
+            options={[
+              { value: '', label: '교구' },
+              { value: '1교구', label: '1교구' },
+              { value: '2교구', label: '2교구' },
+              { value: '3교구', label: '3교구' },
+            ]}
           />
           <Select
             value={filters.team}
             onChange={(value) => handleFilterChange('team', String(value))}
-            options={[{ value: '', label: '팀' }, ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}팀`, label: `${idx + 1}팀` }))]}
+            options={[
+              { value: '', label: '팀' },
+              ...Array.from({ length: 12 }, (_, idx) => ({ value: `${idx + 1}팀`, label: `${idx + 1}팀` })),
+            ]}
           />
           <Select
             value={filters.group_no}
             onChange={(value) => handleFilterChange('group_no', String(value))}
-            options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}그룹`, label: `${idx + 1}그룹` }))]}
+            options={[
+              { value: '', label: '그룹' },
+              ...Array.from({ length: 5 }, (_, idx) => ({ value: `${idx}그룹`, label: `${idx}그룹` })),
+            ]}
           />
           <Select
             value={filters.generation}
             onChange={(value) => handleFilterChange('generation', String(value))}
-            options={[{ value: '', label: '기수' }, ...Array.from({ length: 15 }, (_, idx) => ({ value: `${idx + 35}기`, label: `${idx + 35}기` }))]}
+            options={[
+              { value: '', label: '기수' },
+              ...Array.from({ length: 15 }, (_, idx) => ({ value: `${idx + 35}기`, label: `${idx + 35}기` })),
+            ]}
           />
         </FilterGrid>
       </FilterPanel>
@@ -982,7 +962,7 @@ const NewFamilyMemberPage: React.FC = () => {
         onSelectionChange={setSelectedIds}
         getRowId={(row) => String(row.id)}
         useSearchToolbar
-        searchPlaceholder="검색어를 입력하세요"
+        searchPlaceholder="검색어를 입력해 주세요"
         searchOptions={searchOptions}
         onSearch={(keyword, field) => handleSearch(field || 'name', keyword)}
         selectedActions={() => setDeleteOpen(true)}
@@ -1014,7 +994,14 @@ const NewFamilyMemberPage: React.FC = () => {
       {bulkEnrollOpen && (
         <Popup
           title="등반 처리"
-          description={<>선택한 <strong style={{ color: '#52c41a' }}>{selectedIds.length}명</strong>을 <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?<br/><strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.</>}
+          description={
+            <>
+              선택한 <strong style={{ color: '#52c41a' }}>{selectedIds.length}명</strong>을{' '}
+              <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?
+              <br />
+              <strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
+            </>
+          }
           onCancel={() => setBulkEnrollOpen(false)}
           onConfirm={handleBulkEnroll}
           cancelButtonText="취소"
@@ -1026,7 +1013,14 @@ const NewFamilyMemberPage: React.FC = () => {
       {singleEnrollOpen && (
         <Popup
           title="등반 처리"
-          description={<><strong style={{ color: '#52c41a' }}>{selectedRow?.name}</strong>을(를) <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?<br/><strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.</>}
+          description={
+            <>
+              <strong style={{ color: '#52c41a' }}>{selectedRow?.name}</strong>을{' '}
+              <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?
+              <br />
+              <strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
+            </>
+          }
           onCancel={() => setSingleEnrollOpen(false)}
           onConfirm={handleSingleEnroll}
           cancelButtonText="취소"
@@ -1040,7 +1034,7 @@ const NewFamilyMemberPage: React.FC = () => {
           title="새가족 삭제"
           description={`선택한 ${selectedIds.length}명의 새가족을 삭제하시겠습니까?`}
           showInput
-          caption="삭제 전 사유를 입력해 주세요."
+          caption="삭제 사유를 입력해 주세요."
           maxLength={50}
           onCancel={() => setDeleteOpen(false)}
           onConfirm={handleDelete}
