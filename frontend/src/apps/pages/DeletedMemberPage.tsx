@@ -42,7 +42,7 @@ const mapToDisplayRow = (item: DeletedMemberRow): DisplayRow => ({
   year: item.year ? `${item.year.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
   team: item.team ? `${item.team}팀` : '-',
-  group: item.group_no ? `${item.group_no}그룹` : '-',
+  group: item.group_no !== null && item.group_no !== undefined ? `${item.group_no}그룹` : '-',
   name: item.name,
   gender: item.gender,
   generation: `${item.generation}기`,
@@ -115,8 +115,21 @@ const FilterActions = styled('div')(({ theme }) => ({
 
 const FilterGrid = styled('div')(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
   gap: theme.custom.spacing.sm,
+  '& > *': {
+    minWidth: 0,
+    width: '100%',
+  },
+  '@media (max-width: 1100px)': {
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  },
+  '@media (max-width: 760px)': {
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  },
+  '@media (max-width: 560px)': {
+    gridTemplateColumns: '1fr',
+  },
 }));
 
 const DetailGrid = styled('div')(({ theme }) => ({
@@ -279,7 +292,7 @@ const DeletedMemberPage: React.FC = () => {
           <Select
             value={filters.group_no}
             onChange={(value) => handleFilterChange('group_no', String(value))}
-            options={[{ value: '', label: '그룹' }, ...Array.from({ length: 4 }, (_, idx) => ({ value: `${idx + 1}`, label: `${idx + 1}그룹` }))]}
+            options={[{ value: '', label: '그룹' }, ...Array.from({ length: 5 }, (_, idx) => ({ value: `${idx}`, label: `${idx}그룹` }))]}
           />
           <Select
             value={filters.generation}
