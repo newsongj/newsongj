@@ -12,6 +12,10 @@ export const ChartCard = styled.div`
     transform: translateY(-1px);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   }
+
+  @media (max-width: 760px) {
+    padding: 16px;
+  }
 `;
 
 export const ChartHeader = styled.div`
@@ -19,6 +23,11 @@ export const ChartHeader = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 8px;
+
+  @media (max-width: 760px) {
+    flex-direction: column;
+    gap: 12px;
+  }
 `;
 
 export const ChartTitleSection = styled.div`
@@ -40,4 +49,9 @@ export const ChartDesc = styled.p`
 
 export const SelectWrapper = styled.div`
   min-width: 120px;
+
+  @media (max-width: 760px) {
+    width: 100%;
+    min-width: 0;
+  }
 `;
