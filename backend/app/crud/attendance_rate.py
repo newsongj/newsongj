@@ -32,14 +32,16 @@ def compute_rate(present: int, denom: int) -> Decimal:
 
 
 def compute_grade(rate: Decimal) -> str:
-    """출석률 → 등급 매핑: ≥80 A, ≥60 B, ≥40 C, <40 D."""
+    """출석률 → 등급 매핑: ≥80 A, ≥60 B, ≥40 C, ≥20 D, <20 E."""
     if rate >= 80:
         return "A"
     if rate >= 60:
         return "B"
     if rate >= 40:
         return "C"
-    return "D"
+    if rate >= 20:
+        return "D"
+    return "E"
 
 
 # ── DB 조회 ────────────────────────────────

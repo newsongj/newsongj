@@ -12,6 +12,13 @@ from sqlalchemy import func
 from app.models import MemberProfile
 
 
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 # ---------------------------------------------------------------------------
 # 조회 (read)
 # ---------------------------------------------------------------------------
@@ -111,6 +118,7 @@ def insert_profile(
     group_no: int,
     member_type: str,
     leader_ids: str | None = None,
+    attendance_grade: str | None = None,
     plt_status: str | None = None,
 ) -> MemberProfile:
     """새 profile row를 INSERT하고 반환. commit은 호출부에서."""
@@ -122,7 +130,8 @@ def insert_profile(
         group_no=group_no,
         member_type=member_type,
         leader_ids=leader_ids,
-        plt_status=plt_status,
+        attendance_grade=_blank_to_none(attendance_grade),
+        plt_status=_blank_to_none(plt_status),
     )
     db.add(profile)
     return profile
@@ -135,6 +144,7 @@ def update_profile(
     group_no: int,
     member_type: str,
     leader_ids: str | None = None,
+    attendance_grade: str | None = None,
     plt_status: str | None = None,
 ) -> MemberProfile:
     """기존 profile row의 필드를 덮어쓰고 반환. commit은 호출부에서."""
@@ -143,7 +153,8 @@ def update_profile(
     profile.group_no    = group_no
     profile.member_type = member_type
     profile.leader_ids  = leader_ids
-    profile.plt_status  = plt_status
+    profile.attendance_grade = _blank_to_none(attendance_grade)
+    profile.plt_status  = _blank_to_none(plt_status)
     return profile
 
 
@@ -160,6 +171,7 @@ def upsert_profile_on_date(
     group_no: int,
     member_type: str,
     leader_ids: str | None = None,
+    attendance_grade: str | None = None,
     plt_status: str | None = None,
 ) -> MemberProfile:
     """당일 row가 있으면 UPDATE, 없으면 INSERT. commit은 호출부에서.
@@ -168,5 +180,9 @@ def upsert_profile_on_date(
     """
     existing = get_profile_on_date(db, member_id, date)
     if existing:
-        return update_profile(existing, gyogu, team, group_no, member_type, leader_ids, plt_status)
-    return insert_profile(db, member_id, date, gyogu, team, group_no, member_type, leader_ids, plt_status)
+        return update_profile(
+            existing, gyogu, team, group_no, member_type, leader_ids, attendance_grade, plt_status,
+        )
+    return insert_profile(
+        db, member_id, date, gyogu, team, group_no, member_type, leader_ids, attendance_grade, plt_status,
+    )

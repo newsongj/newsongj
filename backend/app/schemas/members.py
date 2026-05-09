@@ -45,7 +45,7 @@ class MemberCreate(BaseModel):
     group_no: Optional[int] = None
     leader_ids: Optional[str] = None   # JSON 배열 문자열 (예: ["1", "3"])
     member_type: Optional[Literal['토요예배', '주일예배', '래사랑', '군지체', '해외지체', '새가족']] = None
-    attendance_grade: Optional[Literal['A', 'B', 'C', 'D']] = None
+    attendance_grade: Optional[Literal['A', 'B', 'C', 'D', 'E']] = None
     plt_status: Optional[Literal['수료', '1학기 수료']] = None
     v8pid: Optional[str] = None
     school_work: Optional[str] = None  # 학교 및 직장
@@ -87,4 +87,3 @@ class DeletedMember(MemberResponse):
 class DeletedMemberListResponse(BaseModel):
     items: list[DeletedMember]
     meta: PageMeta
-
