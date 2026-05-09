@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Bar,
   BarChart,
@@ -47,7 +48,6 @@ const PERIOD_OPTIONS = [
   { value: 'weekly',  label: '주간' },
   { value: 'monthly', label: '월간' },
   { value: 'yearly',  label: '연간' },
-  { value: '3years',  label: '3개년' },
   { value: 'custom',  label: '직접 입력' },
 ];
 
@@ -116,6 +116,12 @@ const FilterPanel = styled('section')(({ theme }) => ({
   border: `1px solid ${theme.custom.colors.primary.outline}`,
   borderRadius: theme.custom.borderRadius,
   padding: theme.custom.spacing.md,
+  '@media (max-width: 760px)': {
+    alignItems: 'stretch',
+    '& .MuiFormControl-root': {
+      width: '100% !important',
+    },
+  },
 }));
 
 const FilterDivider = styled('div')(({ theme }) => ({
@@ -124,6 +130,9 @@ const FilterDivider = styled('div')(({ theme }) => ({
   backgroundColor: theme.custom.colors.primary.outline,
   margin: `0 ${theme.custom.spacing.xs}`,
   alignSelf: 'center',
+  '@media (max-width: 760px)': {
+    display: 'none',
+  },
 }));
 
 const FilterLabel = styled('span')(({ theme }) => ({
@@ -137,8 +146,13 @@ const FilterField = styled('div')(({ theme }) => ({
   alignItems: 'center',
   gap: theme.custom.spacing.xs,
   minWidth: 0,
-  '@media (max-width: 600px)': {
+  '& .MuiFormControl-root': {
+    minWidth: 0,
+  },
+  '@media (max-width: 760px)': {
     width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
 }));
 
@@ -146,6 +160,13 @@ const WeekNavWrap = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.custom.spacing.xs,
+  '@media (max-width: 760px)': {
+    width: '100%',
+    flexWrap: 'wrap',
+    '& .MuiFormControl-root': {
+      width: '100% !important',
+    },
+  },
 }));
 
 const WeekNavBtn = styled('button')(({ theme }) => ({
@@ -169,6 +190,10 @@ const WeekText = styled('span')(({ theme }) => ({
   color: theme.custom.colors.primary._500,
   minWidth: 150,
   textAlign: 'center',
+  '@media (max-width: 760px)': {
+    flex: '1 1 auto',
+    minWidth: 0,
+  },
 }));
 
 const DateInput = styled('input')(({ theme }) => ({
@@ -183,6 +208,9 @@ const DateInput = styled('input')(({ theme }) => ({
   '&:focus': {
     borderColor: theme.custom.colors.primary._500,
   },
+  '@media (max-width: 760px)': {
+    width: '100%',
+  },
 }));
 
 const KpiGrid = styled('div')({
@@ -190,6 +218,7 @@ const KpiGrid = styled('div')({
   gridTemplateColumns: 'repeat(4, 1fr)',
   gap: 20,
   '@media (max-width: 1024px)': { gridTemplateColumns: 'repeat(2, 1fr)' },
+  '@media (max-width: 640px)': { gridTemplateColumns: '1fr' },
 });
 
 const ChartsGrid = styled('div')({
@@ -197,6 +226,7 @@ const ChartsGrid = styled('div')({
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: 24,
   '@media (max-width: 1024px)': { gridTemplateColumns: '1fr' },
+  '@media (max-width: 640px)': { gap: 16 },
 });
 
 const TooltipStyle = {
@@ -211,9 +241,69 @@ const WeeklyOnlyWrap = styled('div')<{ $active: boolean }>(({ $active }) => ({
   transition: 'opacity 0.25s ease',
 }));
 
+const PieSection = styled('div')({
+  display: 'flex',
+  gap: 16,
+  alignItems: 'center',
+  height: 300,
+  '@media (max-width: 760px)': {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    height: 'auto',
+  },
+});
+
+const PieChartWrap = styled('div')({
+  width: '55%',
+  height: 300,
+  minWidth: 0,
+  '@media (max-width: 760px)': {
+    width: '100%',
+    height: 240,
+  },
+});
+
+const PieLegendList = styled('div')({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  flex: 1,
+  minWidth: 0,
+});
+
+const PieLegendRow = styled('div')({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  fontSize: 13,
+  minWidth: 0,
+});
+
+const PieLegendDot = styled('div')<{ $fill: string }>(({ $fill }) => ({
+  width: 10,
+  height: 10,
+  borderRadius: '50%',
+  backgroundColor: $fill,
+  flexShrink: 0,
+}));
+
+const PieLegendName = styled('span')({
+  color: '#374151',
+  flex: 1,
+  minWidth: 0,
+  wordBreak: 'break-word',
+});
+
+const PieLegendValue = styled('span')({
+  color: '#6b7280',
+  fontWeight: 600,
+  flexShrink: 0,
+});
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 const AttendanceDashboard: React.FC = () => {
+  const isMobile = useMediaQuery('(max-width:760px)');
   // ── 날짜 필터 상태 ────────────────────────────────────────────────────
   const [periodUnit, setPeriodUnit] = useState<PeriodUnit>('weekly');
 
@@ -356,6 +446,17 @@ const AttendanceDashboard: React.FC = () => {
     return '기간을 설정해주세요';
   }, [periodUnit, weekSaturday, selectedYear, selectedMonth, selectedYearOnly, customStart, customEnd]);
 
+  const primaryChartHeight = isMobile ? 240 : 300;
+  const pieChartHeight = isMobile ? 240 : 300;
+  const chartLegendProps = isMobile
+    ? {
+        verticalAlign: 'bottom' as const,
+        align: 'center' as const,
+        wrapperStyle: { paddingTop: 12, fontSize: 12 },
+        iconSize: 10,
+      }
+    : {};
+
   return (
     <PageWrapper>
       {/* ── 날짜 + 세부 필터 패널 ── */}
@@ -402,18 +503,6 @@ const AttendanceDashboard: React.FC = () => {
             onChange={(v) => setSelectedYearOnly(String(v))}
             width={90}
           />
-        )}
-
-        {periodUnit === '3years' && (
-          <>
-            <Select
-              value={selectedYearOnly}
-              options={YEAR_OPTIONS}
-              onChange={(v) => setSelectedYearOnly(String(v))}
-              width={90}
-            />
-            <FilterLabel>기준 (최근 3개년)</FilterLabel>
-          </>
         )}
 
         {periodUnit === 'custom' && (
@@ -494,19 +583,20 @@ const AttendanceDashboard: React.FC = () => {
       <ChartsGrid>
         {/* ① 출석 인원 추이 — Y축: 인원 수(명) */}
         <ChartContainer title="출석 인원 추이" description={periodDesc}>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={primaryChartHeight}>
             {periodUnit === '3years' ? (
               // 3개년: 교구별 그룹 막대(4개 주) + 각 연도 라인 3개
               <ComposedChart data={threeYearsData} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
                 <XAxis
                   dataKey="week"
-                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                   tickLine={false}
                   axisLine={{ stroke: '#e5e7eb' }}
                 />
                 <YAxis
-                  tick={{ fontSize: 12, fill: '#475569' }}
+                  width={isMobile ? 36 : 52}
+                  tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                   tickFormatter={(v) => `${v}명`}
                   domain={[0, 'auto']}
                 />
@@ -528,19 +618,20 @@ const AttendanceDashboard: React.FC = () => {
                     dot={{ fill: color, r: 4 }}
                   />
                 ))}
-                <Legend />
+                <Legend {...chartLegendProps} />
               </ComposedChart>
             ) : (
               <LineChart data={dashboardData?.trend ?? []} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
                 <XAxis
                   dataKey="period"
-                  tick={{ fontSize: 12, fill: '#475569' }} 
+                  tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                   tickLine={false}
                   axisLine={{ stroke: '#e5e7eb' }}
                 />
                 <YAxis
-                  tick={{ fontSize: 12, fill: '#475569' }}
+                  width={isMobile ? 36 : 52}
+                  tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                   tickFormatter={(v) => `${v}명`}
                   domain={[0, 'auto']}
                 />
@@ -549,7 +640,7 @@ const AttendanceDashboard: React.FC = () => {
                   formatter={(v: number, name: string) => [`${v}명`, name]}
                 />
                 <Line type="monotone" dataKey="present" name="출석 인원" stroke="#187EF4" strokeWidth={2} dot={{ fill: '#187EF4', r: 4 }} />
-                <Legend />
+                <Legend {...chartLegendProps} />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -563,17 +654,20 @@ const AttendanceDashboard: React.FC = () => {
           selectOptions={DIMENSION_OPTIONS}
           onSelectChange={(v) => setDimension(v as DimensionKey)}
         >
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={primaryChartHeight}>
             <BarChart data={periodUnit === 'weekly' ? (dashboardData?.dimension[dimension] ?? []) : []} margin={{ top: 8, right: 18, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 12, fill: '#475569' }}
+                height={isMobile ? 48 : 32}
+                tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                 tickLine={false}
                 axisLine={{ stroke: '#e5e7eb' }}
+                interval={0}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: '#475569' }}
+                width={isMobile ? 36 : 52}
+                tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                 tickFormatter={(v) => `${v}명`}
                 domain={[0, 'auto']}
               />
@@ -588,15 +682,16 @@ const AttendanceDashboard: React.FC = () => {
 
         {/* ③ 결석사유 분포 */}
         <WeeklyOnlyWrap $active={periodUnit === 'weekly'}><ChartContainer title="결석사유 분포" description="결석 인원 중 사유별 비중">
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', height: 300 }}>
-            <ResponsiveContainer width="55%" height={300}>
+          <PieSection>
+            <PieChartWrap>
+              <ResponsiveContainer width="100%" height={pieChartHeight}>
               <PieChart>
                 <Pie
                   data={absentReasonChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={70}
-                  outerRadius={110}
+                  innerRadius={isMobile ? 48 : 70}
+                  outerRadius={isMobile ? 78 : 110}
                   paddingAngle={2}
                   dataKey="value"
                 >
@@ -609,22 +704,23 @@ const AttendanceDashboard: React.FC = () => {
                   formatter={(v: number, name: string) => [`${v}명`, name]}
                 />
               </PieChart>
-            </ResponsiveContainer>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+              </ResponsiveContainer>
+            </PieChartWrap>
+            <PieLegendList>
               {absentReasonChartData.map((entry) => (
-                <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: entry.fill, flexShrink: 0 }} />
-                  <span style={{ color: '#374151', flex: 1 }}>{entry.name}</span>
-                  <span style={{ color: '#6b7280', fontWeight: 600 }}>{entry.value}명</span>
-                </div>
+                <PieLegendRow key={entry.name}>
+                  <PieLegendDot $fill={entry.fill} />
+                  <PieLegendName>{entry.name}</PieLegendName>
+                  <PieLegendValue>{entry.value}명</PieLegendValue>
+                </PieLegendRow>
               ))}
-            </div>
-          </div>
+            </PieLegendList>
+          </PieSection>
         </ChartContainer></WeeklyOnlyWrap>
 
         {/* ④ 교구별 출석/결석 현황 (Stacked Bar) */}
         <WeeklyOnlyWrap $active={periodUnit === 'weekly'}><ChartContainer title="교구별 출석 현황" description="교구별 출석 / 결석 인원 현황">
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={primaryChartHeight}>
             <BarChart
               data={periodUnit === 'weekly' ? (dashboardData?.gyogu_status ?? []) : []}
               margin={{ top: 8, right: 18, left: 0, bottom: 4 }}
@@ -632,12 +728,13 @@ const AttendanceDashboard: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
               <XAxis
                 dataKey="name"
-                tick={{ fontSize: 12, fill: '#475569' }}
+                tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                 tickLine={false}
                 axisLine={{ stroke: '#e5e7eb' }}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: '#475569' }}
+                width={isMobile ? 36 : 52}
+                tick={{ fontSize: isMobile ? 11 : 12, fill: '#475569' }}
                 tickFormatter={(v) => `${v}명`}
               />
               <Tooltip
@@ -647,7 +744,10 @@ const AttendanceDashboard: React.FC = () => {
                   name === 'present' ? '출석' : '결석',
                 ]}
               />
-              <Legend formatter={(v) => v === 'present' ? '출석' : '결석'} />
+              <Legend
+                {...chartLegendProps}
+                formatter={(v) => v === 'present' ? '출석' : '결석'}
+              />
               <Bar dataKey="present" name="present" stackId="a" fill="#187EF4" maxBarSize={60} />
               <Bar dataKey="absent"  name="absent"  stackId="a" fill="#ef4444" radius={[6, 6, 0, 0]} maxBarSize={60} />
             </BarChart>

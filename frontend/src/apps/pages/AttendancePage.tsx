@@ -11,8 +11,14 @@ import { Column } from '@components/common/DataTable/DataTable.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { fetchAttendanceRecords, saveAttendanceBatch } from '@/api/attendance';
 import { AbsentReason, AttendanceMemberRow } from '@/models/attendance.types';
-
-// ── Types ─────────────────────────────────────────────────────────────────
+import {
+  addDaysToDateKey,
+  buildCalendarGrid,
+  formatKstSaturdayLabel,
+  getKstDateParts,
+  getMostRecentSaturdayKey,
+  parseDateKey,
+} from '@/utils/kstDate';
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT';
 
@@ -34,8 +40,6 @@ interface FilterState {
   groupNo: string;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────
-
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const STATUS_OPTIONS = [
@@ -44,21 +48,21 @@ const STATUS_OPTIONS = [
 ];
 
 const ABSENT_REASON_OPTIONS = [
-  { value: '',       label: '사유 없음' },
+  { value: '', label: '사유 없음' },
   { value: '학교/학원', label: '학교/학원' },
-  { value: '회사',     label: '회사' },
-  { value: '알바',     label: '알바' },
-  { value: '가족모임',  label: '가족모임' },
-  { value: '개인일정',  label: '개인일정' },
-  { value: '아픔',     label: '아픔' },
-  { value: '기타',     label: '기타' },
+  { value: '회사', label: '회사' },
+  { value: '알바', label: '알바' },
+  { value: '가족모임', label: '가족모임' },
+  { value: '개인일정', label: '개인일정' },
+  { value: '아픔', label: '아픔' },
+  { value: '기타', label: '기타' },
 ];
 
 const GYOGU_OPTIONS = [
-  { value: '',      label: '교구 선택' },
-  { value: '1',     label: '1교구' },
-  { value: '2',     label: '2교구' },
-  { value: '3',     label: '3교구' },
+  { value: '', label: '교구 선택' },
+  { value: '1', label: '1교구' },
+  { value: '2', label: '2교구' },
+  { value: '3', label: '3교구' },
   { value: '임원단', label: '임원단' },
 ];
 
@@ -69,10 +73,8 @@ const TEAM_OPTIONS = [
 
 const GROUP_OPTIONS = [
   { value: '', label: '그룹 선택' },
-  ...Array.from({ length: 4 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}그룹` })),
+  ...Array.from({ length: 5 }, (_, i) => ({ value: String(i), label: `${i}그룹` })),
 ];
-
-// ── Helpers ───────────────────────────────────────────────────────────────
 
 const toAttendanceRow = (item: AttendanceMemberRow, filters: FilterState): AttendanceRow => ({
   memberId: item.member_id,
@@ -85,41 +87,6 @@ const toAttendanceRow = (item: AttendanceMemberRow, filters: FilterState): Atten
   status: item.status,
   absentReason: item.absent_reason,
 });
-
-const getMostRecentSaturday = (): Date => {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const daysBack = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-  const sat = new Date(today);
-  sat.setDate(today.getDate() - daysBack);
-  sat.setHours(0, 0, 0, 0);
-  return sat;
-};
-
-const isSameDay = (a: Date, b: Date): boolean =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
-const formatWorshipDate = (date: Date): string => {
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-  return `${y}년 ${m}월 ${d}일 (토)`;
-};
-
-const buildCalendarGrid = (year: number, month: number): (Date | null)[] => {
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const grid: (Date | null)[] = Array(firstDayOfWeek).fill(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    grid.push(new Date(year, month, d));
-  }
-  while (grid.length % 7 !== 0) grid.push(null);
-  return grid;
-};
-
-// ── Styled Components ─────────────────────────────────────────────────────
 
 const PageWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -226,8 +193,6 @@ const EmptyGuide = styled('div')(({ theme }) => ({
   backgroundColor: theme.custom.colors.neutral._99,
 }));
 
-// ── Calendar Styled Components ────────────────────────────────────────────
-
 const CalendarContainer = styled('div')(({ theme }) => ({
   padding: theme.custom.spacing.md,
   width: 288,
@@ -288,61 +253,51 @@ const DayCell = styled('div')<{
     : {}),
 }));
 
-// ── Component ─────────────────────────────────────────────────────────────
-
 const AttendancePage: React.FC = () => {
-  const [worshipDate, setWorshipDate] = useState<Date>(() => getMostRecentSaturday());
+  const initialKstDate = getKstDateParts();
+
+  const [worshipDate, setWorshipDate] = useState<string>(() => getMostRecentSaturdayKey());
   const [filters, setFilters] = useState<FilterState>({ gyogu: '', team: '', groupNo: '' });
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [savedRows, setSavedRows] = useState<AttendanceRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
-
-  // 페이징 상태
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
-
-  // 달력 Popover 상태
   const [calendarAnchor, setCalendarAnchor] = useState<HTMLElement | null>(null);
   const [calendarView, setCalendarView] = useState<{ year: number; month: number }>({
-    year: new Date().getFullYear(),
-    month: new Date().getMonth(),
+    year: initialKstDate.year,
+    month: initialKstDate.month - 1,
   });
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
-  const mostRecentSaturday = useMemo(() => getMostRecentSaturday(), []);
+  const mostRecentSaturday = useMemo(() => getMostRecentSaturdayKey(), []);
 
-  // 변경 감지 (useBlocker보다 먼저 선언)
   const isDirty = useMemo(
     () =>
       rows.some((row) => {
-        const orig = savedRows.find((r) => r.memberId === row.memberId);
-        if (!orig) return true;
-        return row.status !== orig.status || row.absentReason !== orig.absentReason;
+        const original = savedRows.find((saved) => saved.memberId === row.memberId);
+        if (!original) return true;
+        return row.status !== original.status || row.absentReason !== original.absentReason;
       }),
     [rows, savedRows]
   );
 
-  // ── 이탈 경고 ──────────────────────────────────────────────────────────
-
-  // 브라우저 탭 닫기 / 새로고침 차단
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  // 필터 또는 주차 변경 시 페이지 초기화
   useEffect(() => {
     setPage(0);
   }, [filters.gyogu, filters.team, filters.groupNo, worshipDate, rowsPerPage]);
 
-  // 필터·주차·페이지 변경 시 데이터 로드
   useEffect(() => {
     if (!filters.gyogu) {
       setRows([]);
@@ -350,10 +305,12 @@ const AttendancePage: React.FC = () => {
       setTotalCount(0);
       return;
     }
+
     const gyogu_no = filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0;
     const is_imwondan = filters.gyogu === '임원단';
+
     fetchAttendanceRecords({
-      worship_date: worshipDate.toISOString().split('T')[0],
+      worship_date: worshipDate,
       gyogu_no,
       team_no: filters.team ? Number(filters.team) : undefined,
       group_no: filters.groupNo ? Number(filters.groupNo) : undefined,
@@ -361,83 +318,72 @@ const AttendancePage: React.FC = () => {
       page: page + 1,
       page_size: rowsPerPage,
     })
-      .then((res) => {
-        const loaded = res.items.map((item) => toAttendanceRow(item, filters));
+      .then((response) => {
+        const loaded = response.items.map((item) => toAttendanceRow(item, filters));
         setRows(loaded);
-        setSavedRows(loaded.map((r) => ({ ...r })));
-        setTotalCount(res.meta.total_items);
+        setSavedRows(loaded.map((row) => ({ ...row })));
+        setTotalCount(response.meta.total_items);
       })
       .catch(() => {
         setRows([]);
         setSavedRows([]);
         setTotalCount(0);
       });
-  }, [filters.gyogu, filters.team, filters.groupNo, worshipDate, page, rowsPerPage]);
+  }, [filters.gyogu, filters.team, filters.groupNo, page, rowsPerPage, worshipDate]);
 
-  // 서버 사이드 페이징이므로 rows가 이미 현재 페이지 데이터
   const pagedRows = rows;
+  const presentCount = useMemo(() => rows.filter((row) => row.status === 'PRESENT').length, [rows]);
 
-  const presentCount = useMemo(() => rows.filter((r) => r.status === 'PRESENT').length, [rows]);
+  const updateRow = useCallback((memberId: number, field: 'status' | 'absentReason', value: string | null) => {
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.memberId !== memberId) return row;
 
-  // 행 업데이트
-  const updateRow = useCallback(
-    (memberId: number, field: 'status' | 'absentReason', value: string | null) => {
-      setRows((prev) =>
-        prev.map((row) => {
-          if (row.memberId !== memberId) return row;
-          if (field === 'status') {
-            return {
-              ...row,
-              status: value as AttendanceStatus,
-              absentReason: value === 'PRESENT' ? null : row.absentReason,
-            };
-          }
-          return { ...row, absentReason: (value === '' ? null : value) as AbsentReason };
-        })
-      );
-    },
-    []
-  );
+        if (field === 'status') {
+          return {
+            ...row,
+            status: value as AttendanceStatus,
+            absentReason: value === 'PRESENT' ? null : row.absentReason,
+          };
+        }
 
-  // 주차 이동 (화살표)
+        return { ...row, absentReason: (value === '' ? null : value) as AbsentReason };
+      })
+    );
+  }, []);
+
   const handlePrevWeek = useCallback(() => {
-    setWorshipDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() - 7);
-      return d;
-    });
+    setWorshipDate((prev) => addDaysToDateKey(prev, -7));
   }, []);
 
   const handleNextWeek = useCallback(() => {
-    setWorshipDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + 7);
-      return d;
-    });
+    setWorshipDate((prev) => addDaysToDateKey(prev, 7));
   }, []);
 
-  const isNextDisabled = worshipDate.getTime() >= mostRecentSaturday.getTime();
+  const isNextDisabled = worshipDate >= mostRecentSaturday;
 
-  // 필터 변경 (cascade)
   const handleGyoguChange = useCallback((value: string | number | (string | number)[]) => {
     setFilters({ gyogu: String(value), team: '', groupNo: '' });
   }, []);
+
   const handleTeamChange = useCallback((value: string | number | (string | number)[]) => {
     setFilters((prev) => ({ ...prev, team: String(value), groupNo: '' }));
   }, []);
+
   const handleGroupChange = useCallback((value: string | number | (string | number)[]) => {
     setFilters((prev) => ({ ...prev, groupNo: String(value) }));
   }, []);
 
-  // 저장
   const handleSave = useCallback(async () => {
     setIsSaving(true);
+
     try {
       const changedRows = rows.filter((row) => {
-        const orig = savedRows.find((r) => r.memberId === row.memberId);
-        if (!orig) return true;
-        return row.status !== orig.status || row.absentReason !== orig.absentReason;
+        const original = savedRows.find((saved) => saved.memberId === row.memberId);
+        if (!original) return true;
+        return row.status !== original.status || row.absentReason !== original.absentReason;
       });
+
       const validRecords = changedRows
         .filter((row) => row.status === 'PRESENT' || row.absentReason !== null)
         .map((row) => ({
@@ -445,43 +391,42 @@ const AttendancePage: React.FC = () => {
           status: row.status,
           absent_reason: row.status === 'ABSENT' ? (row.absentReason as AbsentReason) : null,
         }));
+
       if (validRecords.length > 0) {
         await saveAttendanceBatch({
-          worship_date: worshipDate.toISOString().split('T')[0],
+          worship_date: worshipDate,
           records: validRecords,
         });
       }
-      setSavedRows(rows.map((r) => ({ ...r })));
+
+      setSavedRows(rows.map((row) => ({ ...row })));
       showSnackbar('출석 정보가 저장되었습니다.', 'success');
     } catch {
       showSnackbar('저장 중 오류가 발생했습니다.', 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [rows, savedRows, worshipDate, showSnackbar]);
+  }, [rows, savedRows, showSnackbar, worshipDate]);
 
-  // 달력 열기/닫기
-  const handleWeekLabelClick = useCallback(
-    (e: React.MouseEvent<HTMLSpanElement>) => {
-      setCalendarView({ year: worshipDate.getFullYear(), month: worshipDate.getMonth() });
-      setCalendarAnchor(e.currentTarget);
-    },
-    [worshipDate]
-  );
+  const handleWeekLabelClick = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {
+    const { year, month } = parseDateKey(worshipDate);
+    setCalendarView({ year, month: month - 1 });
+    setCalendarAnchor(event.currentTarget);
+  }, [worshipDate]);
+
   const handleCalendarClose = useCallback(() => setCalendarAnchor(null), []);
 
-  // 달력에서 토요일 선택
-  const handleDateSelect = useCallback((date: Date) => {
-    setWorshipDate(date);
+  const handleDateSelect = useCallback((dateKey: string) => {
+    setWorshipDate(dateKey);
     setCalendarAnchor(null);
   }, []);
 
-  // 달력 월 이동
   const handlePrevMonth = useCallback(() => {
     setCalendarView((prev) =>
       prev.month === 0 ? { year: prev.year - 1, month: 11 } : { ...prev, month: prev.month - 1 }
     );
   }, []);
+
   const handleNextMonth = useCallback(() => {
     setCalendarView((prev) =>
       prev.month === 11 ? { year: prev.year + 1, month: 0 } : { ...prev, month: prev.month + 1 }
@@ -493,19 +438,13 @@ const AttendancePage: React.FC = () => {
       calendarView.month === 11
         ? { year: calendarView.year + 1, month: 0 }
         : { year: calendarView.year, month: calendarView.month + 1 };
-    return (
-      next.year > mostRecentSaturday.getFullYear() ||
-      (next.year === mostRecentSaturday.getFullYear() &&
-        next.month > mostRecentSaturday.getMonth())
-    );
+    const recent = parseDateKey(mostRecentSaturday);
+
+    return next.year > recent.year || (next.year === recent.year && next.month > recent.month - 1);
   }, [calendarView, mostRecentSaturday]);
 
-  const calendarGrid = useMemo(
-    () => buildCalendarGrid(calendarView.year, calendarView.month),
-    [calendarView]
-  );
+  const calendarGrid = useMemo(() => buildCalendarGrid(calendarView.year, calendarView.month), [calendarView]);
 
-  // 컬럼 정의
   const columns: Column<AttendanceRow>[] = useMemo(
     () => [
       {
@@ -513,39 +452,37 @@ const AttendancePage: React.FC = () => {
         label: '번호',
         minWidth: 60,
         align: 'center',
-        render: (_v, row) => page * rowsPerPage + pagedRows.findIndex((r) => r.memberId === row.memberId) + 1,
+        render: (_value, row) => page * rowsPerPage + pagedRows.findIndex((item) => item.memberId === row.memberId) + 1,
       },
       {
         id: 'gyogu',
         label: '교구',
         minWidth: 80,
         align: 'center',
-        render: (_v, row) => row.gyogu === 0 ? '임원단' : `${row.gyogu}교구`,
+        render: (_value, row) => (row.gyogu === 0 ? '임원단' : `${row.gyogu}교구`),
       },
       {
         id: 'team',
         label: '팀',
         minWidth: 70,
         align: 'center',
-        render: (_v, row) => row.team === 0 ? '-' : `${row.team}팀`,
+        render: (_value, row) => (row.team === 0 ? '-' : `${row.team}팀`),
       },
       {
         id: 'groupNo',
         label: '그룹',
         minWidth: 80,
         align: 'center',
-        render: (_v, row) => row.groupNo === 0 ? '-' : `${row.groupNo}그룹`,
+        render: (_value, row) => `${row.groupNo}그룹`,
       },
       {
         id: 'leaderNames',
         label: '직분',
         minWidth: 160,
         align: 'center',
-        render: (_v, row) => (
+        render: (_value, row) => (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {row.leaderNames.length > 0
-              ? row.leaderNames.map((ln) => <Chip key={ln} label={ln} />)
-              : '-'}
+            {row.leaderNames.length > 0 ? row.leaderNames.map((name) => <Chip key={name} label={name} />) : '-'}
           </div>
         ),
       },
@@ -556,11 +493,11 @@ const AttendancePage: React.FC = () => {
         label: '출석여부',
         minWidth: 140,
         align: 'center',
-        render: (_v, row) => (
+        render: (_value, row) => (
           <Select
             value={row.status}
             options={STATUS_OPTIONS}
-            onChange={(val) => updateRow(row.memberId, 'status', String(val))}
+            onChange={(value) => updateRow(row.memberId, 'status', String(value))}
             width={130}
           />
         ),
@@ -570,34 +507,26 @@ const AttendancePage: React.FC = () => {
         label: '결석사유',
         minWidth: 170,
         align: 'center',
-        render: (_v, row) => (
+        render: (_value, row) => (
           <Select
             value={row.absentReason ?? ''}
             options={ABSENT_REASON_OPTIONS}
-            onChange={(val) =>
-              updateRow(row.memberId, 'absentReason', val === '' ? null : String(val))
-            }
+            onChange={(value) => updateRow(row.memberId, 'absentReason', value === '' ? null : String(value))}
             disabled={row.status === 'PRESENT'}
             width={155}
           />
         ),
       },
     ],
-    [rows, pagedRows, page, rowsPerPage, updateRow]
+    [page, pagedRows, rowsPerPage, updateRow]
   );
 
   return (
     <PageWrapper>
-      {/* 필터 패널 */}
       <FilterPanel>
         <FilterTitle>조회 조건</FilterTitle>
         <FilterGrid>
-          <Select
-            value={filters.gyogu}
-            options={GYOGU_OPTIONS}
-            onChange={handleGyoguChange}
-            fullWidth
-          />
+          <Select value={filters.gyogu} options={GYOGU_OPTIONS} onChange={handleGyoguChange} fullWidth />
           <Select
             value={filters.team}
             options={TEAM_OPTIONS}
@@ -615,20 +544,18 @@ const AttendancePage: React.FC = () => {
         </FilterGrid>
       </FilterPanel>
 
-      {/* 주차 네비게이션 */}
       <WeekNavBar>
         <NavButton onClick={handlePrevWeek} aria-label="이전 주">
           <ChevronLeftIcon fontSize="small" />
         </NavButton>
         <WeekLabel onClick={handleWeekLabelClick} title="클릭하여 날짜 선택">
-          {formatWorshipDate(worshipDate)}
+          {formatKstSaturdayLabel(worshipDate)}
         </WeekLabel>
         <NavButton onClick={handleNextWeek} disabled={isNextDisabled} aria-label="다음 주">
           <ChevronRightIcon fontSize="small" />
         </NavButton>
       </WeekNavBar>
 
-      {/* 날짜 선택 달력 Popover */}
       <Popover
         open={Boolean(calendarAnchor)}
         anchorEl={calendarAnchor}
@@ -650,26 +577,28 @@ const AttendancePage: React.FC = () => {
           </CalendarHeader>
 
           <CalendarGrid>
-            {WEEK_DAYS.map((d) => (
-              <DayHeader key={d} $isSat={d === '토'}>
-                {d}
+            {WEEK_DAYS.map((day) => (
+              <DayHeader key={day} $isSat={day === '토'}>
+                {day}
               </DayHeader>
             ))}
-            {calendarGrid.map((day, idx) => {
-              if (!day) return <div key={`e-${idx}`} />;
-              const isSat = day.getDay() === 6;
-              const isSelected = isSat && isSameDay(day, worshipDate);
-              const isFuture = isSat && day > mostRecentSaturday;
+            {calendarGrid.map((day, index) => {
+              if (!day) return <div key={`empty-${index}`} />;
+
+              const isSat = day.weekday === 6;
+              const isSelected = isSat && day.dateKey === worshipDate;
+              const isFuture = isSat && day.dateKey > mostRecentSaturday;
               const isDisabled = !isSat || isFuture;
+
               return (
                 <DayCell
-                  key={day.toISOString()}
+                  key={day.dateKey}
                   $isSat={isSat}
                   $isSelected={isSelected}
                   $isDisabled={isDisabled}
-                  onClick={!isDisabled ? () => handleDateSelect(day) : undefined}
+                  onClick={!isDisabled ? () => handleDateSelect(day.dateKey) : undefined}
                 >
-                  {day.getDate()}
+                  {day.day}
                 </DayCell>
               );
             })}
@@ -677,7 +606,6 @@ const AttendancePage: React.FC = () => {
         </CalendarContainer>
       </Popover>
 
-      {/* 교구 미선택 안내 */}
       {!filters.gyogu ? (
         <EmptyGuide>교구를 선택하면 출석 명단이 표시됩니다.</EmptyGuide>
       ) : (
@@ -691,18 +619,17 @@ const AttendancePage: React.FC = () => {
               rowsPerPage,
               totalCount,
               onPageChange: setPage,
-              onRowsPerPageChange: (newSize) => { setRowsPerPage(newSize); setPage(0); },
+              onRowsPerPageChange: (newSize) => {
+                setRowsPerPage(newSize);
+                setPage(0);
+              },
             }}
           />
           <SaveFooter>
             <CountLabel>
-              총 {totalCount}명&nbsp;&nbsp;|&nbsp;&nbsp;출석 {presentCount}명&nbsp;&nbsp;|&nbsp;&nbsp;결석 {presentCount > 0 ? rows.length - presentCount : 0}명
+              총 {totalCount}명 | 출석 {presentCount}명 | 결석 {rows.length - presentCount}명
             </CountLabel>
-            <Button
-              variant="filled"
-              onClick={handleSave}
-              disabled={!isDirty || isSaving}
-            >
+            <Button variant="filled" onClick={handleSave} disabled={!isDirty || isSaving}>
               {isSaving ? '저장 중...' : '저장'}
             </Button>
           </SaveFooter>
@@ -715,7 +642,6 @@ const AttendancePage: React.FC = () => {
         severity={snackbar.severity}
         onClose={hideSnackbar}
       />
-
     </PageWrapper>
   );
 };
