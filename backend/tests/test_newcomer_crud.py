@@ -52,7 +52,11 @@ def test_update_newcomer_on_regular_member_returns_404(client, seed_members):
 
 def test_delete_newcomer_succeeds(client, seed_members):
     _, newcomer_id = seed_members
-    r = client.delete(f"/api/v1/gyojeok/members/newcomers/{newcomer_id}")
+    r = client.request(
+        "DELETE",
+        f"/api/v1/gyojeok/members/newcomers/{newcomer_id}",
+        json={"deleted_reason": "새가족 삭제"},
+    )
     assert r.status_code == 200
 
     # 새가족 목록에서 사라짐
@@ -60,9 +64,44 @@ def test_delete_newcomer_succeeds(client, seed_members):
     assert newcomer_id not in {m["member_id"] for m in r2.json()["items"]}
 
 
+def test_delete_newcomer_requires_deleted_reason(client, seed_members):
+    _, newcomer_id = seed_members
+    r = client.delete(f"/api/v1/gyojeok/members/newcomers/{newcomer_id}")
+    assert r.status_code == 422
+
+
+def test_delete_newcomer_rejects_blank_deleted_reason(client, seed_members):
+    _, newcomer_id = seed_members
+    r = client.request(
+        "DELETE",
+        f"/api/v1/gyojeok/members/newcomers/{newcomer_id}",
+        json={"deleted_reason": "  "},
+    )
+    assert r.status_code == 422
+
+
+def test_delete_newcomer_saves_deleted_reason(client, seed_members, db):
+    _, newcomer_id = seed_members
+    r = client.request(
+        "DELETE",
+        f"/api/v1/gyojeok/members/newcomers/{newcomer_id}",
+        json={"deleted_reason": "연락 두절"},
+    )
+    assert r.status_code == 200
+
+    from app.models import Member
+    db.expire_all()
+    member = db.query(Member).filter(Member.member_id == newcomer_id).first()
+    assert member.deleted_reason == "연락 두절"
+
+
 def test_delete_newcomer_on_regular_member_returns_404(client, seed_members):
     regular_id, _ = seed_members
-    r = client.delete(f"/api/v1/gyojeok/members/newcomers/{regular_id}")
+    r = client.request(
+        "DELETE",
+        f"/api/v1/gyojeok/members/newcomers/{regular_id}",
+        json={"deleted_reason": "대상 오류"},
+    )
     assert r.status_code == 404
 
 

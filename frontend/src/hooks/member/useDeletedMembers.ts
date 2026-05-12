@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { fetchDeletedMembers, restoreMember } from '@/api/member';
+import { fetchDeletedMembers, restoreMembers } from '@/api/member';
 import { DeletedMemberRow, MemberFilterState } from '@/models/member.types';
 import { PageMeta } from '@/models/common.types';
 
@@ -97,7 +97,7 @@ export const useDeletedMembers = () => {
   }, [_fetch, rowsPerPage, filters]);
 
   const handleRestore = useCallback(async (memberIds: number[]) => {
-    await Promise.all(memberIds.map((id) => restoreMember(id)));
+    await restoreMembers(memberIds);
     setSelectedIds((prev) => prev.filter((id) => !memberIds.map(String).includes(id)));
     await _fetch(page, rowsPerPage, filters, searchField, searchKeyword);
   }, [_fetch, page, rowsPerPage, filters, searchField, searchKeyword]);

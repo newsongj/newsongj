@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, String
 from app.models import Member, MemberProfile, Leader
-from app.schemas.members import MemberDeleteRequest, MemberCreate, MemberUpdate
+from app.schemas.members import MemberBulkDeleteRequest, MemberIdsRequest, MemberDeleteRequest, MemberCreate, MemberUpdate
 from app.crud.member_profile import insert_profile, upsert_profile_on_date
 from app.crud.query_builders import (
     active_now,
@@ -234,6 +234,28 @@ def delete_member(db: Session, member_id: int, data: MemberDeleteRequest) -> Mem
     return member
 
 
+def delete_members(db: Session, data: MemberBulkDeleteRequest) -> list[int]:
+    """멤버 다건 소프트 삭제 — 전체 검증 후 한 번에 commit."""
+    member_ids = data.member_ids
+    members = active_now(db.query(Member).filter(Member.member_id.in_(member_ids))).all()
+    member_by_id = {member.member_id: member for member in members}
+    invalid_ids = [
+        member_id for member_id in member_ids
+        if member_id not in member_by_id or _is_newcomer(db, member_id)
+    ]
+    if invalid_ids:
+        raise MemberNotFoundError(f"삭제할 멤버를 찾을 수 없습니다: {invalid_ids}")
+
+    deleted_at = now_kst()
+    for member_id in member_ids:
+        member = member_by_id[member_id]
+        member.deleted_at = deleted_at
+        member.deleted_reason = data.deleted_reason
+
+    db.commit()
+    return member_ids
+
+
 def restore_member(db: Session, member_id: int) -> Member:
     """삭제된 멤버 복원 (deleted_at, deleted_reason 초기화)"""
     member = db.query(Member).filter(Member.member_id == member_id).first()
@@ -247,3 +269,31 @@ def restore_member(db: Session, member_id: int) -> Member:
     db.commit()
     db.refresh(member)
     return member
+
+
+def restore_members(db: Session, data: MemberIdsRequest) -> list[int]:
+    """삭제된 멤버 다건 복원 — 전체 검증 후 한 번에 commit."""
+    member_ids = data.member_ids
+    members = db.query(Member).filter(Member.member_id.in_(member_ids)).all()
+    member_by_id = {member.member_id: member for member in members}
+    invalid_ids = [
+        member_id for member_id in member_ids
+        if member_id not in member_by_id or _is_newcomer(db, member_id)
+    ]
+    if invalid_ids:
+        raise MemberNotFoundError(f"복원할 멤버를 찾을 수 없습니다: {invalid_ids}")
+
+    active_ids = [
+        member_id for member_id in member_ids
+        if member_by_id[member_id].deleted_at is None
+    ]
+    if active_ids:
+        raise MemberAlreadyActiveError(f"이미 활성 상태인 멤버입니다: {active_ids}")
+
+    for member_id in member_ids:
+        member = member_by_id[member_id]
+        member.deleted_at = None
+        member.deleted_reason = None
+
+    db.commit()
+    return member_ids

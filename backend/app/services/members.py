@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.schemas.members import (
     MemberResponse, DeletedMember, PageMeta,
     MemberListResponse, DeletedMemberListResponse,
-    MemberCreate, MemberUpdate, MemberDeleteRequest, MemberIdResponse,
+    MemberCreate, MemberUpdate, MemberIdsRequest, MemberDeleteRequest,
+    MemberBulkDeleteRequest, MemberIdResponse, MemberBulkResponse,
 )
 from app.crud.leaders import get_leader_map
 from app.crud.members import (
@@ -18,7 +19,9 @@ from app.crud.members import (
     create_member as crud_create_member,
     update_member as crud_update_member,
     delete_member as crud_delete_member,
+    delete_members as crud_delete_members,
     restore_member as crud_restore_member,
+    restore_members as crud_restore_members,
 )
 import json
 
@@ -167,7 +170,19 @@ def delete_member(db: Session, member_id: int, body: MemberDeleteRequest) -> Mem
     return MemberIdResponse(member_id=member_id)
 
 
+def delete_members(db: Session, body: MemberBulkDeleteRequest) -> MemberBulkResponse:
+    """다건 삭제. 하나라도 실패하면 전체 실패."""
+    member_ids = crud_delete_members(db, body)
+    return MemberBulkResponse(member_ids=member_ids, count=len(member_ids))
+
+
 def restore_member(db: Session, member_id: int) -> MemberIdResponse:
     """없으면 MemberNotFoundError, 이미 활성이면 MemberAlreadyActiveError 전파."""
     crud_restore_member(db, member_id)
     return MemberIdResponse(member_id=member_id)
+
+
+def restore_members(db: Session, body: MemberIdsRequest) -> MemberBulkResponse:
+    """다건 복원. 하나라도 실패하면 전체 실패."""
+    member_ids = crud_restore_members(db, body)
+    return MemberBulkResponse(member_ids=member_ids, count=len(member_ids))

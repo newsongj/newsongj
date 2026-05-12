@@ -22,8 +22,9 @@ import { useNewcomers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
 import {
   createNewcomer,
-  deleteNewcomer,
+  deleteNewcomers,
   enrollNewcomer,
+  enrollNewcomers,
   NewcomerBody,
   updateNewcomer,
 } from '@/api/newcomer';
@@ -812,8 +813,9 @@ const NewFamilyMemberPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const count = selectedIds.length;
-      await Promise.all(
-        selectedIds.map((id) => enrollNewcomer(parseInt(id, 10), toEnrollPayload(todayStr, enrollMemberType)))
+      await enrollNewcomers(
+        selectedIds.map((id) => parseInt(id, 10)),
+        toEnrollPayload(todayStr, enrollMemberType)
       );
       setSelectedIds([]);
       setBulkEnrollOpen(false);
@@ -844,18 +846,19 @@ const NewFamilyMemberPage: React.FC = () => {
   };
 
   const handleDelete = async (deleteReason?: string) => {
+    const reason = deleteReason?.trim();
+    if (!reason) {
+      showSnackbar('삭제 사유를 입력해 주세요.', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const deletedCount = selectedIds.length;
-      await Promise.all(selectedIds.map((id) => deleteNewcomer(parseInt(id, 10))));
+      await deleteNewcomers(selectedIds.map((id) => parseInt(id, 10)), reason);
       setSelectedIds([]);
       setDeleteOpen(false);
-      showSnackbar(
-        deleteReason?.trim()
-          ? `${deletedCount}건의 새가족이 삭제되었습니다. (사유: ${deleteReason.trim()})`
-          : `${deletedCount}건의 새가족이 삭제되었습니다.`,
-        'success'
-      );
+      showSnackbar(`${deletedCount}건의 새가족이 삭제되었습니다. (사유: ${reason})`, 'success');
       await loadMembers(page, rowsPerPage, filters);
     } catch (err: any) {
       showSnackbar(err?.message || '새가족 삭제에 실패했습니다.', 'error');

@@ -1,5 +1,5 @@
 """미등반 새가족 API 엔드포인트."""
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, Body
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -9,10 +9,15 @@ from app.services.newcomers import (
     create_newcomer as svc_create_newcomer,
     update_newcomer as svc_update_newcomer,
     delete_newcomer as svc_delete_newcomer,
+    delete_newcomers as svc_delete_newcomers,
     enroll_newcomer as svc_enroll_newcomer,
+    enroll_newcomers as svc_enroll_newcomers,
 )
-from app.schemas.members import MemberListResponse, MemberIdResponse
-from app.schemas.newcomers import NewcomerCreate, NewcomerUpdate, EnrollRequest
+from app.schemas.members import MemberListResponse, MemberIdResponse, MemberBulkResponse
+from app.schemas.newcomers import (
+    NewcomerCreate, NewcomerUpdate, NewcomerDeleteRequest,
+    NewcomerBulkDeleteRequest, EnrollRequest, BulkEnrollRequest,
+)
 
 router = APIRouter()
 
@@ -52,12 +57,29 @@ def update_newcomer(
     return svc_update_newcomer(db, member_id, body)
 
 
+@router.delete("/members/newcomers/bulk", response_model=MemberBulkResponse, tags=["미등반새가족"], summary="새가족 다건 소프트 삭제")
+def delete_newcomers(
+    body: NewcomerBulkDeleteRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    return svc_delete_newcomers(db, body)
+
+
 @router.delete("/members/newcomers/{member_id}", response_model=MemberIdResponse, tags=["미등반새가족"], summary="새가족 소프트 삭제")
 def delete_newcomer(
     member_id: int = Path(...),
+    body: NewcomerDeleteRequest = Body(...),
     db: Session = Depends(get_db),
 ):
-    return svc_delete_newcomer(db, member_id)
+    return svc_delete_newcomer(db, member_id, body)
+
+
+@router.put("/members/newcomers/bulk/enroll", response_model=MemberBulkResponse, tags=["미등반새가족"], summary="새가족 다건 등반 처리")
+def enroll_newcomers(
+    body: BulkEnrollRequest,
+    db: Session = Depends(get_db),
+):
+    return svc_enroll_newcomers(db, body)
 
 
 @router.put("/members/{member_id}/enroll", response_model=MemberIdResponse, tags=["미등반새가족"], summary="새가족 등반 처리")
