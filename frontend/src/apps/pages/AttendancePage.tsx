@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Popover } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
@@ -6,6 +6,7 @@ import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
 import { Snackbar } from '@components/common/Snackbar';
+import Popup from '@components/common/Popup';
 import { Chip } from '@components/common/Chip';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
@@ -76,14 +77,14 @@ const GROUP_OPTIONS = [
   ...Array.from({ length: 5 }, (_, i) => ({ value: String(i), label: `${i}그룹` })),
 ];
 
-const toAttendanceRow = (item: AttendanceMemberRow, filters: FilterState): AttendanceRow => ({
+const toAttendanceRow = (item: AttendanceMemberRow): AttendanceRow => ({
   memberId: item.member_id,
   name: item.name,
   generation: `${item.generation}기`,
   leaderNames: item.leader_names,
-  gyogu: filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0,
-  team: filters.team ? Number(filters.team) : 0,
-  groupNo: filters.groupNo ? Number(filters.groupNo) : 0,
+  gyogu: item.gyogu,
+  team: item.team,
+  groupNo: item.group_no,
   status: item.status,
   absentReason: item.absent_reason,
 });
@@ -259,7 +260,7 @@ const AttendancePage: React.FC = () => {
   const [worshipDate, setWorshipDate] = useState<string>(() => getMostRecentSaturdayKey());
   const [filters, setFilters] = useState<FilterState>({ gyogu: '', team: '', groupNo: '' });
   const [rows, setRows] = useState<AttendanceRow[]>([]);
-  const [savedRows, setSavedRows] = useState<AttendanceRow[]>([]);
+  const [changesMap, setChangesMap] = useState<Map<number, { status: AttendanceStatus; absentReason: AbsentReason | null }>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -273,15 +274,28 @@ const AttendancePage: React.FC = () => {
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
   const mostRecentSaturday = useMemo(() => getMostRecentSaturdayKey(), []);
 
-  const isDirty = useMemo(
-    () =>
-      rows.some((row) => {
-        const original = savedRows.find((saved) => saved.memberId === row.memberId);
-        if (!original) return true;
-        return row.status !== original.status || row.absentReason !== original.absentReason;
-      }),
-    [rows, savedRows]
-  );
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const [showDiscardPopup, setShowDiscardPopup] = useState(false);
+  const isDirtyRef = useRef(false);
+  const changesMapRef = useRef(changesMap);
+  const rowsRef = useRef(rows);
+  changesMapRef.current = changesMap;
+  rowsRef.current = rows;
+
+  const confirmDiscard = useCallback((action: () => void) => {
+    if (isDirtyRef.current) {
+      pendingActionRef.current = action;
+      setShowDiscardPopup(true);
+    } else {
+      action();
+    }
+  }, []);
+
+  const isDirty = changesMap.size > 0;
+
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -301,7 +315,6 @@ const AttendancePage: React.FC = () => {
   useEffect(() => {
     if (!filters.gyogu) {
       setRows([]);
-      setSavedRows([]);
       setTotalCount(0);
       return;
     }
@@ -319,14 +332,16 @@ const AttendancePage: React.FC = () => {
       page_size: rowsPerPage,
     })
       .then((response) => {
-        const loaded = response.items.map((item) => toAttendanceRow(item, filters));
+        const loaded = response.items.map((item) => {
+          const row = toAttendanceRow(item);
+          const change = changesMapRef.current.get(item.member_id);
+          return change ? { ...row, status: change.status, absentReason: change.absentReason } : row;
+        });
         setRows(loaded);
-        setSavedRows(loaded.map((row) => ({ ...row })));
         setTotalCount(response.meta.total_items);
       })
       .catch(() => {
         setRows([]);
-        setSavedRows([]);
         setTotalCount(0);
       });
   }, [filters.gyogu, filters.team, filters.groupNo, page, rowsPerPage, worshipDate]);
@@ -335,78 +350,73 @@ const AttendancePage: React.FC = () => {
   const presentCount = useMemo(() => rows.filter((row) => row.status === 'PRESENT').length, [rows]);
 
   const updateRow = useCallback((memberId: number, field: 'status' | 'absentReason', value: string | null) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.memberId !== memberId) return row;
+    const current = rowsRef.current.find((r) => r.memberId === memberId);
+    if (!current) return;
 
-        if (field === 'status') {
-          return {
-            ...row,
-            status: value as AttendanceStatus,
-            absentReason: value === 'PRESENT' ? null : row.absentReason,
-          };
-        }
+    const updated: AttendanceRow =
+      field === 'status'
+        ? { ...current, status: value as AttendanceStatus, absentReason: value === 'PRESENT' ? null : current.absentReason }
+        : { ...current, absentReason: (value === '' ? null : value) as AbsentReason };
 
-        return { ...row, absentReason: (value === '' ? null : value) as AbsentReason };
-      })
-    );
+    setRows((prev) => prev.map((r) => (r.memberId === memberId ? updated : r)));
+    setChangesMap((prev) => new Map(prev).set(memberId, { status: updated.status, absentReason: updated.absentReason }));
   }, []);
 
   const handlePrevWeek = useCallback(() => {
-    setWorshipDate((prev) => addDaysToDateKey(prev, -7));
-  }, []);
+    confirmDiscard(() => setWorshipDate((prev) => addDaysToDateKey(prev, -7)));
+  }, [confirmDiscard]);
 
   const handleNextWeek = useCallback(() => {
-    setWorshipDate((prev) => addDaysToDateKey(prev, 7));
-  }, []);
+    confirmDiscard(() => setWorshipDate((prev) => addDaysToDateKey(prev, 7)));
+  }, [confirmDiscard]);
 
   const isNextDisabled = worshipDate >= mostRecentSaturday;
 
-  const handleGyoguChange = useCallback((value: string | number | (string | number)[]) => {
-    setFilters({ gyogu: String(value), team: '', groupNo: '' });
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage);
   }, []);
+
+  const handleRowsPerPageChange = useCallback((newSize: number) => {
+    setRowsPerPage(newSize);
+    setPage(0);
+  }, []);
+
+  const handleGyoguChange = useCallback((value: string | number | (string | number)[]) => {
+    confirmDiscard(() => setFilters({ gyogu: String(value), team: '', groupNo: '' }));
+  }, [confirmDiscard]);
 
   const handleTeamChange = useCallback((value: string | number | (string | number)[]) => {
-    setFilters((prev) => ({ ...prev, team: String(value), groupNo: '' }));
-  }, []);
+    confirmDiscard(() => setFilters((prev) => ({ ...prev, team: String(value), groupNo: '' })));
+  }, [confirmDiscard]);
 
   const handleGroupChange = useCallback((value: string | number | (string | number)[]) => {
-    setFilters((prev) => ({ ...prev, groupNo: String(value) }));
-  }, []);
+    confirmDiscard(() => setFilters((prev) => ({ ...prev, groupNo: String(value) })));
+  }, [confirmDiscard]);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
 
     try {
-      const changedRows = rows.filter((row) => {
-        const original = savedRows.find((saved) => saved.memberId === row.memberId);
-        if (!original) return true;
-        return row.status !== original.status || row.absentReason !== original.absentReason;
-      });
-
-      const validRecords = changedRows
-        .filter((row) => row.status === 'PRESENT' || row.absentReason !== null)
-        .map((row) => ({
-          member_id: row.memberId,
-          status: row.status,
-          absent_reason: row.status === 'ABSENT' ? (row.absentReason as AbsentReason) : null,
+      const records = Array.from(changesMap.entries())
+        .filter(([, c]) => c.status === 'PRESENT' || c.absentReason !== null)
+        .map(([memberId, c]) => ({
+          member_id: memberId,
+          status: c.status,
+          absent_reason: c.status === 'ABSENT' ? (c.absentReason as AbsentReason) : null,
         }));
 
-      if (validRecords.length > 0) {
-        await saveAttendanceBatch({
-          worship_date: worshipDate,
-          records: validRecords,
-        });
+      if (records.length > 0) {
+        await saveAttendanceBatch({ worship_date: worshipDate, records });
       }
 
-      setSavedRows(rows.map((row) => ({ ...row })));
+      setChangesMap(new Map());
       showSnackbar('출석 정보가 저장되었습니다.', 'success');
     } catch {
       showSnackbar('저장 중 오류가 발생했습니다.', 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [rows, savedRows, showSnackbar, worshipDate]);
+  }, [changesMap, showSnackbar, worshipDate]);
 
   const handleWeekLabelClick = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {
     const { year, month } = parseDateKey(worshipDate);
@@ -417,9 +427,9 @@ const AttendancePage: React.FC = () => {
   const handleCalendarClose = useCallback(() => setCalendarAnchor(null), []);
 
   const handleDateSelect = useCallback((dateKey: string) => {
-    setWorshipDate(dateKey);
     setCalendarAnchor(null);
-  }, []);
+    confirmDiscard(() => setWorshipDate(dateKey));
+  }, [confirmDiscard]);
 
   const handlePrevMonth = useCallback(() => {
     setCalendarView((prev) =>
@@ -618,11 +628,8 @@ const AttendancePage: React.FC = () => {
               page,
               rowsPerPage,
               totalCount,
-              onPageChange: setPage,
-              onRowsPerPageChange: (newSize) => {
-                setRowsPerPage(newSize);
-                setPage(0);
-              },
+              onPageChange: handlePageChange,
+              onRowsPerPageChange: handleRowsPerPageChange,
             }}
           />
           <SaveFooter>
@@ -635,6 +642,24 @@ const AttendancePage: React.FC = () => {
           </SaveFooter>
         </>
       )}
+
+      {showDiscardPopup && (
+        <Popup
+          title="변경사항 삭제"
+          description="저장하지 않은 변경사항이 있습니다. 이동하시겠습니까?"
+          onCancel={() => setShowDiscardPopup(false)}
+          onConfirm={() => {
+            setChangesMap(new Map());
+            pendingActionRef.current?.();
+            pendingActionRef.current = null;
+            setShowDiscardPopup(false);
+          }}
+          cancelButtonText="취소"
+          confirmButtonText="이동"
+          confirmButtonVariant="error"
+        />
+      )}
+
 
       <Snackbar
         open={snackbar.open}

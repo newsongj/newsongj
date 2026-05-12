@@ -71,14 +71,9 @@ interface DisplayRow {
   pid: string;
 }
 
-const formatLeaderIds = (leaderIds: MemberRow['leader_ids']) => {
-  if (Array.isArray(leaderIds)) return leaderIds.join(', ');
-  return leaderIds || '-';
-};
-
 const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   id: item.member_id,
-  year: item.year ? item.year.slice(0, 4) : '-',
+  year: item.updated_at ? item.updated_at.slice(0, 4) : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
   team: item.team ? `${item.team}팀` : '-',
   group: item.group_no !== null && item.group_no !== undefined ? `${item.group_no}그룹` : '-',
@@ -87,7 +82,7 @@ const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   generation: `${item.generation}기`,
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
-  role: formatLeaderIds(item.leader_ids),
+  role: item.leader_names?.join(', ') || '-',
   createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
@@ -745,6 +740,7 @@ const NewFamilyMemberPage: React.FC = () => {
     page,
     rowsPerPage,
     filters,
+    error,
     loadMembers,
     handlePageChange,
     handleRowsPerPageChange,
@@ -771,6 +767,10 @@ const NewFamilyMemberPage: React.FC = () => {
   useEffect(() => {
     loadMembers(page, rowsPerPage, filters);
   }, []);
+
+  useEffect(() => {
+    if (error) showSnackbar(error || '새가족 목록을 불러오지 못했습니다.', 'error');
+  }, [error]);
 
   const rows = useMemo(() => members.map(mapToDisplayRow), [members]);
 

@@ -38,7 +38,7 @@ interface DisplayRow {
 
 const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   id: item.member_id,
-  year: item.year ? `${item.year.slice(0, 4)}년` : '-',
+  year: item.updated_at ? `${item.updated_at.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
   team: item.team ? `${item.team}팀` : '-',
   group: item.group_no !== null && item.group_no !== undefined ? `${item.group_no}그룹` : '-',
@@ -47,7 +47,7 @@ const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   generation: `${item.generation}기`,
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
-  role: item.leader_ids || '-',
+  role: item.leader_names?.join(', ') || '-',
   createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
@@ -205,6 +205,7 @@ const MemberListPage: React.FC = () => {
     page,
     rowsPerPage,
     filters,
+    error,
     loadMembers,
     handlePageChange,
     handleRowsPerPageChange,
@@ -223,6 +224,10 @@ const MemberListPage: React.FC = () => {
   useEffect(() => {
     loadMembers(page, rowsPerPage, filters);
   }, []);
+
+  useEffect(() => {
+    if (error) showSnackbar(error || '교적 목록을 불러오지 못했습니다.', 'error');
+  }, [error]);
 
   const rows = useMemo(() => members.map(mapToDisplayRow), [members]);
 
