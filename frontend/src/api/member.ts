@@ -20,6 +20,11 @@ export interface MemberCreateBody {
   major?: string;
 }
 
+export interface MemberBulkResponse {
+  member_ids: number[];
+  count: number;
+}
+
 /** 활성 멤버 목록 조회 */
 export async function fetchMembers(params: {
   year: number;
@@ -72,9 +77,22 @@ export async function deleteMember(memberId: number, deletedReason: string): Pro
   return del<MemberRow>(`/api/v1/gyojeok/members/${memberId}`, { deleted_reason: deletedReason });
 }
 
+/** 멤버 다건 소프트 삭제 */
+export async function deleteMembers(memberIds: number[], deletedReason: string): Promise<MemberBulkResponse> {
+  return del<MemberBulkResponse>('/api/v1/gyojeok/members/bulk', {
+    member_ids: memberIds,
+    deleted_reason: deletedReason,
+  });
+}
+
 /** 삭제된 멤버 복원 */
 export async function restoreMember(memberId: number): Promise<{ member_id: number }> {
   return post<{ member_id: number }>(`/api/v1/gyojeok/members/restore/${memberId}`);
+}
+
+/** 삭제된 멤버 다건 복원 */
+export async function restoreMembers(memberIds: number[]): Promise<MemberBulkResponse> {
+  return post<MemberBulkResponse>('/api/v1/gyojeok/members/restore/bulk', { member_ids: memberIds });
 }
 
 /** 새가족 등반 처리 */

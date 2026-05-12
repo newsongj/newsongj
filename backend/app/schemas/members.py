@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, Literal
 import datetime
 from app.schemas.common import PageMeta
@@ -72,9 +72,32 @@ class MemberIdResponse(BaseModel):
     member_id: int
 
 
+class MemberIdsRequest(BaseModel):
+    member_ids: list[int]
+
+    @field_validator("member_ids")
+    @classmethod
+    def validate_member_ids(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("member_ids는 비어 있을 수 없습니다.")
+        duplicates = sorted({member_id for member_id in value if value.count(member_id) > 1})
+        if duplicates:
+            raise ValueError(f"member_ids 중복 요청: {duplicates}")
+        return value
+
+
+class MemberBulkResponse(BaseModel):
+    member_ids: list[int]
+    count: int
+
+
 # 멤버 삭제 요청 스키마 (삭제 사유만, 삭제 시각은 서버에서 자동)
 class MemberDeleteRequest(BaseModel):
     deleted_reason: str
+
+
+class MemberBulkDeleteRequest(MemberIdsRequest, MemberDeleteRequest):
+    pass
 
 
 # 삭제된 멤버 응답 (MemberResponse 확장)

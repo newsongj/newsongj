@@ -12,11 +12,14 @@ from app.services.members import (
     create_member as svc_create_member,
     update_member as svc_update_member,
     delete_member as svc_delete_member,
+    delete_members as svc_delete_members,
     restore_member as svc_restore_member,
+    restore_members as svc_restore_members,
 )
 from app.schemas.members import (
     MemberListResponse, DeletedMemberListResponse, DeletedMember,
-    MemberDeleteRequest, MemberCreate, MemberUpdate, MemberIdResponse,
+    MemberIdsRequest, MemberDeleteRequest, MemberBulkDeleteRequest,
+    MemberCreate, MemberUpdate, MemberIdResponse, MemberBulkResponse,
 )
 
 router = APIRouter()
@@ -86,6 +89,14 @@ def update_member(
     return svc_update_member(db, member_id, body)
 
 
+@router.delete("/members/bulk", response_model=MemberBulkResponse, tags=["교적 삭제"], summary="멤버 다건 소프트 삭제")
+def delete_members(
+    body: MemberBulkDeleteRequest,
+    db: Session = Depends(get_db),
+):
+    return svc_delete_members(db, body)
+
+
 @router.delete("/members/{member_id}", response_model=MemberIdResponse, tags=["교적 삭제"], summary="멤버 소프트 삭제")
 def delete_member(
     member_id: int = Path(...),
@@ -93,6 +104,14 @@ def delete_member(
     db: Session = Depends(get_db),
 ):
     return svc_delete_member(db, member_id, body)
+
+
+@router.post("/members/restore/bulk", response_model=MemberBulkResponse, tags=["교적 삭제"], summary="삭제된 멤버 다건 복원")
+def restore_members(
+    body: MemberIdsRequest,
+    db: Session = Depends(get_db),
+):
+    return svc_restore_members(db, body)
 
 
 @router.post("/members/restore/{member_id}", response_model=MemberIdResponse, tags=["교적 삭제"], summary="삭제된 멤버 복원")

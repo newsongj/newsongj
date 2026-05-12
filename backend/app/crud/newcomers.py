@@ -6,7 +6,10 @@
 from sqlalchemy import String, cast, func
 from sqlalchemy.orm import Session
 from app.models import Member, MemberProfile
-from app.schemas.newcomers import NewcomerCreate, NewcomerUpdate, EnrollRequest
+from app.schemas.newcomers import (
+    NewcomerCreate, NewcomerUpdate, NewcomerDeleteRequest,
+    NewcomerBulkDeleteRequest, EnrollRequest, BulkEnrollRequest,
+)
 from app.crud.member_profile import insert_profile, upsert_profile_on_date
 from app.crud.query_builders import (
     active_now,
@@ -15,7 +18,7 @@ from app.crud.query_builders import (
     NEWCOMER_TYPE,
 )
 from app.crud.members import _is_newcomer, _finish_member_list
-from app.core.timezone import today_kst
+from app.core.timezone import now_kst, today_kst
 from app.core.exceptions import MemberNotFoundError
 
 
@@ -79,17 +82,38 @@ def update_newcomer(db: Session, member_id: int, data: NewcomerUpdate) -> int:
     return member_id
 
 
-def delete_newcomer(db: Session, member_id: int) -> int:
+def delete_newcomer(db: Session, member_id: int, data: NewcomerDeleteRequest) -> int:
     """새가족 소프트 삭제 — 대상이 새가족이 아니면 404."""
-    from app.core.timezone import now_kst
     member = active_now(db.query(Member).filter(Member.member_id == member_id)).first()
     if not member or not _is_newcomer(db, member_id):
         raise MemberNotFoundError("새가족 멤버를 찾을 수 없습니다.")
 
     member.deleted_at = now_kst()
-    member.deleted_reason = "새가족 삭제"
+    member.deleted_reason = data.deleted_reason
     db.commit()
     return member_id
+
+
+def delete_newcomers(db: Session, data: NewcomerBulkDeleteRequest) -> list[int]:
+    """새가족 다건 소프트 삭제 — 전체 검증 후 한 번에 commit."""
+    member_ids = data.member_ids
+    members = active_now(db.query(Member).filter(Member.member_id.in_(member_ids))).all()
+    member_by_id = {member.member_id: member for member in members}
+    invalid_ids = [
+        member_id for member_id in member_ids
+        if member_id not in member_by_id or not _is_newcomer(db, member_id)
+    ]
+    if invalid_ids:
+        raise MemberNotFoundError(f"새가족 멤버를 찾을 수 없습니다: {invalid_ids}")
+
+    deleted_at = now_kst()
+    for member_id in member_ids:
+        member = member_by_id[member_id]
+        member.deleted_at = deleted_at
+        member.deleted_reason = data.deleted_reason
+
+    db.commit()
+    return member_ids
 
 
 def enroll_newcomer(db: Session, member_id: int, data: EnrollRequest) -> int:
@@ -125,3 +149,48 @@ def enroll_newcomer(db: Session, member_id: int, data: EnrollRequest) -> int:
 
     db.commit()
     return member_id
+
+
+def enroll_newcomers(db: Session, data: BulkEnrollRequest) -> list[int]:
+    """새가족 다건 등반 처리 — 전체 검증 후 한 번에 commit."""
+    member_ids = data.member_ids
+    members = active_now(db.query(Member).filter(Member.member_id.in_(member_ids))).all()
+    member_by_id = {member.member_id: member for member in members}
+    invalid_ids = [
+        member_id for member_id in member_ids
+        if member_id not in member_by_id or not _is_newcomer(db, member_id)
+    ]
+    if invalid_ids:
+        raise MemberNotFoundError(f"새가족 멤버를 찾을 수 없습니다: {invalid_ids}")
+
+    latest_profiles = {}
+    for member_id in member_ids:
+        latest = (
+            db.query(
+                MemberProfile.gyogu,
+                MemberProfile.team,
+                MemberProfile.group_no,
+                MemberProfile.leader_ids,
+                cast(func.nullif(MemberProfile.plt_status, ""), String).label("plt_status"),
+            )
+            .filter(MemberProfile.member_id == member_id)
+            .order_by(MemberProfile.updated_at.desc(), MemberProfile.profile_id.desc())
+            .first()
+        )
+        if latest is None:
+            raise MemberNotFoundError(f"새가족 멤버를 찾을 수 없습니다: {[member_id]}")
+        latest_profiles[member_id] = latest
+
+    today = today_kst()
+    for member_id in member_ids:
+        latest = latest_profiles[member_id]
+        upsert_profile_on_date(
+            db, member_id, today,
+            gyogu=latest.gyogu, team=latest.team, group_no=latest.group_no,
+            member_type=data.member_type,
+            leader_ids=latest.leader_ids, plt_status=latest.plt_status,
+        )
+        member_by_id[member_id].enrolled_at = data.enrolled_at
+
+    db.commit()
+    return member_ids

@@ -1,7 +1,8 @@
 """미등반 새가족 도메인 스키마."""
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Literal
 import datetime
+from app.schemas.members import MemberIdsRequest
 
 
 # 등반 가능한 일반 member_type — 새가족은 이 set로 전환되며 enrolled_at 세팅
@@ -28,6 +29,24 @@ class NewcomerUpdate(NewcomerCreate):
     pass
 
 
+class NewcomerDeleteRequest(BaseModel):
+    """새가족 삭제 요청 — 삭제 사유 필수."""
+    deleted_reason: str
+
+    @field_validator("deleted_reason")
+    @classmethod
+    def validate_deleted_reason(cls, value: str) -> str:
+        reason = value.strip()
+        if not reason:
+            raise ValueError("deleted_reason은 필수입니다.")
+        return reason
+
+
+class NewcomerBulkDeleteRequest(MemberIdsRequest, NewcomerDeleteRequest):
+    """새가족 다건 삭제 요청 — 전체 성공/전체 실패."""
+    pass
+
+
 class EnrollRequest(BaseModel):
     """등반 처리 요청 — 새가족 → 일반 멤버 전환
 
@@ -36,3 +55,8 @@ class EnrollRequest(BaseModel):
     """
     enrolled_at: datetime.datetime
     member_type: EnrollableMemberType = '토요예배'
+
+
+class BulkEnrollRequest(MemberIdsRequest, EnrollRequest):
+    """새가족 다건 등반 처리 요청 — 전체 성공/전체 실패."""
+    pass

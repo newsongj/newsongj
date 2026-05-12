@@ -21,6 +21,11 @@ export interface NewcomerEnrollBody {
   member_type?: string;
 }
 
+export interface NewcomerBulkResponse {
+  member_ids: number[];
+  count: number;
+}
+
 export async function fetchNewcomers(params: {
   year: number;
   page: number;
@@ -43,10 +48,26 @@ export async function updateNewcomer(memberId: number, body: NewcomerBody): Prom
   return put<{ member_id: number }>(`/api/v1/gyojeok/members/newcomers/${memberId}`, body);
 }
 
-export async function deleteNewcomer(memberId: number): Promise<{ member_id: number }> {
-  return del<{ member_id: number }>(`/api/v1/gyojeok/members/newcomers/${memberId}`);
+export async function deleteNewcomer(memberId: number, deletedReason: string): Promise<{ member_id: number }> {
+  return del<{ member_id: number }>(`/api/v1/gyojeok/members/newcomers/${memberId}`, {
+    deleted_reason: deletedReason,
+  });
+}
+
+export async function deleteNewcomers(memberIds: number[], deletedReason: string): Promise<NewcomerBulkResponse> {
+  return del<NewcomerBulkResponse>('/api/v1/gyojeok/members/newcomers/bulk', {
+    member_ids: memberIds,
+    deleted_reason: deletedReason,
+  });
 }
 
 export async function enrollNewcomer(memberId: number, body: NewcomerEnrollBody): Promise<{ member_id: number }> {
   return put<{ member_id: number }>(`/api/v1/gyojeok/members/${memberId}/enroll`, body);
+}
+
+export async function enrollNewcomers(memberIds: number[], body: NewcomerEnrollBody): Promise<NewcomerBulkResponse> {
+  return put<NewcomerBulkResponse>('/api/v1/gyojeok/members/newcomers/bulk/enroll', {
+    member_ids: memberIds,
+    ...body,
+  });
 }

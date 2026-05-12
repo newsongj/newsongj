@@ -13,7 +13,7 @@ import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { MemberFormValue } from '@components/user/memberForm.types';
 import { useMembers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
-import { createMember, updateMember, deleteMember, MemberCreateBody } from '@/api/member';
+import { createMember, updateMember, deleteMembers, MemberCreateBody } from '@/api/member';
 
 interface DisplayRow {
   id: number;
@@ -264,9 +264,7 @@ const MemberListPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const deletedCount = selectedIds.length;
-      await Promise.all(
-        selectedIds.map((id) => deleteMember(parseInt(id), deleteReason?.trim() || ''))
-      );
+      await deleteMembers(selectedIds.map((id) => parseInt(id, 10)), deleteReason?.trim() || '');
       setSelectedIds([]);
       setDeleteOpen(false);
       showSnackbar(
