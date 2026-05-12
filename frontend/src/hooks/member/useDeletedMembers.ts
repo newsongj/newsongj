@@ -23,6 +23,7 @@ export const useDeletedMembers = () => {
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState<PageMeta>(INITIAL_META);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -38,6 +39,7 @@ export const useDeletedMembers = () => {
     keyword: string,
   ) => {
     setLoading(true);
+    setError(null);
     try {
       const params: Parameters<typeof fetchDeletedMembers>[0] = {
         page: currentPage + 1,
@@ -56,8 +58,8 @@ export const useDeletedMembers = () => {
       const res = await fetchDeletedMembers(params);
       setItems(res.items);
       setPagination(res.meta);
-    } catch {
-      // silently fail, loading will be cleared in finally
+    } catch (err: any) {
+      setError(err?.message || null);
     } finally {
       setLoading(false);
     }
@@ -110,6 +112,7 @@ export const useDeletedMembers = () => {
     page,
     rowsPerPage,
     filters,
+    error,
     loadDeletedMembers,
     handlePageChange,
     handleRowsPerPageChange,

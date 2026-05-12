@@ -13,7 +13,7 @@ import {
 import { MemberCreatePageProps } from './MemberCreatePage.types';
 import { fetchLeaders, LeaderOption } from '@/api/meta';
 
-const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group'];
+const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group', 'memberType'];
 
 const INITIAL_FORM: MemberFormValue = {
   name: '',
@@ -306,13 +306,17 @@ const MemberCreatePage: React.FC<MemberCreatePageProps> = ({ open, onClose, onSu
         </FullWidthBlock>
 
         <FieldBlock>
-          <FieldLabel>교인구분</FieldLabel>
-          <Select
-            value={form.memberType}
-            onChange={(value) => setForm((prev) => ({ ...prev, memberType: String(value) }))}
-            options={[{ value: '', label: '선택' }, ...MEMBER_MEMBER_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))]}
-            fullWidth
-          />
+          <FieldLabel>교인구분<Required>*</Required></FieldLabel>
+          <ErrorSelectWrapper $error={Boolean(errors.memberType)}>
+            <Select
+              value={form.memberType}
+              onChange={(value) => setForm((prev) => ({ ...prev, memberType: String(value) }))}
+              options={[{ value: '', label: '선택' }, ...MEMBER_MEMBER_TYPE_OPTIONS.filter((o) => o !== '새가족').map((option) => ({ value: option, label: option }))]}
+              error={Boolean(errors.memberType)}
+              helperText={errors.memberType}
+              fullWidth
+            />
+          </ErrorSelectWrapper>
         </FieldBlock>
 
         <FieldBlock>

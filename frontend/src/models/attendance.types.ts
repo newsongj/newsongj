@@ -15,6 +15,9 @@ export interface AttendanceMemberRow {
   member_id: number;
   name: string;
   generation: number;
+  gyogu: number;
+  team: number;
+  group_no: number;
   leader_names: string[];
   status: AttendanceStatus;
   absent_reason: AbsentReason | null;

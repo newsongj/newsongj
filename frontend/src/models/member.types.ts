@@ -13,11 +13,11 @@ export interface MemberRow {
   member_type: string | null;
   attendance_grade: string | null;
   plt_status: string | null;
-  leader_ids: string | null;
+  leader_names: string[];
   v8pid: string | null;
   school_work: string | null;
   major: string | null;
-  year: string | null;
+  updated_at: string | null;
   enrolled_at: string | null;
 }
 

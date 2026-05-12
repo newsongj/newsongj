@@ -22,6 +22,7 @@ export const useMembers = () => {
   const [filters, setFilters] = useState<MemberFilterState>(INITIAL_FILTERS);
   const [searchField, setSearchField] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const _fetch = useCallback(async (
     currentPage: number,
@@ -31,6 +32,7 @@ export const useMembers = () => {
     keyword: string,
   ) => {
     setMembersData(prev => ({ ...prev, loading: true }));
+    setError(null);
     try {
       const params: Parameters<typeof fetchMembers>[0] = {
         page: currentPage + 1,
@@ -52,7 +54,8 @@ export const useMembers = () => {
         loading: false,
         pagination: res.meta,
       });
-    } catch {
+    } catch (err: any) {
+      setError(err?.message || null);
       setMembersData(prev => ({ ...prev, loading: false }));
     }
   }, [setMembersData]);
@@ -98,6 +101,7 @@ export const useMembers = () => {
     page,
     rowsPerPage,
     filters,
+    error,
     loadMembers,
     handlePageChange,
     handleRowsPerPageChange,

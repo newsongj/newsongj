@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useRecoilState } from 'recoil';
 import { fetchNewcomers } from '@/api/newcomer';
 import { MemberFilterState } from '@/models/member.types';
-import { membersState, selectedMemberIdsState } from '@/recoil/member/atoms';
+import { newcomersState, selectedNewcomerIdsState } from '@/recoil/member/atoms';
 
 const INITIAL_FILTERS: MemberFilterState = {
   year: `${new Date().getFullYear()}년`,
@@ -13,14 +13,15 @@ const INITIAL_FILTERS: MemberFilterState = {
 };
 
 export const useNewcomers = () => {
-  const [membersData, setMembersData] = useRecoilState(membersState);
-  const [selectedIds, setSelectedIds] = useRecoilState(selectedMemberIdsState);
+  const [membersData, setMembersData] = useRecoilState(newcomersState);
+  const [selectedIds, setSelectedIds] = useRecoilState(selectedNewcomerIdsState);
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [filters, setFilters] = useState<MemberFilterState>(INITIAL_FILTERS);
   const [searchField, setSearchField] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPage = useCallback(async (
     currentPage: number,
@@ -30,6 +31,7 @@ export const useNewcomers = () => {
     keyword: string,
   ) => {
     setMembersData(prev => ({ ...prev, loading: true }));
+    setError(null);
     try {
       const params: Parameters<typeof fetchNewcomers>[0] = {
         page: currentPage + 1,
@@ -52,7 +54,8 @@ export const useNewcomers = () => {
         loading: false,
         pagination: res.meta,
       });
-    } catch {
+    } catch (err: any) {
+      setError(err?.message || null);
       setMembersData(prev => ({ ...prev, loading: false }));
     }
   }, [setMembersData]);
@@ -98,6 +101,7 @@ export const useNewcomers = () => {
     page,
     rowsPerPage,
     filters,
+    error,
     loadMembers,
     handlePageChange,
     handleRowsPerPageChange,
