@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.date_utils import is_saturday
 from app.core.database import get_db
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard import build_dashboard_response
@@ -47,7 +48,7 @@ def _resolve_period(
             d = datetime.datetime.strptime(date, "%Y-%m-%d").date()
         except ValueError:
             raise HTTPException(422, "weekly: date는 YYYY-MM-DD 형식이어야 합니다 (예: 2026-01-03).")
-        if d.weekday() != 5:
+        if not is_saturday(d):
             raise HTTPException(422, "weekly: date는 토요일이어야 합니다 (예: 2026-01-03).")
         trend_start = d - datetime.timedelta(weeks=_TREND_LOOKBACK_WEEKS - 1)
         return (d, d), (trend_start, d)

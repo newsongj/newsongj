@@ -46,14 +46,18 @@ def compute_grade(rate: Decimal) -> str:
 
 # ── DB 조회 ────────────────────────────────
 def _count_present_with_member_start(
-    db: Session, member_ids: list[int], end: datetime.date,
+    db: Session, member_ids: list[int], start: datetime.date, end: datetime.date,
 ) -> dict[int, int]:
     """멤버별 enrolled_at 이상 ~ end 이하 PRESENT 수. (N <= 52 케이스)"""
+    saturdays = saturdays_between(start, end)
+    if not saturdays:
+        return {}
     q = (
         db.query(AttendanceRecord.member_id,
                  func.count(AttendanceRecord.attendance_id))
         .join(Member, Member.member_id == AttendanceRecord.member_id)
         .filter(AttendanceRecord.worship_date >= func.date(Member.enrolled_at))
+        .filter(AttendanceRecord.worship_date.in_(saturdays))
     )
     q = by_status(q, "PRESENT")
     q = by_worship_date_lte(q, end)
@@ -65,10 +69,14 @@ def _count_present_in_window(
     db: Session, member_ids: list[int], start: datetime.date, end: datetime.date,
 ) -> dict[int, int]:
     """고정 [start, end] 구간 내 PRESENT 수. (N > 52 케이스)"""
+    saturdays = saturdays_between(start, end)
+    if not saturdays:
+        return {}
     q = db.query(AttendanceRecord.member_id,
                  func.count(AttendanceRecord.attendance_id))
     q = by_status(q, "PRESENT")
     q = by_worship_date_range(q, start, end)
+    q = q.filter(AttendanceRecord.worship_date.in_(saturdays))
     q = by_member_ids(q, member_ids)
     return dict(q.group_by(AttendanceRecord.member_id).all())
 
@@ -107,7 +115,8 @@ def update_rates_for_members(
 
     present: dict[int, int] = {}
     if short_ids:
-        present.update(_count_present_with_member_start(db, short_ids, today))
+        start = min(enrolled_map[mid] for mid in short_ids)
+        present.update(_count_present_with_member_start(db, short_ids, start, today))
     if long_ids:
         window_start = nth_saturday_before(today, WINDOW)
         present.update(_count_present_in_window(db, long_ids, window_start, today))

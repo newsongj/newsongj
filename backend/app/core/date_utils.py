@@ -4,6 +4,10 @@ import datetime
 SATURDAY = 5  # datetime.date.weekday() 기준
 
 
+def is_saturday(d: datetime.date) -> bool:
+    return d.weekday() == SATURDAY
+
+
 def first_saturday_on_or_after(d: datetime.date) -> datetime.date:
     return d + datetime.timedelta(days=(SATURDAY - d.weekday()) % 7)
 

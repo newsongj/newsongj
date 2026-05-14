@@ -1,6 +1,7 @@
 from pydantic import BaseModel, model_validator
 from datetime import date
 from typing import Optional, Literal
+from app.core.date_utils import is_saturday
 from app.core.timezone import today_kst
 from app.schemas.common import PageMeta
 
@@ -25,6 +26,8 @@ class AttendanceBatchRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_request(self) -> "AttendanceBatchRequest":
+        if not is_saturday(self.worship_date):
+            raise ValueError("worship_date는 토요일이어야 합니다.")
         if self.worship_date > today_kst():
             raise ValueError("worship_date는 미래 날짜를 허용하지 않습니다.")
         ids = [r.member_id for r in self.records]
