@@ -17,6 +17,7 @@
 import datetime
 from sqlalchemy.orm import Session, Query
 from sqlalchemy import func, and_, or_
+from app.core.date_utils import saturdays_between
 from app.models import Member, MemberProfile, Leader, AttendanceRecord
 
 
@@ -388,11 +389,13 @@ def get_worship_dates_in_range(
     end_date: datetime.date,
 ) -> list[datetime.date]:
     """기간 내 예배 날짜 목록 (attendance_record 기준, 오름차순)."""
+    saturdays = saturdays_between(start_date, end_date)
+    if not saturdays:
+        return []
     rows = (
         db.query(AttendanceRecord.worship_date)
         .filter(
-            AttendanceRecord.worship_date >= start_date,
-            AttendanceRecord.worship_date <= end_date,
+            AttendanceRecord.worship_date.in_(saturdays),
         )
         .distinct()
         .order_by(AttendanceRecord.worship_date)
@@ -461,6 +464,7 @@ def build_attendance_records_range_query(
     대시보드 집계처럼 기간 단위로 record를 한번에 조회할 때 사용.
     날짜별 루프 + build_attendance_records_query 호출 패턴(N+1)을 대체한다.
     """
+    saturdays = saturdays_between(start_date, end_date)
     ranked = (
         db.query(
             AttendanceRecord.attendance_id.label("aid"),
@@ -477,7 +481,7 @@ def build_attendance_records_range_query(
             MemberProfile.member_id == AttendanceRecord.member_id,
             MemberProfile.updated_at <= AttendanceRecord.worship_date,
         ))
-        .filter(AttendanceRecord.worship_date.between(start_date, end_date))
+        .filter(AttendanceRecord.worship_date.in_(saturdays))
         .subquery()
     )
 

@@ -1,10 +1,11 @@
 """출석 기록 API"""
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
 
 from app.core.database import get_db
+from app.core.date_utils import is_saturday
 from app.schemas.attendance import AttendanceBatchRequest, AttendanceBatchResponse, AttendanceListResponse
 from app.services.attendance import build_attendance_list_response, save_attendance_batch
 
@@ -26,6 +27,8 @@ def list_attendance_records(
     page_size: int = Query(20, description="페이지당 건수"),
     db: Session = Depends(get_db),
 ):
+    if not is_saturday(worship_date):
+        raise HTTPException(422, "worship_date는 토요일이어야 합니다.")
     return build_attendance_list_response(
         db, worship_date, gyogu_no, team_no, group_no, is_imwondan, page, page_size,
     )
