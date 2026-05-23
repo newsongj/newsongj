@@ -116,7 +116,6 @@ def get_dashboard(
     end_date: Optional[datetime.date] = Query(None, description="custom 전용 (YYYY-MM-DD)"),
     gyogu_no: Optional[int] = Query(None, description="교구 번호 (미지정 시 전체)"),
     team_no: Optional[int] = Query(None, description="팀 번호 (gyogu_no와 함께만 지정 가능)"),
-    is_imwondan: bool = Query(False, description="임원단 포함 여부 (기본 false=제외, true=포함)"),
     db: Session = Depends(get_db),
 ):
     # 필터 조합 검증
@@ -134,5 +133,4 @@ def get_dashboard(
         trend_end=trend_range[1],
         gyogu_no=gyogu_no,
         team_no=team_no,
-        is_imwondan=is_imwondan,
     )

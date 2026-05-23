@@ -14,6 +14,7 @@ from app.crud.leaders import get_leader_map
 from app.crud.attendance import (
     get_attendance_records as crud_get_attendance_records,
     upsert_attendance_batch as crud_upsert_attendance_batch,
+    upsert_newcomer_attendance_batch as crud_upsert_newcomer_attendance_batch,
 )
 from app.services.members import resolve_leader_names
 
@@ -49,13 +50,12 @@ def build_attendance_list_response(
     gyogu_no: int,
     team_no: Optional[int],
     group_no: Optional[int],
-    is_imwondan: bool,
     page: int,
     page_size: int,
 ) -> AttendanceListResponse:
     """출석 목록 조회 + 응답 조립."""
     rows, total = crud_get_attendance_records(
-        db, worship_date, gyogu_no, team_no, group_no, is_imwondan, page, page_size,
+        db, worship_date, gyogu_no, team_no, group_no, page, page_size,
     )
     return build_attendance_list(rows, total, page, page_size, db)
 
@@ -63,4 +63,10 @@ def build_attendance_list_response(
 def save_attendance_batch(db: Session, body: AttendanceBatchRequest) -> AttendanceBatchResponse:
     """출석 일괄 upsert. 잘못된 member_id / enrolled_at은 예외로 전파."""
     saved = crud_upsert_attendance_batch(db, body)
+    return AttendanceBatchResponse(saved_count=saved)
+
+
+def save_newcomer_attendance_batch(db: Session, body: AttendanceBatchRequest) -> AttendanceBatchResponse:
+    """미등반 새가족 출석 일괄 upsert. 일반 출석률은 갱신하지 않는다."""
+    saved = crud_upsert_newcomer_attendance_batch(db, body)
     return AttendanceBatchResponse(saved_count=saved)

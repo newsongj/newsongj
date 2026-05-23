@@ -36,13 +36,11 @@ def _fetch_filtered_records_and_dates(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> tuple[list, list[datetime.date]]:
     """기간 내 필터 적용된 출석 record + 예배일 list를 반환.
 
     반환:
         rows  — 필터 적용된 (AttendanceRecord, Member, MemberProfile) 튜플 list.
-                apply_attendance_filters가 None을 반환하면 빈 list.
         dates — 기간 내 예배일 list (필터 무관, n = len(dates) 계산용).
 
     SQL 회수: 2 (예배일 distinct + ranged record query).
@@ -50,8 +48,8 @@ def _fetch_filtered_records_and_dates(
     """
     dates = get_worship_dates_in_range(db, start_date, end_date)
     q = build_attendance_records_range_query(db, start_date, end_date)
-    q = apply_attendance_filters(q, db, gyogu_no, team_no, is_imwondan)
-    rows = [] if q is None else q.all()
+    q = apply_attendance_filters(q, gyogu_no, team_no)
+    rows = q.all()
     return rows, dates
 
 
@@ -61,7 +59,6 @@ def get_kpi_stats(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict | None:
     """기간 내 예배별 출석 통계를 집계해 KPI 원시 데이터 반환.
 
@@ -72,7 +69,7 @@ def get_kpi_stats(
         dict  — n, total_present, total_members, gen_stats, reason_counter
     """
     rows, dates = _fetch_filtered_records_and_dates(
-        db, start_date, end_date, gyogu_no, team_no, is_imwondan
+        db, start_date, end_date, gyogu_no, team_no
     )
     if not dates:
         return None
@@ -118,7 +115,6 @@ def get_trend_stats(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict[datetime.date, int]:
     """기간 내 예배일별 출석 인원 수를 {worship_date: present_count} 딕셔너리로 반환.
 
@@ -128,9 +124,7 @@ def get_trend_stats(
     result: dict[datetime.date, int] = {d: 0 for d in dates}
 
     base = build_attendance_records_range_query(db, start_date, end_date)
-    base = apply_attendance_filters(base, db, gyogu_no, team_no, is_imwondan)
-    if base is None:
-        return result
+    base = apply_attendance_filters(base, gyogu_no, team_no)
 
     agg = (
         base.with_entities(
@@ -192,7 +186,6 @@ def _dimension_stats_sql(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict:
     """team/generation/gender 차원: SQL GROUP BY로 한 방에 카운트.
 
@@ -202,9 +195,7 @@ def _dimension_stats_sql(
     buckets: dict[str, list[int]] = {k: [0] for k in keys}
 
     base = build_attendance_records_range_query(db, start_date, end_date)
-    base = apply_attendance_filters(base, db, gyogu_no, team_no, is_imwondan)
-    if base is None:
-        return {"n": len(dates), "buckets": buckets, "keys": keys}
+    base = apply_attendance_filters(base, gyogu_no, team_no)
 
     if dimension == "team":
         group_col = MemberProfile.team
@@ -242,14 +233,13 @@ def _dimension_stats_python(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict:
     """gyogu(임원단 포함)/leader 차원: leader_ids JSON 파싱이 필요해 raw fetch 후 Python 집계.
 
     buckets[key]는 날짜별 카운트 list (기존 동작 보존).
     """
     rows, dates = _fetch_filtered_records_and_dates(
-        db, start_date, end_date, gyogu_no, team_no, is_imwondan
+        db, start_date, end_date, gyogu_no, team_no
     )
     by_date: dict[datetime.date, dict[str, int]] = {
         d: {k: 0 for k in keys} for d in dates
@@ -292,7 +282,6 @@ def get_dimension_stats(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict:
     """dimension별 예배일당 출석 인원을 집계.
 
@@ -311,13 +300,13 @@ def get_dimension_stats(
 
     if dimension in ("team", "generation", "gender"):
         return _dimension_stats_sql(
-            db, dimension, keys, start_date, end_date, gyogu_no, team_no, is_imwondan
+            db, dimension, keys, start_date, end_date, gyogu_no, team_no
         )
 
     if dimension in ("gyogu", "leader"):
         return _dimension_stats_python(
             db, dimension, keys, imwondan_lid, leader_id_map,
-            start_date, end_date, gyogu_no, team_no, is_imwondan,
+            start_date, end_date, gyogu_no, team_no,
         )
 
     # 알 수 없는 dimension — 빈 결과
@@ -335,7 +324,6 @@ def get_absent_reason_stats(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> dict:
     """기간 내 결석 사유 카운트 집계 (SQL GROUP BY).
 
@@ -347,9 +335,7 @@ def get_absent_reason_stats(
     buckets: dict[str, list[int]] = {r: [0] for r in ABSENT_REASONS}
 
     base = build_attendance_records_range_query(db, start_date, end_date)
-    base = apply_attendance_filters(base, db, gyogu_no, team_no, is_imwondan)
-    if base is None:
-        return {"n": len(dates), "buckets": buckets}
+    base = apply_attendance_filters(base, gyogu_no, team_no)
 
     agg = (
         base.with_entities(
@@ -376,7 +362,6 @@ def get_gyogu_status_stats(
     start_date: datetime.date,
     end_date: datetime.date,
     gyogu_no: int | None,
-    is_imwondan: bool,
 ) -> dict:
     """교구별 예배일당 출석/결석 인원 집계.
 
@@ -386,7 +371,7 @@ def get_gyogu_status_stats(
     imwondan_lid = get_leader_id(db, "임원단")
 
     rows, dates = _fetch_filtered_records_and_dates(
-        db, start_date, end_date, gyogu_no, None, is_imwondan
+        db, start_date, end_date, gyogu_no, None
     )
 
     by_date_present: dict[datetime.date, dict[str, int]] = {

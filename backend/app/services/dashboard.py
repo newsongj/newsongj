@@ -21,9 +21,8 @@ def build_kpi_response(
     end_date,
     gyogu_no: int | None,
     team_no,
-    is_imwondan: bool,
 ) -> KpiResponse:
-    stats = get_kpi_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    stats = get_kpi_stats(db, start_date, end_date, gyogu_no, team_no)
 
     if stats is None:
         return KpiResponse(
@@ -65,9 +64,8 @@ def build_trend_response(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> list[TrendItem]:
-    date_present = get_trend_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    date_present = get_trend_stats(db, start_date, end_date, gyogu_no, team_no)
 
     if period_unit == "weekly":
         # 기간 내 모든 토요일 생성, 데이터 없으면 0
@@ -118,9 +116,8 @@ def build_dimension_response(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> list[DimensionItem]:
-    stats = get_dimension_stats(db, dimension, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    stats = get_dimension_stats(db, dimension, start_date, end_date, gyogu_no, team_no)
     n = stats["n"]
 
     return [
@@ -138,9 +135,8 @@ def build_absent_reason_response(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> list[AbsentReasonItem]:
-    stats = get_absent_reason_stats(db, start_date, end_date, gyogu_no, team_no, is_imwondan)
+    stats = get_absent_reason_stats(db, start_date, end_date, gyogu_no, team_no)
     n = stats["n"]
 
     return [
@@ -161,7 +157,6 @@ def build_dashboard_response(
     trend_end: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> DashboardResponse:
     """대시보드 5개 섹션 통합 응답.
 
@@ -169,27 +164,27 @@ def build_dashboard_response(
     trend 범위: trend만 사용하는 lookback 범위 (weekly:12주, monthly:6달, yearly:3년, custom:동일).
     """
     # 1. KPI
-    kpi = build_kpi_response(db, main_start, main_end, gyogu_no, team_no, is_imwondan)
+    kpi = build_kpi_response(db, main_start, main_end, gyogu_no, team_no)
 
     # 2. Trend — custom은 주별 점으로 표시
     trend_unit = "weekly" if period_unit == "custom" else period_unit
     trend = build_trend_response(
-        db, trend_unit, trend_start, trend_end, gyogu_no, team_no, is_imwondan
+        db, trend_unit, trend_start, trend_end, gyogu_no, team_no
     )
 
     # 3. Dimension — 어떤 차원을 포함할지는 헬퍼에서 결정
     dimension = _build_dimension_breakdown(
-        db, main_start, main_end, gyogu_no, team_no, is_imwondan
+        db, main_start, main_end, gyogu_no, team_no
     )
 
     # 4. Absent reason
     absent_reason = build_absent_reason_response(
-        db, main_start, main_end, gyogu_no, team_no, is_imwondan
+        db, main_start, main_end, gyogu_no, team_no
     )
 
     # 5. Gyogu status — team_no는 의미 없으므로 전달하지 않음
     gyogu_status = build_gyogu_status_response(
-        db, main_start, main_end, gyogu_no, is_imwondan
+        db, main_start, main_end, gyogu_no
     )
 
     return DashboardResponse(
@@ -207,7 +202,6 @@ def _build_dimension_breakdown(
     end_date: datetime.date,
     gyogu_no: int | None,
     team_no: int | None,
-    is_imwondan: bool,
 ) -> DimensionBreakdown:
     """필터 조합에 따라 어떤 차원을 포함할지 결정 (포함 규칙 한 곳에 집중).
 
@@ -225,7 +219,7 @@ def _build_dimension_breakdown(
     }
     sections = {
         name: build_dimension_response(
-            db, name, start_date, end_date, gyogu_no, team_no, is_imwondan,
+            db, name, start_date, end_date, gyogu_no, team_no,
         )
         for name, include in rules.items() if include
     }
@@ -237,9 +231,8 @@ def build_gyogu_status_response(
     start_date: datetime.date,
     end_date: datetime.date,
     gyogu_no: int | None,
-    is_imwondan: bool,
 ) -> list[GyoguStatusItem]:
-    stats = get_gyogu_status_stats(db, start_date, end_date, gyogu_no, is_imwondan)
+    stats = get_gyogu_status_stats(db, start_date, end_date, gyogu_no)
     n = stats["n"]
 
     return [

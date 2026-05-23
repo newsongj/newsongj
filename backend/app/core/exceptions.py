@@ -49,3 +49,11 @@ class InvalidEnrolledError(ConflictError):
     def __init__(self, ids: list[int]):
         self.ids = ids
         super().__init__(f"등록일이 없거나 미래인 멤버: {ids}")
+
+
+class InvalidNewcomerAttendanceIdsError(ConflictError):
+    """미등반 새가족 출석 저장 대상이 아닌 멤버 ID 목록 포함."""
+
+    def __init__(self, ids: list[int]):
+        self.ids = ids
+        super().__init__(f"미등반 새가족이 아닌 멤버입니다: {ids}")
