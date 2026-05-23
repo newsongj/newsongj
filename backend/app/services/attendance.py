@@ -38,7 +38,7 @@ def _to_item(member, profile, record, leader_map) -> AttendanceMemberItem:
         team=profile.team,
         group_no=profile.group_no,
         leader_names=resolve_leader_names(profile.leader_ids, leader_map),
-        status=record.status if record else "ABSENT",
+        status=record.status if record else None,
         absent_reason=record.absent_reason if record else None,
     )
 
