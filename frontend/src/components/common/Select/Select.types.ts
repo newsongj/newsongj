@@ -6,7 +6,7 @@ export type SelectVariant = 'outlined' | 'filled';
 
 export interface SelectOption {
   value: string | number;
-  label: string;
+  label: string | ReactNode;
   disabled?: boolean;
   icon?: ReactNode;
 }

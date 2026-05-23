@@ -21,7 +21,7 @@ import {
   parseDateKey,
 } from '@/utils/kstDate';
 
-type AttendanceStatus = 'PRESENT' | 'ABSENT';
+type AttendanceStatus = 'PRESENT' | 'ABSENT' | null;
 
 interface AttendanceRow {
   memberId: number;
@@ -44,18 +44,20 @@ interface FilterState {
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const STATUS_OPTIONS = [
-  { value: 'PRESENT', label: '✓ 출석' },
-  { value: 'ABSENT',  label: '✕ 결석' },
+  { value: '', label: '선택' },
+  { value: 'PRESENT', label: <span style={{ color: '#52c41a', fontWeight: 600 }}>✓ 출석</span> },
+  { value: 'ABSENT',  label: <span style={{ color: '#ff4d4f', fontWeight: 600 }}>✕ 결석</span> },
 ];
 
 const ABSENT_REASON_OPTIONS = [
-  { value: '', label: '사유 없음' },
+  { value: '', label: '사유 선택' },
   { value: '학교/학원', label: '학교/학원' },
   { value: '회사', label: '회사' },
   { value: '알바', label: '알바' },
   { value: '가족모임', label: '가족모임' },
   { value: '개인일정', label: '개인일정' },
   { value: '아픔', label: '아픔' },
+  { value: '사유 모름', label: '사유 모름' },
   { value: '기타', label: '기타' },
 ];
 
@@ -261,6 +263,7 @@ const AttendancePage: React.FC = () => {
   const [filters, setFilters] = useState<FilterState>({ gyogu: '', team: '', groupNo: '' });
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [changesMap, setChangesMap] = useState<Map<number, { status: AttendanceStatus; absentReason: AbsentReason | null }>>(new Map());
+  const [showAbsentReasonPopup, setShowAbsentReasonPopup] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
@@ -320,14 +323,11 @@ const AttendancePage: React.FC = () => {
     }
 
     const gyogu_no = filters.gyogu !== '임원단' ? Number(filters.gyogu) : 0;
-    const is_imwondan = filters.gyogu === '임원단';
-
     fetchAttendanceRecords({
       worship_date: worshipDate,
       gyogu_no,
       team_no: filters.team ? Number(filters.team) : undefined,
       group_no: filters.groupNo ? Number(filters.groupNo) : undefined,
-      is_imwondan,
       page: page + 1,
       page_size: rowsPerPage,
     })
@@ -348,6 +348,7 @@ const AttendancePage: React.FC = () => {
 
   const pagedRows = rows;
   const presentCount = useMemo(() => rows.filter((row) => row.status === 'PRESENT').length, [rows]);
+  const absentCount = useMemo(() => rows.filter((row) => row.status === 'ABSENT').length, [rows]);
 
   const updateRow = useCallback((memberId: number, field: 'status' | 'absentReason', value: string | null) => {
     const current = rowsRef.current.find((r) => r.memberId === memberId);
@@ -355,7 +356,7 @@ const AttendancePage: React.FC = () => {
 
     const updated: AttendanceRow =
       field === 'status'
-        ? { ...current, status: value as AttendanceStatus, absentReason: value === 'PRESENT' ? null : current.absentReason }
+        ? { ...current, status: (value === '' ? null : value) as AttendanceStatus, absentReason: value === 'PRESENT' ? null : current.absentReason }
         : { ...current, absentReason: (value === '' ? null : value) as AbsentReason };
 
     setRows((prev) => prev.map((r) => (r.memberId === memberId ? updated : r)));
@@ -394,14 +395,22 @@ const AttendancePage: React.FC = () => {
   }, [confirmDiscard]);
 
   const handleSave = useCallback(async () => {
+    const hasAbsentWithoutReason = Array.from(changesMap.values()).some(
+      (c) => c.status === 'ABSENT' && !c.absentReason
+    );
+    if (hasAbsentWithoutReason) {
+      setShowAbsentReasonPopup(true);
+      return;
+    }
+
     setIsSaving(true);
 
     try {
       const records = Array.from(changesMap.entries())
-        .filter(([, c]) => c.status === 'PRESENT' || c.absentReason !== null)
+        .filter(([, c]) => c.status !== null)
         .map(([memberId, c]) => ({
           member_id: memberId,
-          status: c.status,
+          status: c.status as 'PRESENT' | 'ABSENT',
           absent_reason: c.status === 'ABSENT' ? (c.absentReason as AbsentReason) : null,
         }));
 
@@ -505,7 +514,7 @@ const AttendancePage: React.FC = () => {
         align: 'center',
         render: (_value, row) => (
           <Select
-            value={row.status}
+            value={row.status ?? ''}
             options={STATUS_OPTIONS}
             onChange={(value) => updateRow(row.memberId, 'status', String(value))}
             width={130}
@@ -522,7 +531,7 @@ const AttendancePage: React.FC = () => {
             value={row.absentReason ?? ''}
             options={ABSENT_REASON_OPTIONS}
             onChange={(value) => updateRow(row.memberId, 'absentReason', value === '' ? null : String(value))}
-            disabled={row.status === 'PRESENT'}
+            disabled={row.status !== 'ABSENT'}
             width={155}
           />
         ),
@@ -634,7 +643,7 @@ const AttendancePage: React.FC = () => {
           />
           <SaveFooter>
             <CountLabel>
-              총 {totalCount}명 | 출석 {presentCount}명 | 결석 {rows.length - presentCount}명
+              총 {totalCount}명 | <span style={{ color: '#52c41a', fontWeight: 600 }}>출석 {presentCount}명</span> | <span style={{ color: '#ff4d4f', fontWeight: 600 }}>결석 {absentCount}명</span>
             </CountLabel>
             <Button variant="filled" onClick={handleSave} disabled={!isDirty || isSaving}>
               {isSaving ? '저장 중...' : '저장'}
@@ -660,6 +669,17 @@ const AttendancePage: React.FC = () => {
         />
       )}
 
+
+      {showAbsentReasonPopup && (
+        <Popup
+          title="결석사유 미입력"
+          description="결석으로 표시된 인원의 결석사유를 선택해주세요."
+          onCancel={() => setShowAbsentReasonPopup(false)}
+          onConfirm={() => setShowAbsentReasonPopup(false)}
+          cancelButtonText="닫기"
+          confirmButtonText="확인"
+        />
+      )}
 
       <Snackbar
         open={snackbar.open}

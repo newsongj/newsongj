@@ -9,6 +9,7 @@ export type AbsentReason =
   | '가족모임'
   | '개인일정'
   | '아픔'
+  | '사유 모름'
   | '기타';
 
 export interface AttendanceMemberRow {
@@ -19,7 +20,7 @@ export interface AttendanceMemberRow {
   team: number;
   group_no: number;
   leader_names: string[];
-  status: AttendanceStatus;
+  status: AttendanceStatus | null;
   absent_reason: AbsentReason | null;
 }
 
@@ -50,8 +51,6 @@ export interface AttendanceBatchResponse {
 
 export type AttendancePageResponse = Page<AttendanceMemberRow>;
 
-// ── Dashboard types ────────────────────────────────────────────────────────
-
 export interface TrendItem {
   period: string;
   date: string;
@@ -78,12 +77,11 @@ export type DashboardPeriodUnit = 'weekly' | 'monthly' | 'yearly' | 'custom';
 
 export interface DashboardQuery {
   period_unit: DashboardPeriodUnit;
-  date?: string;        // weekly: YYYY-MM-DD / monthly: YYYY-MM / yearly: YYYY
-  start_date?: string;  // custom 전용
-  end_date?: string;    // custom 전용
+  date?: string;
+  start_date?: string;
+  end_date?: string;
   gyogu_no?: number;
   team_no?: number;
-  is_imwondan?: boolean;
 }
 
 export interface DashboardResponse {

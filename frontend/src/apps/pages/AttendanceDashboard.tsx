@@ -64,7 +64,6 @@ const GYOGU_OPTIONS = [
   { value: '1',     label: '1교구' },
   { value: '2',     label: '2교구' },
   { value: '3',     label: '3교구' },
-  { value: '임원단', label: '임원단' },
 ];
 
 const TEAM_OPTIONS = [
@@ -348,10 +347,9 @@ const AttendanceDashboard: React.FC = () => {
   const dashboardQuery = useMemo((): DashboardQuery | null => {
     if (periodUnit === '3years') return null;
 
-    const gyogu_no = gyogu && gyogu !== '임원단' ? Number(gyogu) : undefined;
-    const is_imwondan = gyogu === '임원단' ? true : undefined;
+    const gyogu_no = gyogu ? Number(gyogu) : undefined;
     const team_no = team ? Number(team) : undefined;
-    const base = { gyogu_no, team_no, is_imwondan };
+    const base = { gyogu_no, team_no };
 
     if (periodUnit === 'custom') {
       if (!customStart || !customEnd) return null;
@@ -537,7 +535,7 @@ const AttendanceDashboard: React.FC = () => {
             value={team}
             options={TEAM_OPTIONS}
             onChange={(v) => setTeam(String(v))}
-            disabled={!gyogu || gyogu === '임원단'}
+            disabled={!gyogu}
             width={100}
           />
         </FilterField>

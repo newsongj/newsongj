@@ -50,7 +50,7 @@ class AttendanceMemberItem(BaseModel):
     team: int
     group_no: int
     leader_names: list[str]  # 리더 이름 배열 (예: ["팀장", "구역장"]), 없으면 []
-    status: Literal["PRESENT", "ABSENT"] = "ABSENT"  # 기록 없으면 ABSENT
+    status: Optional[Literal["PRESENT", "ABSENT"]] = None  # 기록 없으면 None
     absent_reason: Optional[Literal["학교/학원", "회사", "알바", "가족모임", "개인일정", "아픔", "기타"]] = None
 
 
