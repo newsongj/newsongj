@@ -8,13 +8,53 @@ from app.crud.query_builders import (
     by_group_no,
     apply_attendance_filters,
     exclude_newcomers,
+    unenrolled_newcomers_as_of,
     _latest_as_of_sq,
     _latest_profile_id_sq,
 )
 from app.crud.attendance_rate import update_rates_for_members
 from app.core.timezone import now_kst, today_kst
-from app.core.exceptions import InvalidMemberIdsError, InvalidEnrolledError  # noqa: F401  (재export — 하위호환)
+from app.core.exceptions import (  # noqa: F401  (재export — 하위호환)
+    InvalidEnrolledError,
+    InvalidMemberIdsError,
+    InvalidNewcomerAttendanceIdsError,
+)
 import datetime
+
+
+def _upsert_attendance_records(db: Session, req: AttendanceBatchRequest, valid_ids: set[int]) -> int:
+    if not valid_ids:
+        return 0
+
+    existing_map: dict[int, AttendanceRecord] = {
+        r.member_id: r
+        for r in db.query(AttendanceRecord).filter(
+            AttendanceRecord.member_id.in_(valid_ids),
+            AttendanceRecord.worship_date == req.worship_date,
+        ).all()
+    }
+
+    saved_count = 0
+    for item in req.records:
+        existing = existing_map.get(item.member_id)
+
+        if existing is None:
+            db.add(AttendanceRecord(
+                worship_date=req.worship_date,
+                member_id=item.member_id,
+                status=item.status,
+                absent_reason=item.absent_reason,
+                checked_at=now_kst(),
+            ))
+            saved_count += 1
+        elif existing.status != item.status or existing.absent_reason != item.absent_reason:
+            existing.status = item.status
+            existing.absent_reason = item.absent_reason
+            existing.checked_at = now_kst()
+            saved_count += 1
+
+    db.flush()
+    return saved_count
 
 
 def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
@@ -46,39 +86,37 @@ def upsert_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
     if bad_enrolled:
         raise InvalidEnrolledError(sorted(bad_enrolled))
 
-    # 기존 레코드 일괄 조회 — N+1 방지
-    existing_map: dict[int, AttendanceRecord] = {
-        r.member_id: r
-        for r in db.query(AttendanceRecord).filter(
-            AttendanceRecord.member_id.in_(valid_ids),
-            AttendanceRecord.worship_date == req.worship_date,
+    saved_count = _upsert_attendance_records(db, req, valid_ids)
+    update_rates_for_members(db, valid_map, today)
+
+    db.commit()
+    return saved_count
+
+
+def upsert_newcomer_attendance_batch(db: Session, req: AttendanceBatchRequest) -> int:
+    request_ids = {item.member_id for item in req.records}
+
+    max_year_sq = _latest_as_of_sq(db, req.worship_date)
+    latest_sq = _latest_profile_id_sq(db, max_year_sq)
+    base_q = (
+        db.query(Member.member_id)
+        .join(latest_sq, latest_sq.c.member_id == Member.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_profile_id)
+        .filter(Member.member_id.in_(request_ids))
+    )
+    valid_ids = {
+        row.member_id
+        for row in unenrolled_newcomers_as_of(
+            active_as_of(base_q, req.worship_date),
+            req.worship_date,
         ).all()
     }
 
-    saved_count = 0
+    invalid_ids = request_ids - valid_ids
+    if invalid_ids:
+        raise InvalidNewcomerAttendanceIdsError(sorted(invalid_ids))
 
-    for item in req.records:
-        existing = existing_map.get(item.member_id)
-
-        if existing is None:
-            db.add(AttendanceRecord(
-                worship_date=req.worship_date,
-                member_id=item.member_id,
-                status=item.status,
-                absent_reason=item.absent_reason,
-                checked_at=now_kst(),
-            ))
-            saved_count += 1
-
-        elif existing.status != item.status or existing.absent_reason != item.absent_reason:
-            existing.status = item.status
-            existing.absent_reason = item.absent_reason
-            existing.checked_at = now_kst()
-            saved_count += 1
-
-    db.flush()
-    update_rates_for_members(db, valid_map, today)
-
+    saved_count = _upsert_attendance_records(db, req, valid_ids)
     db.commit()
     return saved_count
 
@@ -89,7 +127,6 @@ def get_attendance_records(
     gyogu_no: int,
     team_no: int | None = None,
     group_no: int | None = None,
-    is_imwondan: bool = False,
     page: int = 1,
     size: int = 20,
 ) -> tuple[list, int]:
@@ -99,9 +136,7 @@ def get_attendance_records(
     - (Member, MemberProfile, AttendanceRecord|None) 튜플 목록 반환
     """
     query = build_members_as_of_query(db, worship_date)
-    query = apply_attendance_filters(query, db, gyogu_no, team_no, is_imwondan)
-    if query is None:
-        return [], 0
+    query = apply_attendance_filters(query, gyogu_no, team_no)
     if group_no is not None:
         query = by_group_no(query, group_no)
 
