@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { IconButton } from '@mui/material';
 import { TextField } from '@components/common/TextField';
 import { Checkbox } from '@components/common/Checkbox';
 import { Button } from '@components/common/Button';
@@ -15,6 +16,7 @@ interface VehicleTypeConfig {
 }
 
 interface RetreatCreateForm {
+  retreatName: string;
   startDate: string;
   endDate: string;
   busFare: string;
@@ -31,6 +33,7 @@ const VEHICLE_TYPE_LABELS: Record<VehicleTypeKey, string> = {
 };
 
 const DEFAULT_FORM: RetreatCreateForm = {
+  retreatName: '',
   startDate: '',
   endDate: '',
   busFare: '',
@@ -59,6 +62,7 @@ const FormSection = styled('section')(({ theme }) => ({
   border: `1px solid ${theme.custom.colors.primary.outline}`,
   borderRadius: theme.custom.borderRadius,
   boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
+  '@media (max-width: 600px)': { padding: theme.custom.spacing.md },
 }));
 
 const SectionTitle = styled('h3')(({ theme }) => ({
@@ -82,7 +86,10 @@ const VehicleCardList = styled('div')(({ theme }) => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: theme.custom.spacing.md,
-  '@media (max-width: 1100px)': {
+  '@media (max-width: 900px)': {
+    gridTemplateColumns: 'repeat(2, 1fr)',
+  },
+  '@media (max-width: 600px)': {
     gridTemplateColumns: '1fr',
   },
 }));
@@ -121,6 +128,22 @@ const TimeRow = styled('div')(({ theme }) => ({
   gridTemplateColumns: '1fr auto',
   gap: theme.custom.spacing.sm,
   alignItems: 'center',
+  '& > *:first-child': { minWidth: 0 },
+}));
+
+const DeleteIconButton = styled(IconButton)(({ theme }) => ({
+  width: 40,
+  height: 40,
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: '100px',
+  color: theme.custom.colors.primary._500,
+  flexShrink: 0,
+  '& svg': { width: 18, height: 18 },
+  '&:hover': { backgroundColor: 'rgba(24, 126, 244, 0.08)' },
+  '&.Mui-disabled': {
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    color: theme.custom.colors.text.disabled,
+  },
 }));
 
 const InputsCard = styled('div')(({ theme }) => ({
@@ -149,16 +172,31 @@ const SummaryCard = styled('div')(({ theme }) => ({
 const SummaryItem = styled('div')({
   display: 'flex',
   justifyContent: 'space-between',
+  alignItems: 'baseline',
   gap: 16,
+  '@media (max-width: 480px)': {
+    flexDirection: 'column',
+    gap: 2,
+  },
 });
 
 const SummaryLabel = styled('span')(({ theme }) => ({
   color: theme.custom.colors.text.medium,
+  whiteSpace: 'nowrap',
+  '@media (max-width: 480px)': {
+    fontSize: theme.custom.typography.body2.fontSize,
+  },
 }));
 
 const SummaryValue = styled('span')(({ theme }) => ({
   color: theme.custom.colors.text.high,
   fontWeight: 600,
+  textAlign: 'right',
+  wordBreak: 'break-word',
+  '@media (max-width: 480px)': {
+    fontSize: theme.custom.typography.body2.fontSize,
+    textAlign: 'left',
+  },
 }));
 
 const formatCurrency = (raw: string) => {
@@ -242,6 +280,7 @@ const RetreatCreatePage: React.FC = () => {
       .map(([type, config]) => `${VEHICLE_TYPE_LABELS[type as VehicleTypeKey]} ${config.times.length}개`);
 
     return {
+      retreatName: form.retreatName || '-',
       period:
         form.startDate && form.endDate ? `${form.startDate} ~ ${form.endDate}` : '-',
       busFare: form.busFare ? `${form.busFare}원` : '-',
@@ -258,6 +297,7 @@ const RetreatCreatePage: React.FC = () => {
 
   const handleSave = () => {
     const payload = {
+      retreat_name: form.retreatName,
       start_date: form.startDate,
       end_date: form.endDate,
       bus_fare: Number(parseCurrency(form.busFare) || 0),
@@ -282,6 +322,15 @@ const RetreatCreatePage: React.FC = () => {
         <SectionTitle>기본 정보 입력</SectionTitle>
         <InputsCard>
           <FormGrid>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <TextField
+                label="수련회 주제명"
+                value={form.retreatName}
+                onChange={(e) => updateField('retreatName', e.target.value)}
+                fullWidth
+              />
+            </div>
+
             <TextField
               id="retreat-start-date"
               label="수련회 시작일"
@@ -366,15 +415,12 @@ const RetreatCreatePage: React.FC = () => {
                         disabled={!config.enabled}
                         fullWidth
                       />
-                      <Button
-                        variant="outlined"
+                      <DeleteIconButton
                         onClick={() => removeVehicleTime(type, index)}
                         disabled={!config.enabled || config.times.length === 1}
-                        showIcon
-                        icon={<DeleteIcon />}
                       >
-                        삭제
-                      </Button>
+                        <DeleteIcon />
+                      </DeleteIconButton>
                     </TimeRow>
                   ))}
                 </TimeList>
@@ -397,6 +443,10 @@ const RetreatCreatePage: React.FC = () => {
       <FormSection>
         <SectionTitle>설정 미리보기</SectionTitle>
         <SummaryCard>
+          <SummaryItem>
+            <SummaryLabel>수련회 주제명</SummaryLabel>
+            <SummaryValue>{summary.retreatName}</SummaryValue>
+          </SummaryItem>
           <SummaryItem>
             <SummaryLabel>기간</SummaryLabel>
             <SummaryValue>{summary.period}</SummaryValue>

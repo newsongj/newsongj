@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import { setAccessToken, getAccessToken, removeAccessToken } from '@/utils/auth';
 import { authState, userPermissionsState } from '@/recoil/auth/atoms';
-import { exchangeTicket, getMe, localLogin, changePassword as changePasswordApi, logout as logoutApi } from '@/api/auth.ts';
+import { getMe, localLogin, changePassword as changePasswordApi, logout as logoutApi } from '@/api/auth.ts';
 import { LoginRequest, LoginResponse, PasswordChangeRequest, MeResponse } from '@/models/auth.types';
 import { CommonResponse } from '@/models/common.types';
 import { APP_CONFIG } from '@/constants/config.ts';
@@ -76,38 +76,6 @@ export const useAuth = () => {
       }
     }, [setAuth, setPermissions, isBackendEnabled, applyOfflineAuth]);
 
-  const redirectToSSO = useCallback(() => {
-    if (!isBackendEnabled) {
-      return;
-    }
-
-    const finalFrontendRedirect = `${window.location.origin}/auth/exchange`;
-    const backendCallbackUrl = `${window.location.origin}/api/v1/auth/akon-login?redirect_uri=${encodeURIComponent(finalFrontendRedirect)}`;
-    const ssoUrl = `https://dwp.aekyung.kr/user/login/login.do?response_type=ezsso&redirect_uri=${encodeURIComponent(backendCallbackUrl)}`;
-
-    window.location.href = ssoUrl;
-  }, [isBackendEnabled]);
-
-  const exchangeTicketForToken = useCallback(async (ticket: string) => {
-    if (!isBackendEnabled) {
-      applyOfflineAuth();
-      return true;
-    }
-
-    try {
-      const response = await exchangeTicket({ ticket });
-
-      if (response && response.access_token) {
-        setAuthStatus(response.access_token);
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      return false;
-    }
-  }, [setAuthStatus, isBackendEnabled, applyOfflineAuth]);
-
   const checkAuthStatus = useCallback(async () => {
     if (!isBackendEnabled) {
       return applyOfflineAuth();
@@ -173,15 +141,13 @@ export const useAuth = () => {
       removeAccessToken();
       setAuth({ isAuthenticated: false, user: null, isLoading: false });
       setPermissions([]);
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
     }
   }, [setAuth, setPermissions, isBackendEnabled]);
 
   return {
     auth,
     permissions,
-    redirectToSSO,
-    exchangeTicketForToken,
     checkAuthStatus,
     login,
     setAuthStatus,

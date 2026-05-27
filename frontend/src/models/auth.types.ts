@@ -15,9 +15,6 @@ export interface LogoutResponse {
   message: string;
 }
 
-export interface TicketExchangeRequest {
-  ticket: string;
-}
 
 export interface MenuInfo {
   menu_idx: number;

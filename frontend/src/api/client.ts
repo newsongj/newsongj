@@ -39,7 +39,7 @@ client.interceptors.response.use(
       }
       removeAccessToken();
       alert('세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.');
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
       return Promise.reject(new Error('Unauthorized'));
     }
 

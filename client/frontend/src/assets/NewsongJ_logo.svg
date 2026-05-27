@@ -1,0 +1,8 @@
+<svg width="450" height="120" viewBox="0 0 450 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="450" height="120" fill="none"/>
+  
+  <text x="40" y="80" fill="#2E67A4" style="font-family: Arial, sans-serif; font-weight: 900; font-size: 52px; letter-spacing: -1px;">NEWSONG</text>
+  
+  <circle cx="370" cy="60" r="28" fill="#2E67A4" />
+  <text x="370" y="78" text-anchor="middle" fill="white" style="font-family: Arial, sans-serif; font-weight: 900; font-size: 45px;">J</text>
+</svg>
