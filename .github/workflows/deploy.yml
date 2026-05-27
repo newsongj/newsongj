@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'client/frontend/**'
       - 'docker-compose.yml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -20,6 +21,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      client_frontend: ${{ steps.filter.outputs.client_frontend }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v3
@@ -31,6 +33,8 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+            client_frontend:
+              - 'client/frontend/**'
             workflows:
               - '.github/workflows/**'
 
@@ -40,7 +44,10 @@ jobs:
   build-and-push:
     needs: changes
     if: |
-      needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflows == 'true'
+      needs.changes.outputs.backend == 'true' ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.client_frontend == 'true' ||
+      needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -55,11 +62,17 @@ jobs:
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back ./backend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-back
 
-      - name: Build and Push Frontend
+      - name: Build and Push Frontend (관리자)
         if: needs.changes.outputs.frontend == 'true'
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front ./frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
+
+      - name: Build and Push Client Frontend (사용자)
+        if: needs.changes.outputs.client_frontend == 'true'
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-client ./client/frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-client
 
   # ──────────────────────────────────────────
   # 3. 서버 배포
@@ -135,6 +148,10 @@ jobs:
                   mariadb:
                     condition: service_healthy
 
+              client-frontend:
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-client
+                restart: unless-stopped
+
               frontend:
                 image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
                 restart: unless-stopped
@@ -142,6 +159,7 @@ jobs:
                   - "80:80"
                 depends_on:
                   - backend
+                  - client-frontend
 
             volumes:
               db_data:

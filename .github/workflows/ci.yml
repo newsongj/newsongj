@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'client/frontend/**'
       - '.github/workflows/**'
       - 'docker-compose.yml'
 
@@ -19,6 +20,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      client_frontend: ${{ steps.filter.outputs.client_frontend }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -29,6 +31,8 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+            client_frontend:
+              - 'client/frontend/**'
 
   # ──────────────────────────────────────────
   # backend 변경 시 pytest 실행
@@ -51,7 +55,7 @@ jobs:
         run: cd backend && pytest || echo "No tests found"
 
   # ──────────────────────────────────────────
-  # frontend 변경 시 빌드 성공 여부 확인
+  # frontend(관리자) 변경 시 빌드 성공 여부 확인
   # ──────────────────────────────────────────
   test-frontend:
     needs: changes
@@ -66,3 +70,20 @@ jobs:
       - name: Build
         if: needs.changes.outputs.frontend == 'true'
         run: cd frontend && npm install && npm run build
+
+  # ──────────────────────────────────────────
+  # client/frontend(사용자) 변경 시 빌드 성공 여부 확인
+  # ──────────────────────────────────────────
+  test-client-frontend:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        if: needs.changes.outputs.client_frontend == 'true'
+      - uses: actions/setup-node@v3
+        if: needs.changes.outputs.client_frontend == 'true'
+        with:
+          node-version: '22'
+      - name: Build
+        if: needs.changes.outputs.client_frontend == 'true'
+        run: cd client/frontend && npm install && npm run build
