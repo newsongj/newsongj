@@ -8,7 +8,7 @@ RUN npm run build
 
 # 실행 단계 (서버용)
 FROM nginx:stable-alpine
-COPY --from=build-stage /app/dist /usr/share/nginx/html
+COPY --from=build-stage /app/dist /usr/share/nginx/html/admin
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
