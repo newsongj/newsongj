@@ -36,6 +36,11 @@ services:
     build: ./frontend
     ports:
       - "80:80"
+    depends_on:
+      - client-frontend
+
+  client-frontend:
+    build: ./client/frontend
 
 # volumes:
 #   db_data:

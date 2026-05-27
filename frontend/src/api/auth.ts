@@ -4,7 +4,6 @@ import {
   LoginResponse,
   MeResponse,
   LogoutResponse,
-  TicketExchangeRequest,
   PasswordChangeRequest
 } from '@/models/auth.types';
 import { CommonResponse } from '@/models/common.types';
@@ -35,13 +34,6 @@ export async function logout(): Promise<LogoutResponse> {
  */
 export async function checkAuth(): Promise<any> {
   return get<any>('/api/v1/auth/check');
-}
-
-/**
- * 티켓-토큰 교환 (SSO)
- */
-export async function exchangeTicket(ticketData: TicketExchangeRequest): Promise<any> {
-  return post<any>('/api/v1/auth/exchange-ticket', ticketData);
 }
 
 /**

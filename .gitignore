@@ -19,6 +19,13 @@ frontend/dist-ssr/
 frontend/*.local
 frontend/.env.*.local
 
+# --- Client Frontend (React/Vite) ---
+client/frontend/node_modules/
+client/frontend/dist/
+client/frontend/dist-ssr/
+client/frontend/*.local
+client/frontend/.env.*.local
+
 # --- Docs ---
 mds/
 MDs/
