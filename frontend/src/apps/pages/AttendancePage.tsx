@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Popover } from '@mui/material';
+import NewcomerAttendanceTab from './NewcomerAttendanceTab';
 import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
 import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
@@ -95,6 +96,27 @@ const PageWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.custom.spacing.md,
+}));
+
+const TabBar = styled('div')(({ theme }) => ({
+  display: 'flex',
+  borderBottom: `2px solid ${theme.custom.colors.primary.outline}`,
+}));
+
+const TabBtn = styled('button')<{ $active: boolean }>(({ theme, $active }) => ({
+  padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.md}`,
+  background: 'none',
+  border: 'none',
+  borderBottom: $active ? `2px solid ${theme.custom.colors.primary._500}` : '2px solid transparent',
+  marginBottom: '-2px',
+  fontSize: theme.custom.typography.body1.fontSize,
+  fontWeight: $active ? 700 : 400,
+  color: $active ? theme.custom.colors.primary._500 : theme.custom.colors.text.medium,
+  cursor: 'pointer',
+  transition: 'color 0.15s ease, border-color 0.15s ease',
+  '&:hover': {
+    color: theme.custom.colors.primary._500,
+  },
 }));
 
 const FilterPanel = styled('section')(({ theme }) => ({
@@ -259,6 +281,7 @@ const DayCell = styled('div')<{
 const AttendancePage: React.FC = () => {
   const initialKstDate = getKstDateParts();
 
+  const [tab, setTab] = useState<'member' | 'newcomer'>('member');
   const [worshipDate, setWorshipDate] = useState<string>(() => getMostRecentSaturdayKey());
   const [filters, setFilters] = useState<FilterState>({ gyogu: '', team: '', groupNo: '' });
   const [rows, setRows] = useState<AttendanceRow[]>([]);
@@ -293,6 +316,11 @@ const AttendancePage: React.FC = () => {
       action();
     }
   }, []);
+
+  const handleTabChange = useCallback((newTab: 'member' | 'newcomer') => {
+    if (newTab === tab) return;
+    confirmDiscard(() => setTab(newTab));
+  }, [tab, confirmDiscard]);
 
   const isDirty = changesMap.size > 0;
 
@@ -542,113 +570,124 @@ const AttendancePage: React.FC = () => {
 
   return (
     <PageWrapper>
-      <FilterPanel>
-        <FilterTitle>조회 조건</FilterTitle>
-        <FilterGrid>
-          <Select value={filters.gyogu} options={GYOGU_OPTIONS} onChange={handleGyoguChange} fullWidth />
-          <Select
-            value={filters.team}
-            options={TEAM_OPTIONS}
-            onChange={handleTeamChange}
-            disabled={!filters.gyogu || filters.gyogu === '임원단'}
-            fullWidth
-          />
-          <Select
-            value={filters.groupNo}
-            options={GROUP_OPTIONS}
-            onChange={handleGroupChange}
-            disabled={!filters.team || filters.gyogu === '임원단'}
-            fullWidth
-          />
-        </FilterGrid>
-      </FilterPanel>
+      <TabBar>
+        <TabBtn $active={tab === 'member'} onClick={() => handleTabChange('member')}>교구 출석</TabBtn>
+        <TabBtn $active={tab === 'newcomer'} onClick={() => handleTabChange('newcomer')}>미등반 새가족 출석</TabBtn>
+      </TabBar>
 
-      <WeekNavBar>
-        <NavButton onClick={handlePrevWeek} aria-label="이전 주">
-          <ChevronLeftIcon fontSize="small" />
-        </NavButton>
-        <WeekLabel onClick={handleWeekLabelClick} title="클릭하여 날짜 선택">
-          {formatKstSaturdayLabel(worshipDate)}
-        </WeekLabel>
-        <NavButton onClick={handleNextWeek} disabled={isNextDisabled} aria-label="다음 주">
-          <ChevronRightIcon fontSize="small" />
-        </NavButton>
-      </WeekNavBar>
-
-      <Popover
-        open={Boolean(calendarAnchor)}
-        anchorEl={calendarAnchor}
-        onClose={handleCalendarClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <CalendarContainer>
-          <CalendarHeader>
-            <NavButton onClick={handlePrevMonth} aria-label="이전 달">
-              <ChevronLeftIcon fontSize="small" />
-            </NavButton>
-            <MonthLabel>
-              {calendarView.year}년 {calendarView.month + 1}월
-            </MonthLabel>
-            <NavButton onClick={handleNextMonth} disabled={isNextMonthDisabled} aria-label="다음 달">
-              <ChevronRightIcon fontSize="small" />
-            </NavButton>
-          </CalendarHeader>
-
-          <CalendarGrid>
-            {WEEK_DAYS.map((day) => (
-              <DayHeader key={day} $isSat={day === '토'}>
-                {day}
-              </DayHeader>
-            ))}
-            {calendarGrid.map((day, index) => {
-              if (!day) return <div key={`empty-${index}`} />;
-
-              const isSat = day.weekday === 6;
-              const isSelected = isSat && day.dateKey === worshipDate;
-              const isFuture = isSat && day.dateKey > mostRecentSaturday;
-              const isDisabled = !isSat || isFuture;
-
-              return (
-                <DayCell
-                  key={day.dateKey}
-                  $isSat={isSat}
-                  $isSelected={isSelected}
-                  $isDisabled={isDisabled}
-                  onClick={!isDisabled ? () => handleDateSelect(day.dateKey) : undefined}
-                >
-                  {day.day}
-                </DayCell>
-              );
-            })}
-          </CalendarGrid>
-        </CalendarContainer>
-      </Popover>
-
-      {!filters.gyogu ? (
-        <EmptyGuide>교구를 선택하면 출석 명단이 표시됩니다.</EmptyGuide>
+      {tab === 'newcomer' ? (
+        <NewcomerAttendanceTab filters={filters} onFiltersChange={setFilters} />
       ) : (
         <>
-          <DataTable
-            columns={columns}
-            data={pagedRows}
-            getRowId={(row) => String(row.memberId)}
-            pagination={{
-              page,
-              rowsPerPage,
-              totalCount,
-              onPageChange: handlePageChange,
-              onRowsPerPageChange: handleRowsPerPageChange,
-            }}
-          />
-          <SaveFooter>
-            <CountLabel>
-              총 {totalCount}명 | <span style={{ color: '#52c41a', fontWeight: 600 }}>출석 {presentCount}명</span> | <span style={{ color: '#ff4d4f', fontWeight: 600 }}>결석 {absentCount}명</span>
-            </CountLabel>
-            <Button variant="filled" onClick={handleSave} disabled={!isDirty || isSaving}>
-              {isSaving ? '저장 중...' : '저장'}
-            </Button>
-          </SaveFooter>
+          <FilterPanel>
+            <FilterTitle>조회 조건</FilterTitle>
+            <FilterGrid>
+              <Select value={filters.gyogu} options={GYOGU_OPTIONS} onChange={handleGyoguChange} fullWidth />
+              <Select
+                value={filters.team}
+                options={TEAM_OPTIONS}
+                onChange={handleTeamChange}
+                disabled={!filters.gyogu || filters.gyogu === '임원단'}
+                fullWidth
+              />
+              <Select
+                value={filters.groupNo}
+                options={GROUP_OPTIONS}
+                onChange={handleGroupChange}
+                disabled={!filters.team || filters.gyogu === '임원단'}
+                fullWidth
+              />
+            </FilterGrid>
+          </FilterPanel>
+
+          <WeekNavBar>
+            <NavButton onClick={handlePrevWeek} aria-label="이전 주">
+              <ChevronLeftIcon fontSize="small" />
+            </NavButton>
+            <WeekLabel onClick={handleWeekLabelClick} title="클릭하여 날짜 선택">
+              {formatKstSaturdayLabel(worshipDate)}
+            </WeekLabel>
+            <NavButton onClick={handleNextWeek} disabled={isNextDisabled} aria-label="다음 주">
+              <ChevronRightIcon fontSize="small" />
+            </NavButton>
+          </WeekNavBar>
+
+          <Popover
+            open={Boolean(calendarAnchor)}
+            anchorEl={calendarAnchor}
+            onClose={handleCalendarClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
+            <CalendarContainer>
+              <CalendarHeader>
+                <NavButton onClick={handlePrevMonth} aria-label="이전 달">
+                  <ChevronLeftIcon fontSize="small" />
+                </NavButton>
+                <MonthLabel>
+                  {calendarView.year}년 {calendarView.month + 1}월
+                </MonthLabel>
+                <NavButton onClick={handleNextMonth} disabled={isNextMonthDisabled} aria-label="다음 달">
+                  <ChevronRightIcon fontSize="small" />
+                </NavButton>
+              </CalendarHeader>
+
+              <CalendarGrid>
+                {WEEK_DAYS.map((day) => (
+                  <DayHeader key={day} $isSat={day === '토'}>
+                    {day}
+                  </DayHeader>
+                ))}
+                {calendarGrid.map((day, index) => {
+                  if (!day) return <div key={`empty-${index}`} />;
+
+                  const isSat = day.weekday === 6;
+                  const isSelected = isSat && day.dateKey === worshipDate;
+                  const isFuture = isSat && day.dateKey > mostRecentSaturday;
+                  const isDisabled = !isSat || isFuture;
+
+                  return (
+                    <DayCell
+                      key={day.dateKey}
+                      $isSat={isSat}
+                      $isSelected={isSelected}
+                      $isDisabled={isDisabled}
+                      onClick={!isDisabled ? () => handleDateSelect(day.dateKey) : undefined}
+                    >
+                      {day.day}
+                    </DayCell>
+                  );
+                })}
+              </CalendarGrid>
+            </CalendarContainer>
+          </Popover>
+
+          {!filters.gyogu ? (
+            <EmptyGuide>교구를 선택하면 출석 명단이 표시됩니다.</EmptyGuide>
+          ) : (
+            <>
+              <DataTable
+                columns={columns}
+                data={pagedRows}
+                getRowId={(row) => String(row.memberId)}
+                pagination={{
+                  page,
+                  rowsPerPage,
+                  totalCount,
+                  onPageChange: handlePageChange,
+                  onRowsPerPageChange: handleRowsPerPageChange,
+                }}
+              />
+              <SaveFooter>
+                <CountLabel>
+                  총 {totalCount}명 | <span style={{ color: '#52c41a', fontWeight: 600 }}>출석 {presentCount}명</span> | <span style={{ color: '#ff4d4f', fontWeight: 600 }}>결석 {absentCount}명</span>
+                </CountLabel>
+                <Button variant="filled" onClick={handleSave} disabled={!isDirty || isSaving}>
+                  {isSaving ? '저장 중...' : '저장'}
+                </Button>
+              </SaveFooter>
+            </>
+          )}
         </>
       )}
 

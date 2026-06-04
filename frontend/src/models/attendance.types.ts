@@ -84,6 +84,46 @@ export interface DashboardQuery {
   team_no?: number;
 }
 
+// ── 새가족 출석 ──────────────────────────────────────────────────────────────
+
+export type NewcomerUiStatus = 'PRESENT' | 'ABSENT' | 'EDU_1' | 'EDU_2' | 'EDU_3';
+
+export interface NewcomerAttendanceMemberRow {
+  member_id: number;
+  name: string;
+  generation: number;
+  gender: string;
+  gyogu: number;
+  team: number;
+  group_no: number;
+  status: AttendanceStatus | null;
+  edu_week: 1 | 2 | 3 | null;
+  memo: string;
+}
+
+export interface NewcomerAttendanceRecordsParams {
+  worship_date: string;
+  gyogu_no: number;
+  team_no?: number;
+  group_no?: number;
+  page: number;
+  page_size: number;
+}
+
+export interface NewcomerAttendanceRecordItem {
+  member_id: number;
+  status: AttendanceStatus;
+  edu_week: 1 | 2 | 3 | null;
+  memo: string;
+}
+
+export interface NewcomerAttendanceBatchRequest {
+  worship_date: string;
+  records: NewcomerAttendanceRecordItem[];
+}
+
+export type NewcomerAttendancePageResponse = Page<NewcomerAttendanceMemberRow>;
+
 export interface DashboardResponse {
   kpi: {
     all: { present: number; total: number };

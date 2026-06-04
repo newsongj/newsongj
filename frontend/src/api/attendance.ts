@@ -6,6 +6,9 @@ import {
   AttendanceRecordsParams,
   DashboardQuery,
   DashboardResponse,
+  NewcomerAttendanceBatchRequest,
+  NewcomerAttendancePageResponse,
+  NewcomerAttendanceRecordsParams,
 } from '@/models/attendance.types';
 
 export async function fetchAttendanceRecords(
@@ -18,6 +21,18 @@ export async function saveAttendanceBatch(
   body: AttendanceBatchRequest
 ): Promise<AttendanceBatchResponse> {
   return post<AttendanceBatchResponse>('/api/attendance/records/batch', body);
+}
+
+export async function fetchNewcomerAttendanceRecords(
+  params: NewcomerAttendanceRecordsParams
+): Promise<NewcomerAttendancePageResponse> {
+  return get<NewcomerAttendancePageResponse>('/api/attendance/newcomers', params);
+}
+
+export async function saveNewcomerAttendanceBatch(
+  body: NewcomerAttendanceBatchRequest
+): Promise<AttendanceBatchResponse> {
+  return post<AttendanceBatchResponse>('/api/attendance/newcomers/batch', body);
 }
 
 export async function fetchAttendanceDashboard(
