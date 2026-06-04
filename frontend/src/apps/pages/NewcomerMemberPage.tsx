@@ -104,24 +104,257 @@ const searchOptions: SearchOption[] = [
   { value: 'v8pid', label: 'V8 PID' },
 ];
 
-const columns: Column<DisplayRow>[] = [
-  { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
-  { id: 'parish', label: '교구', minWidth: 100, align: 'center' },
-  { id: 'team', label: '팀', minWidth: 88, align: 'center' },
-  { id: 'group', label: '그룹', minWidth: 88, align: 'center' },
-  { id: 'name', label: '이름', minWidth: 96, align: 'center' },
-  { id: 'gender', label: '성별', minWidth: 76, align: 'center' },
-  { id: 'generation', label: '기수', minWidth: 84, align: 'center' },
-  { id: 'phone', label: '연락처', minWidth: 140, align: 'center' },
-  { id: 'birthDate', label: '생년월일', minWidth: 120, align: 'center' },
-  { id: 'role', label: '직분', minWidth: 150, align: 'center' },
-  { id: 'createdAt', label: '등반일자', minWidth: 120, align: 'center' },
-  { id: 'attendanceGrade', label: '출석등급', minWidth: 98, align: 'center' },
-  { id: 'pltCompleted', label: 'PLT 수료여부', minWidth: 126, align: 'center' },
-  { id: 'schoolWork', label: '학교 및 직장', minWidth: 170, align: 'center' },
-  { id: 'major', label: '전공', minWidth: 120, align: 'center' },
-  { id: 'pid', label: 'V8 PID', minWidth: 120, align: 'center' },
-];
+// ── 교육 이력 모달 ──────────────────────────────────────────────────────────
+
+interface EduRecord {
+  worship_date: string;
+  status: 'PRESENT' | 'ABSENT';
+  edu_week: 1 | 2 | 3 | null;
+  memo: string;
+}
+
+// TODO: 백엔드 연동 시 API 호출로 교체
+const getMockHistory = (memberId: number): EduRecord[] => {
+  const variants: EduRecord[][] = [
+    [],
+    [{ worship_date: '2026-05-31', status: 'PRESENT', edu_week: 1, memo: '1주차 교육은 교회와 공동체에 대해서 진행하였음' }],
+    [
+      { worship_date: '2026-05-31', status: 'PRESENT', edu_week: 2, memo: '2주차 교육은 신앙 생활에 대해서 진행하였음' },
+      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 1, memo: '밝은 분위기 속에서 잘 적응하는 듯해 보였음, 교육 중에는 신앙적인 고민을 많이 나누었음' },
+    ],
+    [
+      { worship_date: '2026-05-31', status: 'ABSENT',  edu_week: null, memo: '' },
+      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 2,    memo: '' },
+      { worship_date: '2026-05-17', status: 'PRESENT', edu_week: 1,    memo: '첫 방문이라 목사님과 인사하고 교제함' },
+    ],
+    [
+      { worship_date: '2026-05-31', status: 'PRESENT', edu_week: 3, memo: '3주차 교육은 예수님에 대해서 교육하였음' },
+      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 2, memo: '2주차 교육 참여하면서 이전에 다녔던 교회에 대해서 나누고 신앙적인 고민도 나누었음' },
+      { worship_date: '2026-05-17', status: 'PRESENT', edu_week: 1, memo: '첫 방문이라 목사님과 인사하고 교제함' },
+    ],
+  ];
+  return variants[memberId % 5];
+};
+
+const ModalOverlay = styled('div')({
+  position: 'fixed',
+  inset: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1300,
+});
+
+const ModalBox = styled('div')(({ theme }) => ({
+  backgroundColor: '#fff',
+  borderRadius: theme.custom.borderRadius,
+  width: '100%',
+  maxWidth: 560,
+  maxHeight: '80vh',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+  margin: '0 16px',
+}));
+
+const ModalHeader = styled('div')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: `${theme.custom.spacing.md} ${theme.custom.spacing.lg}`,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+}));
+
+const ModalTitle = styled('h3')(({ theme }) => ({
+  margin: 0,
+  fontSize: theme.custom.typography.subtitle.fontSize,
+  fontWeight: 700,
+  color: theme.custom.colors.text.high,
+}));
+
+const ModalCloseBtn = styled('button')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 32,
+  height: 32,
+  border: 'none',
+  borderRadius: '50%',
+  background: 'transparent',
+  cursor: 'pointer',
+  fontSize: 18,
+  color: theme.custom.colors.text.medium,
+  '&:hover': { backgroundColor: theme.custom.colors.neutral._95 },
+}));
+
+const ModalBody = styled('div')(({ theme }) => ({
+  padding: theme.custom.spacing.lg,
+  overflowY: 'auto',
+}));
+
+const HistoryTable = styled('table')(({ theme }) => ({
+  width: '100%',
+  borderCollapse: 'collapse',
+  fontSize: theme.custom.typography.body2.fontSize,
+  tableLayout: 'fixed',
+  '@media (max-width: 560px)': { display: 'none' },
+}));
+
+const HistoryTh = styled('th')(({ theme }) => ({
+  padding: '8px 12px',
+  textAlign: 'center',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  color: theme.custom.colors.text.high,
+  backgroundColor: theme.custom.colors.neutral._95,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+}));
+
+const HistoryTd = styled('td')(({ theme }) => ({
+  padding: '8px 12px',
+  textAlign: 'center',
+  verticalAlign: 'top',
+  whiteSpace: 'nowrap',
+  color: theme.custom.colors.text.high,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+}));
+
+const MemoTd = styled('td')(({ theme }) => ({
+  padding: '8px 12px',
+  textAlign: 'left',
+  verticalAlign: 'top',
+  wordBreak: 'break-word',
+  color: theme.custom.colors.text.high,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+}));
+
+const HistoryCardList = styled('div')(({ theme }) => ({
+  display: 'none',
+  flexDirection: 'column',
+  gap: theme.custom.spacing.sm,
+  '@media (max-width: 560px)': { display: 'flex' },
+}));
+
+const HistoryCard = styled('div')(({ theme }) => ({
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: theme.custom.borderRadius,
+  padding: theme.custom.spacing.md,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.custom.spacing.xs,
+}));
+
+const CardRow = styled('div')(({ theme }) => ({
+  display: 'flex',
+  gap: theme.custom.spacing.sm,
+  fontSize: theme.custom.typography.body2.fontSize,
+  alignItems: 'flex-start',
+}));
+
+const CardLabel = styled('span')(({ theme }) => ({
+  color: theme.custom.colors.text.medium,
+  fontWeight: 600,
+  minWidth: 56,
+  flexShrink: 0,
+}));
+
+const CardValue = styled('span')(({ theme }) => ({
+  color: theme.custom.colors.text.high,
+  wordBreak: 'break-word',
+  flex: 1,
+}));
+
+const EmptyHistory = styled('div')(({ theme }) => ({
+  textAlign: 'center',
+  padding: '40px 0',
+  color: theme.custom.colors.text.medium,
+  fontSize: theme.custom.typography.body2.fontSize,
+}));
+
+interface HistoryModalProps {
+  memberId: number;
+  memberName: string;
+  onClose: () => void;
+}
+
+const NewcomerHistoryModal: React.FC<HistoryModalProps> = ({ memberId, memberName, onClose }) => {
+  const records = getMockHistory(memberId);
+  return (
+    <ModalOverlay onClick={onClose}>
+      <ModalBox onClick={(e) => e.stopPropagation()}>
+        <ModalHeader>
+          <ModalTitle>{memberName} · 교육 이력</ModalTitle>
+          <ModalCloseBtn onClick={onClose}>✕</ModalCloseBtn>
+        </ModalHeader>
+        <ModalBody>
+          {records.length === 0 ? (
+            <EmptyHistory>교육 이력이 없습니다.</EmptyHistory>
+          ) : (
+            <>
+              {/* 데스크톱: 테이블 */}
+              <HistoryTable>
+                <colgroup>
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <HistoryTh>날짜</HistoryTh>
+                    <HistoryTh>출석여부</HistoryTh>
+                    <HistoryTh>교육주차</HistoryTh>
+                    <HistoryTh style={{ textAlign: 'left' }}>교육 메모</HistoryTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((r, i) => (
+                    <tr key={i}>
+                      <HistoryTd>{r.worship_date}</HistoryTd>
+                      <HistoryTd style={{ color: r.status === 'PRESENT' ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
+                        {r.status === 'PRESENT' ? '출석' : '결석'}
+                      </HistoryTd>
+                      <HistoryTd>{r.edu_week ? `${r.edu_week}주차 교육` : '-'}</HistoryTd>
+                      <MemoTd>{r.memo || '-'}</MemoTd>
+                    </tr>
+                  ))}
+                </tbody>
+              </HistoryTable>
+
+              {/* 모바일: 카드 */}
+              <HistoryCardList>
+                {records.map((r, i) => (
+                  <HistoryCard key={i}>
+                    <CardRow>
+                      <CardLabel>날짜</CardLabel>
+                      <CardValue>{r.worship_date}</CardValue>
+                    </CardRow>
+                    <CardRow>
+                      <CardLabel>출석여부</CardLabel>
+                      <CardValue style={{ color: r.status === 'PRESENT' ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
+                        {r.status === 'PRESENT' ? '출석' : '결석'}
+                      </CardValue>
+                    </CardRow>
+                    <CardRow>
+                      <CardLabel>교육주차</CardLabel>
+                      <CardValue>{r.edu_week ? `${r.edu_week}주차 교육` : '-'}</CardValue>
+                    </CardRow>
+                    <CardRow>
+                      <CardLabel>교육 메모</CardLabel>
+                      <CardValue>{r.memo || '-'}</CardValue>
+                    </CardRow>
+                  </HistoryCard>
+                ))}
+              </HistoryCardList>
+            </>
+          )}
+        </ModalBody>
+      </ModalBox>
+    </ModalOverlay>
+  );
+};
 
 const FilterPanel = styled('section')(({ theme }) => ({
   display: 'flex',
@@ -318,14 +551,14 @@ const toEnrollPayload = (date: string, memberType: string) => ({
   member_type: memberType,
 });
 
-interface NewFamilyCreateModalProps {
+interface NewcomerCreateModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (form: MemberFormValue) => Promise<void>;
   isSubmitting: boolean;
 }
 
-const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({
+const NewcomerCreateModal: React.FC<NewcomerCreateModalProps> = ({
   open,
   onClose,
   onSubmit,
@@ -506,7 +739,7 @@ const NewFamilyCreateModal: React.FC<NewFamilyCreateModalProps> = ({
   );
 };
 
-interface NewFamilyEditModalProps {
+interface NewcomerEditModalProps {
   open: boolean;
   value: MemberFormValue | null;
   onClose: () => void;
@@ -515,7 +748,7 @@ interface NewFamilyEditModalProps {
   isSubmitting: boolean;
 }
 
-const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({
+const NewcomerEditModal: React.FC<NewcomerEditModalProps> = ({
   open,
   value,
   onClose,
@@ -732,7 +965,7 @@ const NewFamilyEditModal: React.FC<NewFamilyEditModalProps> = ({
   );
 };
 
-const NewFamilyMemberPage: React.FC = () => {
+const NewcomerMemberPage: React.FC = () => {
   const {
     members,
     pagination,
@@ -748,6 +981,41 @@ const NewFamilyMemberPage: React.FC = () => {
     handleSearch,
     setSelectedIds,
   } = useNewcomers();
+
+  const [historyMember, setHistoryMember] = useState<{ id: number; name: string } | null>(null);
+
+  const columns = useMemo<Column<DisplayRow>[]>(() => [
+    { id: 'no', label: '번호', minWidth: 72, align: 'center', render: (_value, row) => row.id },
+    { id: 'parish', label: '교구', minWidth: 100, align: 'center' },
+    { id: 'team', label: '팀', minWidth: 88, align: 'center' },
+    { id: 'group', label: '그룹', minWidth: 88, align: 'center' },
+    {
+      id: 'name',
+      label: '이름',
+      minWidth: 96,
+      align: 'center',
+      render: (_value, row) => (
+        <span
+          role="button"
+          style={{ cursor: 'pointer', color: '#1677ff', textDecoration: 'underline' }}
+          onClick={(e) => { e.stopPropagation(); setHistoryMember({ id: row.id, name: row.name }); }}
+        >
+          {row.name}
+        </span>
+      ),
+    },
+    { id: 'gender', label: '성별', minWidth: 76, align: 'center' },
+    { id: 'generation', label: '기수', minWidth: 84, align: 'center' },
+    { id: 'phone', label: '연락처', minWidth: 140, align: 'center' },
+    { id: 'birthDate', label: '생년월일', minWidth: 120, align: 'center' },
+    { id: 'role', label: '직분', minWidth: 150, align: 'center' },
+    { id: 'createdAt', label: '등반일자', minWidth: 120, align: 'center' },
+    { id: 'attendanceGrade', label: '출석등급', minWidth: 98, align: 'center' },
+    { id: 'pltCompleted', label: 'PLT 수료여부', minWidth: 126, align: 'center' },
+    { id: 'schoolWork', label: '학교 및 직장', minWidth: 170, align: 'center' },
+    { id: 'major', label: '전공', minWidth: 120, align: 'center' },
+    { id: 'pid', label: 'V8 PID', minWidth: 120, align: 'center' },
+  ], []);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -978,14 +1246,14 @@ const NewFamilyMemberPage: React.FC = () => {
         }}
       />
 
-      <NewFamilyCreateModal
+      <NewcomerCreateModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
         isSubmitting={isSubmitting}
       />
 
-      <NewFamilyEditModal
+      <NewcomerEditModal
         open={editOpen}
         value={selectedRow ? toFormFromRow(selectedRow) : null}
         onClose={() => setEditOpen(false)}
@@ -1048,6 +1316,14 @@ const NewFamilyMemberPage: React.FC = () => {
         />
       )}
 
+      {historyMember && (
+        <NewcomerHistoryModal
+          memberId={historyMember.id}
+          memberName={historyMember.name}
+          onClose={() => setHistoryMember(null)}
+        />
+      )}
+
       <Snackbar
         open={snackbar.open}
         message={snackbar.message}
@@ -1058,4 +1334,4 @@ const NewFamilyMemberPage: React.FC = () => {
   );
 };
 
-export default NewFamilyMemberPage;
+export default NewcomerMemberPage;
