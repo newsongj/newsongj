@@ -40,7 +40,10 @@ const getPageInfo = (path: string) => {
     '/attendance-dashboard': { title: '출석 대시보드', breadcrumb: '교적관리 > 출석 대시보드' },
     '/members/newcomer': { title: '미등반 새가족 명단', breadcrumb: '교적관리 > 미등반 새가족 명단' },
     '/retreat/dashboard': { title: '수련회 대시보드', breadcrumb: '수련회 > 수련회 대시보드' },
+    '/retreat/research': { title: '인원조사 명단', breadcrumb: '수련회 > 인원조사 명단' },
+    '/retreat/vehicle':  { title: '차량조사 명단', breadcrumb: '수련회 > 차량조사 명단' },
     '/retreat/create': { title: '수련회 생성', breadcrumb: '수련회 > 수련회 생성' },
+    '/retreat/edit': { title: '수련회 설정 수정', breadcrumb: '수련회 > 수련회 설정 수정' },
     '/retreat/suspended-meal': { title: '서스펜디드밀', breadcrumb: '수련회 > 서스펜디드밀' },
   };
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
@@ -93,7 +96,10 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
       icon: <DirectionsRunOutlined />,
       subItems: [
         { id: 'retreat-create', label: '수련회 생성', path: '/retreat/create' },
+        { id: 'retreat-edit', label: '수련회 설정 수정', path: '/retreat/edit' },
         { id: 'retreat-dashboard', label: '수련회 대시보드', path: '/retreat/dashboard' },
+        { id: 'retreat-research', label: '인원조사 명단', path: '/retreat/research' },
+        { id: 'retreat-vehicle',  label: '차량조사 명단', path: '/retreat/vehicle' },
         { id: 'retreat-suspended-meal', label: '서스펜디드밀', path: '/retreat/suspended-meal' },
       ],
     },

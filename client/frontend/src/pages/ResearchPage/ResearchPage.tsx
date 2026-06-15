@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
+import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
+import Button from '@components/common/Button/Button';
 import type { AttendanceStatus, FeeType, RetreatInfo, ResearchMember, ResearchResponseBody } from '@models/research.types';
 
 // ─── 목업 데이터 (백엔드 연동 전 임시) ────────────────────────────────────────
@@ -81,11 +84,6 @@ const FilterLabel = styled('span')(({ theme }) => ({
     whiteSpace: 'nowrap',
 }));
 
-const SaveStatus = styled('span')<{ $saving: boolean }>(({ theme, $saving }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: $saving ? theme.custom.colors.primary._500 : theme.custom.colors.text.medium,
-    marginLeft: 'auto',
-}));
 
 const TableWrapper = styled('div')(({ theme }) => ({
     borderRadius: theme.custom.borderRadius,
@@ -155,6 +153,39 @@ const CountLabel = styled('span')(({ theme }) => ({
     },
 }));
 
+const ConfirmDialog = styled(Dialog)(({ theme }) => ({
+    '& .MuiDialog-paper': {
+        borderRadius: theme.custom.borderRadius,
+        boxShadow: '0 24px 48px rgba(15, 23, 42, 0.12)',
+        margin: '12px',
+        width: '100%',
+        maxWidth: 400,
+    },
+}));
+
+const ConfirmTitle = styled(DialogTitle)(({ theme }) => ({
+    fontSize: theme.custom.typography.body1.fontSize,
+    fontWeight: 700,
+    color: theme.custom.colors.text.high,
+    borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+    padding: theme.custom.spacing.md,
+}));
+
+const ConfirmContent = styled(DialogContent)(({ theme }) => ({
+    padding: theme.custom.spacing.md,
+    paddingTop: `${theme.custom.spacing.md} !important`,
+    fontSize: theme.custom.typography.body2.fontSize,
+    color: theme.custom.colors.text.medium,
+    lineHeight: 1.6,
+}));
+
+const ConfirmActions = styled(DialogActions)(({ theme }) => ({
+    padding: theme.custom.spacing.md,
+    borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
+    gap: theme.custom.spacing.sm,
+    justifyContent: 'flex-end',
+}));
+
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
 type DayKey = 'day1' | 'day2' | 'day3' | 'day4';
@@ -187,10 +218,12 @@ const ResearchPage: React.FC = () => {
     const [groupNo, setGroupNo] = useState<number | ''>(() =>
         !isTeamLeader && user?.group_no != null ? user.group_no : ''
     );
-    const [drafts,  setDrafts]  = useState<Map<number, ResearchResponseBody>>(new Map());
-    const [saving,  setSaving]  = useState(false);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pendingRef   = useRef<Map<number, ResearchResponseBody>>(new Map());
+    const [drafts,   setDrafts]   = useState<Map<number, ResearchResponseBody>>(new Map());
+    const [isDirty,  setIsDirty]  = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+        open: false, message: '', severity: 'success',
+    });
 
     const days: DayKey[] = useMemo(() => {
         const count = getDayCount(retreatInfo);
@@ -211,34 +244,48 @@ const ResearchPage: React.FC = () => {
         ...(drafts.get(member.member_id) ?? {}),
     }), [drafts]);
 
-    const flushSave = useCallback(async () => {
-        const toSave = new Map(pendingRef.current);
-        if (toSave.size === 0) return;
-        pendingRef.current.clear();
-        setSaving(true);
-        try {
-            // TODO: 백엔드 연동 시 주석 해제
-            // await Promise.all(Array.from(toSave.entries()).map(([id, body]) => saveResearchResponse(id, body)));
-            await new Promise((r) => setTimeout(r, 300));
-        } finally { setSaving(false); }
-    }, []);
-
-    const scheduleSave = useCallback((memberId: number, patch: ResearchResponseBody) => {
-        pendingRef.current.set(memberId, { ...(pendingRef.current.get(memberId) ?? {}), ...patch });
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(flushSave, 500);
-    }, [flushSave]);
-
     const updateDraft = useCallback((memberId: number, patch: ResearchResponseBody) => {
         setDrafts((prev) => {
             const next = new Map(prev);
             next.set(memberId, { ...(prev.get(memberId) ?? {}), ...patch });
             return next;
         });
-        scheduleSave(memberId, patch);
-    }, [scheduleSave]);
+        setIsDirty(true);
+    }, []);
 
-    useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
+    const handleSave = useCallback(async () => {
+        setIsSaving(true);
+        try {
+            // TODO: 백엔드 연동 시 실제 API 호출로 교체
+            // await Promise.all(
+            //   Array.from(drafts.keys()).map((memberId) => {
+            //     const member = allMembers.find((m) => m.member_id === memberId)!;
+            //     return saveResearchResponse(memberId, getRow(member));
+            //   })
+            // );
+            await new Promise((r) => setTimeout(r, 400));
+            setIsDirty(false);
+            setSnackbar({ open: true, message: '저장되었습니다.', severity: 'success' });
+        } catch {
+            setSnackbar({ open: true, message: '저장 중 오류가 발생했습니다.', severity: 'error' });
+        } finally {
+            setIsSaving(false);
+        }
+    }, []);
+
+    const blocker = useBlocker(
+        ({ currentLocation, nextLocation }) =>
+            isDirty && currentLocation.pathname !== nextLocation.pathname
+    );
+
+
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
 
     const feeOptions: SelectOption[] = useMemo(() => [
         { value: '',        label: '선택 안 함' },
@@ -251,7 +298,7 @@ const ResearchPage: React.FC = () => {
         ...groupNos.map((g) => ({ value: g, label: `${g}그룹` })),
     ], [groupNos]);
 
-    const paidCount = members.filter((m) => getRow(m).fee_type != null).length;
+    const surveyedCount = members.filter((m) => m.response !== null).length;
 
     return (
         <PageWrapper>
@@ -266,9 +313,16 @@ const ResearchPage: React.FC = () => {
                     disabled={!isTeamLeader}
                     width={140}
                 />
-                <SaveStatus $saving={saving}>
-                    {saving ? '저장 중...' : '자동저장'}
-                </SaveStatus>
+                <div style={{ marginLeft: 'auto' }}>
+                    <Button
+                        variant="filled"
+                        size="small"
+                        onClick={handleSave}
+                        disabled={!isDirty || isSaving}
+                    >
+                        {isSaving ? '저장 중...' : '저장'}
+                    </Button>
+                </div>
             </FilterPanel>
 
             {/* 테이블 */}
@@ -348,10 +402,43 @@ const ResearchPage: React.FC = () => {
             <Footer>
                 <CountLabel>
                     총 {members.length}명&nbsp;|&nbsp;
-                    <span style={{ color: '#1677ff', fontWeight: 600 }}>납부 완료 {paidCount}명</span>&nbsp;|&nbsp;
-                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미납부 {members.length - paidCount}명</span>
+                    <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
                 </CountLabel>
             </Footer>
+
+            {/* 이탈 확인 다이얼로그 */}
+            <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>
+                <ConfirmTitle>저장하지 않은 변경 사항</ConfirmTitle>
+                <ConfirmContent>
+                    변경 사항을 저장하지 않고 이동하시겠습니까?<br />
+                    저장하지 않으면 변경 내용이 사라집니다.
+                </ConfirmContent>
+                <ConfirmActions>
+                    <Button variant="outlined" size="small" onClick={() => blocker.reset?.()}>
+                        취소
+                    </Button>
+                    <Button variant="filled" size="small" onClick={() => blocker.proceed?.()}>
+                        나가기
+                    </Button>
+                </ConfirmActions>
+            </ConfirmDialog>
+
+            {/* 저장 완료 스낵바 */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageWrapper>
     );
 };

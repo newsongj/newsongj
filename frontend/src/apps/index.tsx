@@ -13,8 +13,11 @@ const AttendancePage = React.lazy(() => import('./pages/AttendancePage'));
 const NewcomerMemberPage = React.lazy(() => import('./pages/NewcomerMemberPage'));
 const AttendanceDashboard = React.lazy(() => import('./pages/AttendanceDashboard'));
 const RetreatDashboard = React.lazy(() => import('./pages/RetreatDashboard'));
+const RetreatResearchListPage = React.lazy(() => import('./pages/RetreatResearchListPage'));
+const RetreatVehicleListPage = React.lazy(() => import('./pages/RetreatVehicleListPage'));
 const SuspendedMealPage = React.lazy(() => import('./pages/SuspendedMealPage'));
 const RetreatCreatePage = React.lazy(() => import('./pages/RetreatCreatePage'));
+const RetreatEditPage = React.lazy(() => import('./pages/RetreatEditPage'));
 
 const Orchestrator: React.FC = () => {
   return (
@@ -29,7 +32,10 @@ const Orchestrator: React.FC = () => {
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/attendance-dashboard" element={<AttendanceDashboard />} />
           <Route path="/retreat/dashboard" element={<RetreatDashboard />} />
+          <Route path="/retreat/research" element={<RetreatResearchListPage />} />
+          <Route path="/retreat/vehicle" element={<RetreatVehicleListPage />} />
           <Route path="/retreat/create" element={<RetreatCreatePage />} />
+          <Route path="/retreat/edit" element={<RetreatEditPage />} />
           <Route path="/retreat/suspended-meal" element={<SuspendedMealPage />} />
 
           <Route

@@ -6,11 +6,11 @@ import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
 import type { SelectOption } from '@components/common/Select';
 import type {
-    BusType, DayKey, VehicleRetreatInfo, VehicleSelections,
+    BusSlot, BusType, DayKey, VehicleRetreatInfo, VehicleSelections,
     BusSingleSelection, BusMultiSelections,
 } from '@models/vehicle.types';
 
-// ─── 목업 데이터 (관리자 수련회 생성 기준) ─────────────────────────────────────
+// ─── 목업 데이터 (bus_custom 기반) ────────────────────────────────────────────
 
 const MOCK_RETREAT: VehicleRetreatInfo = {
     retreat_custom_id: 1,
@@ -19,18 +19,21 @@ const MOCK_RETREAT: VehicleRetreatInfo = {
     end_date:          '2026-08-15',
     vehicles: {
         후발: {
-            day1: { slots: ['15:00', '18:00', '19:00', '20:00'] },
-            day2: { slots: ['15:00', '18:00', '19:00', '20:00'] },
-            day3: { slots: ['15:00', '18:00', '19:00', '20:00'] },
+            day1: { buses: [
+                { bus_id: 1, bus_name: '후발버스1', departure_time: '15:00', departure_date: '2026-08-12' },
+                { bus_id: 2, bus_name: '후발버스2', departure_time: '18:00', departure_date: '2026-08-12' },
+            ]},
         },
         픽업: {
-            day1: { slots: ['11:30', '15:00', '17:00', '18:30', '22:30'] },
-            day2: { slots: ['11:30', '15:00', '17:00', '18:30', '22:30'] },
-            day3: { slots: ['11:30', '15:00', '17:00', '18:30', '22:30'] },
+            day2: { buses: [
+                { bus_id: 5, bus_name: '픽업버스1', departure_time: '11:30', departure_date: '2026-08-13' },
+            ]},
         },
         귀경: {
-            day3: { slots: ['05:30', '22:30'] },
-            day4: { slots: ['05:30', '22:30'] },
+            day4: { buses: [
+                { bus_id: 3, bus_name: '귀경버스1', departure_time: '05:30', departure_date: '2026-08-15' },
+                { bus_id: 4, bus_name: '귀경버스2', departure_time: '22:00', departure_date: '2026-08-15' },
+            ]},
         },
     },
 };
@@ -39,7 +42,6 @@ const MOCK_RETREAT: VehicleRetreatInfo = {
 
 const BUS_TYPE_ORDER: BusType[] = ['후발', '픽업', '귀경'];
 
-// 픽업·귀경은 다중 선택 가능, 후발은 단일 선택
 const MULTI_SELECT_TYPES = new Set<BusType>(['픽업', '귀경']);
 
 const BUS_TYPE_META: Record<BusType, { label: string; desc: string }> = {
@@ -56,7 +58,6 @@ const DAY_LABELS: Record<DayKey, string> = {
 };
 
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
-
 const PHONE_REGEX = /^010-\d{4}-\d{4}$/;
 
 const formatTime12h = (time: string): string => {
@@ -72,18 +73,6 @@ const formatPhone = (raw: string): string => {
     if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
     return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 };
-
-const GYOGU_OPTIONS: SelectOption[] = [
-    { value: '', label: '선택' },
-    ...[1, 2, 3].map((n) => ({ value: n, label: `${n}교구` })),
-];
-
-const TEAM_OPTIONS: SelectOption[] = [
-    { value: '', label: '선택' },
-    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => ({ value: n, label: `${n}팀` })),
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const addDays = (dateStr: string, n: number) => {
     const d = new Date(dateStr);
@@ -102,6 +91,16 @@ const getDayCount = (start: string, end: string) =>
         4,
     );
 
+const GYOGU_OPTIONS: SelectOption[] = [
+    { value: '', label: '선택' },
+    ...[1, 2, 3].map((n) => ({ value: n, label: `${n}교구` })),
+];
+
+const TEAM_OPTIONS: SelectOption[] = [
+    { value: '', label: '선택' },
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => ({ value: n, label: `${n}팀` })),
+];
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UserForm { gyogu: string | number; team: string | number; name: string; phone: string; }
@@ -112,56 +111,43 @@ interface SubmissionRecord {
     selections: VehicleSelections;
 }
 
-// 이전 신청 내역 목업 (실제 서비스에서는 API로 조회)
 const MOCK_HISTORY: SubmissionRecord | null = {
     submittedAt: '2026. 8. 1. 오후 2:23',
     form: { gyogu: 1, team: 3, name: '홍길동', phone: '010-1234-5678' },
     selections: {
-        후발: { day: 'day1', time: '15:00' },
-        귀경: { day3: ['22:30'] },
+        후발: { bus_id: 1, bus_name: '후발버스1', departure_time: '15:00', departure_date: '2026-08-12' },
+        귀경: [{ bus_id: 4, bus_name: '귀경버스2', departure_time: '22:00', departure_date: '2026-08-15' }],
     },
 };
 
 // ─── Helpers (선택 내역 요약) ─────────────────────────────────────────────────
 
-const formatSelectionSummary = (
-    type: BusType,
-    sel: BusSingleSelection | null | BusMultiSelections | undefined,
-): string => {
+const formatSelectionSummary = (type: BusType, sel: BusSingleSelection | BusMultiSelections | null | undefined): string => {
     if (!sel) return '신청 안 함';
     if (!MULTI_SELECT_TYPES.has(type)) {
-        const s = sel as BusSingleSelection | null;
+        const s = sel as BusSingleSelection;
         if (!s) return '신청 안 함';
-        return `${DAY_LABELS[s.day]} ${formatTime12h(s.time)}`;
+        return `${s.bus_name}  ${formatTime12h(s.departure_time)}`;
     }
-    const ms = sel as BusMultiSelections;
-    const parts = (Object.entries(ms) as [DayKey, string[]][])
-        .filter(([, times]) => times && times.length > 0)
-        .map(([day, times]) => `${DAY_LABELS[day]} ${times.map(formatTime12h).join(', ')}`);
-    return parts.length > 0 ? parts.join(' / ') : '신청 안 함';
+    const arr = sel as BusMultiSelections;
+    if (!arr || arr.length === 0) return '신청 안 함';
+    return arr.map((b) => `${b.bus_name} ${formatTime12h(b.departure_time)}`).join(' / ');
 };
 
 // ─── Styled ───────────────────────────────────────────────────────────────────
 
 const PageWrapper = styled('div')(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.custom.spacing.lg,
+    display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.lg,
     '@media (max-width: 600px)': { gap: theme.custom.spacing.md },
 }));
 
 const RetreatLabel = styled('p')(({ theme }) => ({
-    margin: 0,
-    fontSize: theme.custom.typography.body2.fontSize,
-    fontWeight: 600,
-    color: theme.custom.colors.text.medium,
+    margin: 0, fontSize: theme.custom.typography.body2.fontSize,
+    fontWeight: 600, color: theme.custom.colors.text.medium,
 }));
 
-// ── 이전 신청 내역 ──
 const HistorySection = styled('section')(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.custom.spacing.sm,
+    display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.sm,
     padding: theme.custom.spacing.lg,
     backgroundColor: theme.custom.colors.neutral._99,
     border: `1px solid ${theme.custom.colors.primary.outline}`,
@@ -171,60 +157,42 @@ const HistorySection = styled('section')(({ theme }) => ({
 }));
 
 const HistoryHeaderRow = styled('div')({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    flexWrap: 'wrap', gap: 8,
 });
 
 const HistoryTitle = styled('h3')(({ theme }) => ({
-    margin: 0,
-    fontSize: theme.custom.typography.subtitle.fontSize,
-    fontWeight: 700,
-    color: theme.custom.colors.text.high,
+    margin: 0, fontSize: theme.custom.typography.subtitle.fontSize,
+    fontWeight: 700, color: theme.custom.colors.text.high,
 }));
 
 const HistoryTimestamp = styled('span')(({ theme }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.text.medium,
+    fontSize: theme.custom.typography.body2.fontSize, color: theme.custom.colors.text.medium,
 }));
 
 const HistoryVehicleList = styled('div')(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.custom.spacing.xs,
+    display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.xs,
 }));
 
 const HistoryVehicleItem = styled('div')(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.custom.spacing.sm,
+    display: 'flex', alignItems: 'center', gap: theme.custom.spacing.sm,
 }));
 
 const VehicleTypeBadge = styled('span')(({ theme }) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '2px 10px',
+    display: 'inline-flex', alignItems: 'center', padding: '2px 10px',
     borderRadius: 100,
     backgroundColor: theme.custom.colors.primary._050,
     border: `1px solid ${theme.custom.colors.primary._100}`,
     color: theme.custom.colors.primary._700,
-    fontSize: theme.custom.typography.body2.fontSize,
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
+    fontSize: theme.custom.typography.body2.fontSize, fontWeight: 600, whiteSpace: 'nowrap',
 }));
 
 const HistoryVehicleText = styled('span')(({ theme }) => ({
-    color: theme.custom.colors.text.high,
-    fontSize: theme.custom.typography.body2.fontSize,
+    color: theme.custom.colors.text.high, fontSize: theme.custom.typography.body2.fontSize,
 }));
 
-// ── 차량 유형 선택 패널 ──
 const TypeSelectorPanel = styled('section')(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.custom.spacing.sm,
+    display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.sm,
     padding: theme.custom.spacing.lg,
     backgroundColor: theme.custom.colors.primary._050,
     border: `1px solid ${theme.custom.colors.primary._100}`,
@@ -234,24 +202,17 @@ const TypeSelectorPanel = styled('section')(({ theme }) => ({
 }));
 
 const TypeSelectorTitle = styled('p')(({ theme }) => ({
-    margin: 0,
-    fontSize: theme.custom.typography.subtitle.fontSize,
-    fontWeight: 700,
-    color: theme.custom.colors.primary._700,
+    margin: 0, fontSize: theme.custom.typography.subtitle.fontSize,
+    fontWeight: 700, color: theme.custom.colors.primary._700,
 }));
 
 const TypeSelectorHint = styled('p')(({ theme }) => ({
-    margin: 0,
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.primary._600,
-    lineHeight: '1.6',
+    margin: 0, fontSize: theme.custom.typography.body2.fontSize,
+    color: theme.custom.colors.primary._600, lineHeight: '1.6',
 }));
 
-// ── 내 정보 폼 ──
 const FormSection = styled('section')(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.custom.spacing.md,
+    display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.md,
     padding: theme.custom.spacing.lg,
     backgroundColor: theme.custom.colors.neutral._99,
     border: `1px solid ${theme.custom.colors.primary.outline}`,
@@ -261,58 +222,40 @@ const FormSection = styled('section')(({ theme }) => ({
 }));
 
 const SectionTitleRow = styled('div')({
-    display: 'flex',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    gap: 10,
+    display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 10,
 });
 
 const SectionTitle = styled('h3')(({ theme }) => ({
-    margin: 0,
-    fontSize: theme.custom.typography.subtitle.fontSize,
-    fontWeight: 700,
-    color: theme.custom.colors.text.high,
-    whiteSpace: 'nowrap',
+    margin: 0, fontSize: theme.custom.typography.subtitle.fontSize,
+    fontWeight: 700, color: theme.custom.colors.text.high, whiteSpace: 'nowrap',
 }));
 
 const SectionDesc = styled('span')(({ theme }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.text.medium,
+    fontSize: theme.custom.typography.body2.fontSize, color: theme.custom.colors.text.medium,
 }));
 
 const FormGrid = styled('div')(({ theme }) => ({
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(200px, 1fr))',
+    display: 'grid', gridTemplateColumns: 'repeat(2, minmax(200px, 1fr))',
     gap: theme.custom.spacing.md,
     '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
 }));
 
-const FormRow = styled('div')({
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-});
+const FormRow = styled('div')({ display: 'flex', flexDirection: 'column', gap: 6 });
 
 const FieldLabel = styled('label')(({ theme }) => ({
     fontSize: theme.custom.typography.body2.fontSize,
-    fontWeight: 600,
-    color: theme.custom.colors.text.high,
+    fontWeight: 600, color: theme.custom.colors.text.high,
 }));
 
-// ── 버스 섹션 ──
 const BusSectionWrapper = styled('section')(({ theme }) => ({
     border: `1px solid ${theme.custom.colors.primary.outline}`,
-    borderRadius: theme.custom.borderRadius,
-    overflow: 'hidden',
+    borderRadius: theme.custom.borderRadius, overflow: 'hidden',
     backgroundColor: theme.custom.colors.white,
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
 }));
 
 const BusSectionHeader = styled('div')(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: theme.custom.spacing.sm,
+    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: theme.custom.spacing.sm,
     padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.md}`,
     backgroundColor: theme.custom.colors.neutral._99,
     borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
@@ -324,56 +267,41 @@ const BusSectionHeader = styled('div')(({ theme }) => ({
 
 const BusSectionTitle = styled('span')(({ theme }) => ({
     fontSize: theme.custom.typography.subtitle.fontSize,
-    fontWeight: 700,
-    color: theme.custom.colors.text.high,
-    whiteSpace: 'nowrap',
+    fontWeight: 700, color: theme.custom.colors.text.high, whiteSpace: 'nowrap',
 }));
 
 const BusSectionDesc = styled('span')(({ theme }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.text.medium,
+    fontSize: theme.custom.typography.body2.fontSize, color: theme.custom.colors.text.medium,
 }));
 
 const DaySelectorWrap = styled('div')({
-    marginLeft: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
+    marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8,
     '& > *:last-child': { minWidth: 180 },
     '@media (max-width: 600px)': {
-        marginLeft: 0,
-        width: '100%',
+        marginLeft: 0, width: '100%',
         '& > *:last-child': { flex: 1, minWidth: 0, width: 'auto !important' },
     },
 });
 
 const DayLabel = styled('span')(({ theme }) => ({
     fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.text.medium,
-    whiteSpace: 'nowrap',
+    color: theme.custom.colors.text.medium, whiteSpace: 'nowrap',
 }));
 
 const BusSectionBody = styled('div')(({ theme }) => ({
-    padding: theme.custom.spacing.md,
-    display: 'flex',
-    flexDirection: 'column',
+    padding: theme.custom.spacing.md, display: 'flex', flexDirection: 'column',
     gap: theme.custom.spacing.sm,
     '@media (max-width: 600px)': { padding: theme.custom.spacing.sm },
 }));
 
 const SlotGrid = styled('div')(({ theme }) => ({
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: theme.custom.spacing.sm,
+    display: 'flex', flexWrap: 'wrap', gap: theme.custom.spacing.sm,
     '@media (max-width: 480px)': { gap: theme.custom.spacing.xs },
 }));
 
 const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ theme, $selected, $none }) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '8px 20px',
-    borderRadius: 100,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    padding: '8px 20px', borderRadius: 100,
     border: `2px solid ${
         $none
             ? ($selected ? theme.custom.colors.neutral._70 : theme.custom.colors.neutral._80)
@@ -385,37 +313,28 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ th
     color: $none
         ? theme.custom.colors.text.medium
         : ($selected ? theme.custom.colors.white : theme.custom.colors.text.high),
-    fontSize: theme.custom.typography.body1.fontSize,
-    fontWeight: $selected ? 600 : 400,
-    cursor: 'pointer',
-    transition: theme.custom.transitions.fast,
-    whiteSpace: 'nowrap',
+    fontSize: theme.custom.typography.body1.fontSize, fontWeight: $selected ? 600 : 400,
+    cursor: 'pointer', transition: theme.custom.transitions.fast, whiteSpace: 'nowrap',
     '@media (max-width: 480px)': {
-        padding: '6px 14px',
-        fontSize: theme.custom.typography.body2.fontSize,
+        padding: '6px 14px', fontSize: theme.custom.typography.body2.fontSize,
     },
     '&:hover': {
-        borderColor: $none
-            ? theme.custom.colors.neutral._70
-            : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.neutral._40),
-        backgroundColor: $none
-            ? theme.custom.colors.neutral._90
-            : ($selected ? theme.custom.colors.primary._500 : theme.custom.overlay.primary.hover),
+        borderColor: $none ? theme.custom.colors.neutral._70 : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.neutral._40),
+        backgroundColor: $none ? theme.custom.colors.neutral._90 : ($selected ? theme.custom.colors.primary._500 : theme.custom.overlay.primary.hover),
     },
+}));
+
+const SlotTime = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
+    fontSize: 12, opacity: $selected ? 0.85 : 0.55, marginLeft: 6,
 }));
 
 const EmptyNote = styled('span')(({ theme }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: theme.custom.colors.text.medium,
+    fontSize: theme.custom.typography.body2.fontSize, color: theme.custom.colors.text.medium,
 }));
 
-// ── 제출 버튼 영역 ──
 const SubmitRow = styled('div')({
-    display: 'flex',
-    justifyContent: 'flex-end',
-    '@media (max-width: 600px)': {
-        '& > *': { width: '100%' },
-    },
+    display: 'flex', justifyContent: 'flex-end',
+    '@media (max-width: 600px)': { '& > *': { width: '100%' } },
 });
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -451,22 +370,21 @@ const VehiclePage: React.FC = () => {
         ...availableBusTypes.map((t) => ({ value: t, label: BUS_TYPE_META[t].label })),
     ], [availableBusTypes]);
 
-    const [form,       setForm]       = useState<UserForm>(MOCK_HISTORY?.form ?? { gyogu: '', team: '', name: '', phone: '' });
-    const [phoneError, setPhoneError] = useState(false);
-    const [selections, setSelections] = useState<VehicleSelections>(MOCK_HISTORY?.selections ?? {});
-    const [activeDays, setActiveDays] = useState<Record<BusType, DayKey>>({} as Record<BusType, DayKey>);
-    const [submitting, setSubmitting] = useState(false);
-    const [history,    setHistory]    = useState<SubmissionRecord | null>(MOCK_HISTORY);
-    const [typeFilter, setTypeFilter] = useState<BusType | 'all'>('all');
-    const [snackbar,   setSnackbar]   = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    const [form,        setForm]        = useState<UserForm>(MOCK_HISTORY?.form ?? { gyogu: '', team: '', name: '', phone: '' });
+    const [phoneError,  setPhoneError]  = useState(false);
+    const [selections,  setSelections]  = useState<VehicleSelections>(MOCK_HISTORY?.selections ?? {});
+    const [activeDays,  setActiveDays]  = useState<Record<BusType, DayKey>>({} as Record<BusType, DayKey>);
+    const [submitting,  setSubmitting]  = useState(false);
+    const [history,     setHistory]     = useState<SubmissionRecord | null>(MOCK_HISTORY);
+    const [typeFilter,  setTypeFilter]  = useState<BusType | 'all'>('all');
+    const [snackbar,    setSnackbar]    = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
         open: false, message: '', severity: 'success',
     });
 
     interface ConfirmDialog {
         variant: 'replace' | 'warn-multi';
         pendingType: BusType;
-        pendingDay:  DayKey;
-        pendingTime: string;
+        pendingBus:  BusSlot;
     }
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
 
@@ -475,10 +393,8 @@ const VehiclePage: React.FC = () => {
     [activeDays, dayKeys]);
 
     const isFormValid = useMemo(() => (
-        form.gyogu !== '' &&
-        form.team !== '' &&
-        form.name.trim() !== '' &&
-        PHONE_REGEX.test(form.phone)
+        form.gyogu !== '' && form.team !== '' &&
+        form.name.trim() !== '' && PHONE_REGEX.test(form.phone)
     ), [form]);
 
     const handleFormChange = useCallback((key: keyof UserForm, value: string | number) => {
@@ -495,60 +411,53 @@ const VehiclePage: React.FC = () => {
         setActiveDays((prev) => ({ ...prev, [type]: day }));
     }, []);
 
-    const handleSlotSelect = useCallback((type: BusType, time: string | null) => {
-        const day = getActiveDay(type);
-
+    const handleSlotSelect = useCallback((type: BusType, bus: BusSlot | null) => {
         if (!MULTI_SELECT_TYPES.has(type)) {
-            // ── 후발: 단일 선택 ──
-            const cur = selections[type] as BusSingleSelection | null | undefined;
-            if (time === null) {
+            // 후발: 단일 선택
+            if (bus === null) {
                 setSelections((prev) => ({ ...prev, [type]: null }));
                 return;
             }
-            if (cur && (cur.day !== day || cur.time !== time)) {
-                setConfirmDialog({ variant: 'replace', pendingType: type, pendingDay: day, pendingTime: time });
+            const cur = selections[type] as BusSingleSelection | undefined;
+            if (cur && cur.bus_id !== bus.bus_id) {
+                setConfirmDialog({ variant: 'replace', pendingType: type, pendingBus: bus });
                 return;
             }
-            const next = (cur?.day === day && cur?.time === time) ? null : { day, time };
+            const next = cur?.bus_id === bus.bus_id ? null : bus;
             setSelections((prev) => ({ ...prev, [type]: next }));
             return;
         }
 
-        // ── 픽업·귀경: 다중 선택 ──
-        if (time === null) {
-            setSelections((prev) => ({ ...prev, [type]: {} }));
+        // 픽업/귀경: 다중 선택
+        if (bus === null) {
+            setSelections((prev) => ({ ...prev, [type]: [] }));
             return;
         }
-        const multiSel = (selections[type] as BusMultiSelections | undefined) ?? {};
-        const dayTimes = multiSel[day] ?? [];
-
-        if (dayTimes.includes(time)) {
-            const newTimes = dayTimes.filter((t) => t !== time);
-            setSelections((prev) => {
-                const ms = (prev[type] as BusMultiSelections | undefined) ?? {};
-                return { ...prev, [type]: { ...ms, [day]: newTimes } };
-            });
+        const arr = (selections[type] as BusMultiSelections | undefined) ?? [];
+        if (arr.some((b) => b.bus_id === bus.bus_id)) {
+            setSelections((prev) => ({
+                ...prev,
+                [type]: (prev[type] as BusMultiSelections ?? []).filter((b) => b.bus_id !== bus.bus_id),
+            }));
             return;
         }
-        if (dayTimes.length > 0) {
-            setConfirmDialog({ variant: 'warn-multi', pendingType: type, pendingDay: day, pendingTime: time });
+        // 같은 날짜에 이미 선택한 버스가 있으면 경고
+        const sameDaySelected = arr.some((b) => b.departure_date === bus.departure_date);
+        if (sameDaySelected) {
+            setConfirmDialog({ variant: 'warn-multi', pendingType: type, pendingBus: bus });
             return;
         }
-        setSelections((prev) => {
-            const ms = (prev[type] as BusMultiSelections | undefined) ?? {};
-            return { ...prev, [type]: { ...ms, [day]: [time] } };
-        });
-    }, [selections, getActiveDay]);
+        setSelections((prev) => ({ ...prev, [type]: [...(prev[type] as BusMultiSelections ?? []), bus] }));
+    }, [selections]);
 
     const handleConfirm = useCallback(() => {
         if (!confirmDialog) return;
-        const { variant, pendingType, pendingDay, pendingTime } = confirmDialog;
+        const { variant, pendingType, pendingBus } = confirmDialog;
         setSelections((prev) => {
             if (variant === 'replace') {
-                return { ...prev, [pendingType]: { day: pendingDay, time: pendingTime } };
+                return { ...prev, [pendingType]: pendingBus };
             }
-            const ms = (prev[pendingType] as BusMultiSelections | undefined) ?? {};
-            return { ...prev, [pendingType]: { ...ms, [pendingDay]: [...(ms[pendingDay] ?? []), pendingTime] } };
+            return { ...prev, [pendingType]: [...(prev[pendingType] as BusMultiSelections ?? []), pendingBus] };
         });
         setConfirmDialog(null);
     }, [confirmDialog]);
@@ -557,7 +466,7 @@ const VehiclePage: React.FC = () => {
         if (!isFormValid) return;
         setSubmitting(true);
         try {
-            // TODO: 백엔드 연동 시 실제 API 호출로 교체
+            // TODO: POST /api/vehicle (bus_id 배열 전송)
             await new Promise((r) => setTimeout(r, 800));
             const submittedAt = new Date().toLocaleString('ko-KR', {
                 year: 'numeric', month: 'numeric', day: 'numeric',
@@ -572,27 +481,22 @@ const VehiclePage: React.FC = () => {
         }
     }, [isFormValid, form, selections]);
 
-    const closeSnackbar = useCallback(() => {
-        setSnackbar((prev) => ({ ...prev, open: false }));
-    }, []);
+    const closeSnackbar = useCallback(() => setSnackbar((prev) => ({ ...prev, open: false })), []);
 
-    const isSlotSelected = useCallback((type: BusType, time: string | null): boolean => {
+    const isSlotSelected = useCallback((type: BusType, bus: BusSlot | null): boolean => {
         const sel = selections[type];
-        const day = getActiveDay(type);
-        if (time === null) {
+        if (bus === null) {
             if (MULTI_SELECT_TYPES.has(type)) {
-                const ms = sel as BusMultiSelections | undefined;
-                if (!ms) return true;
-                return Object.values(ms).every((ts) => !ts || ts.length === 0);
+                const arr = sel as BusMultiSelections | undefined;
+                return !arr || arr.length === 0;
             }
             return sel === null || sel === undefined;
         }
         if (MULTI_SELECT_TYPES.has(type)) {
-            return !!(sel as BusMultiSelections | undefined)?.[day]?.includes(time);
+            return !!(sel as BusMultiSelections | undefined)?.some((b) => b.bus_id === bus.bus_id);
         }
-        const s = sel as BusSingleSelection | null | undefined;
-        return !!s && s.day === day && s.time === time;
-    }, [selections, getActiveDay]);
+        return (sel as BusSingleSelection | undefined)?.bus_id === bus.bus_id;
+    }, [selections]);
 
     const displayedTypes = useMemo(
         () => typeFilter === 'all' ? availableBusTypes : availableBusTypes.filter((t) => t === typeFilter),
@@ -603,7 +507,7 @@ const VehiclePage: React.FC = () => {
         <PageWrapper>
             <RetreatLabel>{retreatInfo.retreat_name}</RetreatLabel>
 
-            {/* ── 이전 신청 내역 ── */}
+            {/* 이전 신청 내역 */}
             {history && (
                 <HistorySection>
                     <HistoryHeaderRow>
@@ -623,11 +527,11 @@ const VehiclePage: React.FC = () => {
                 </HistorySection>
             )}
 
-            {/* ── 차량 유형 선택 ── */}
+            {/* 차량 유형 선택 */}
             <TypeSelectorPanel>
                 <TypeSelectorTitle>어떤 차량을 신청하시나요?</TypeSelectorTitle>
                 <TypeSelectorHint>
-                    탑승할 차량 유형을 선택하면 해당 시간대를 확인하고 신청할 수 있습니다.{'\n'}
+                    탑승할 차량 유형을 선택하면 해당 버스와 시간대를 확인하고 신청할 수 있습니다.{'\n'}
                     여러 유형을 모두 확인하려면 <strong>전체 보기</strong>를 선택하세요.
                 </TypeSelectorHint>
                 <Select
@@ -642,7 +546,7 @@ const VehiclePage: React.FC = () => {
                 />
             </TypeSelectorPanel>
 
-            {/* ── 내 정보 ── */}
+            {/* 내 정보 */}
             <FormSection>
                 <SectionTitleRow>
                     <SectionTitle>내 정보</SectionTitle>
@@ -667,10 +571,7 @@ const VehiclePage: React.FC = () => {
                     <FormRow>
                         <FieldLabel>전화번호</FieldLabel>
                         <TextField
-                            size="small"
-                            placeholder="010-0000-0000"
-                            value={form.phone}
-                            fullWidth
+                            size="small" placeholder="010-0000-0000" value={form.phone} fullWidth
                             error={phoneError}
                             helperText={phoneError ? '010-0000-0000 형식으로 입력해 주세요' : undefined}
                             onChange={(e) => handleFormChange('phone', e.target.value)}
@@ -680,11 +581,17 @@ const VehiclePage: React.FC = () => {
                 </FormGrid>
             </FormSection>
 
-            {/* ── 버스 타입별 섹션 ── */}
+            {/* 버스 타입별 섹션 */}
             {displayedTypes.map((type) => {
                 const meta      = BUS_TYPE_META[type];
                 const activeDay = getActiveDay(type);
-                const slots     = retreatInfo.vehicles[type]?.[activeDay]?.slots ?? [];
+                const buses     = retreatInfo.vehicles[type]?.[activeDay]?.buses ?? [];
+
+                // 해당 유형에 버스가 있는 날짜만 드롭다운에 표시
+                const typeVehicle = retreatInfo.vehicles[type] ?? {};
+                const availDayOptions = dayKeys
+                    .filter((dk) => (typeVehicle[dk]?.buses?.length ?? 0) > 0)
+                    .map((dk, idx) => dayOptions.find((o) => o.value === dk) ?? { value: dk, label: `${idx + 1}일차` });
 
                 return (
                     <BusSectionWrapper key={type}>
@@ -696,7 +603,7 @@ const VehiclePage: React.FC = () => {
                                 <Select
                                     size="small"
                                     value={activeDay}
-                                    options={dayOptions}
+                                    options={availDayOptions.length > 0 ? availDayOptions : dayOptions}
                                     onChange={(v) => handleDayChange(type, v as DayKey)}
                                 />
                             </DaySelectorWrap>
@@ -710,13 +617,16 @@ const VehiclePage: React.FC = () => {
                                 >
                                     신청 안 함
                                 </SlotChip>
-                                {slots.length > 0 ? slots.map((time) => (
+                                {buses.length > 0 ? buses.map((bus) => (
                                     <SlotChip
-                                        key={time}
-                                        $selected={isSlotSelected(type, time)}
-                                        onClick={() => handleSlotSelect(type, time)}
+                                        key={bus.bus_id}
+                                        $selected={isSlotSelected(type, bus)}
+                                        onClick={() => handleSlotSelect(type, bus)}
                                     >
-                                        {formatTime12h(time)}
+                                        {bus.bus_name}
+                                        <SlotTime $selected={isSlotSelected(type, bus)}>
+                                            {formatTime12h(bus.departure_time)}
+                                        </SlotTime>
                                     </SlotChip>
                                 )) : (
                                     <EmptyNote>해당 날짜에 운행하는 차량이 없습니다.</EmptyNote>
@@ -727,18 +637,14 @@ const VehiclePage: React.FC = () => {
                 );
             })}
 
-            {/* ── 제출 버튼 ── */}
+            {/* 제출 버튼 */}
             <SubmitRow>
-                <Button
-                    variant="filled"
-                    onClick={handleSubmit}
-                    disabled={!isFormValid || submitting}
-                >
+                <Button variant="filled" onClick={handleSubmit} disabled={!isFormValid || submitting}>
                     {submitting ? '제출 중...' : '제출하기'}
                 </Button>
             </SubmitRow>
 
-            {/* ── 확인 다이얼로그 ── */}
+            {/* 확인 다이얼로그 */}
             <Dialog
                 open={confirmDialog !== null}
                 onClose={() => setConfirmDialog(null)}
@@ -750,25 +656,21 @@ const VehiclePage: React.FC = () => {
                 <DialogContent>
                     <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.6' }}>
                         {confirmDialog?.variant === 'replace'
-                            ? '이미 선택한 후발 차량이 있습니다.\n변경하면 기존 차량은 취소됩니다.'
+                            ? `이미 선택한 후발 차량이 있습니다.\n${confirmDialog.pendingBus.bus_name}으로 변경하면 기존 차량은 취소됩니다.`
                             : '같은 날 여러 차량을 신청하면 다른 사람이 탑승하지 못할 수 있습니다.\n실제로 탑승하는 경우에만 다중 선택해 주세요.'}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-                    <Button variant="outlined" onClick={() => setConfirmDialog(null)}>
-                        취소
-                    </Button>
+                    <Button variant="outlined" onClick={() => setConfirmDialog(null)}>취소</Button>
                     <Button variant="filled" onClick={handleConfirm}>
                         {confirmDialog?.variant === 'replace' ? '변경' : '선택 계속'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* ── 스낵바 ── */}
+            {/* 스낵바 */}
             <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={closeSnackbar}
+                open={snackbar.open} autoHideDuration={3000} onClose={closeSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
                 <Alert severity={snackbar.severity} onClose={closeSnackbar} sx={{ width: '100%' }}>

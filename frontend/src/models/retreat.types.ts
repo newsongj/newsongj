@@ -1,6 +1,6 @@
 // ── 서스펜디드밀 ──────────────────────────────────────────────────────────────
 
-export type ReviewStatus = 'APPROVED' | 'REJECTED';
+export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface SuspendedMealApplication {
   application_id: number;
@@ -10,7 +10,7 @@ export interface SuspendedMealApplication {
   fee_support: boolean;
   applicant_reason: string | null;
   applied_at: string;
-  review_status: ReviewStatus | null;
+  review_status: ReviewStatus;
   review_comment: string | null;
   reviewed_at: string | null;
 }
@@ -32,7 +32,61 @@ export interface SuspendedMealStats {
   rejected: number;
 }
 
-// ── 수련회 인원조사 ───────────────────────────────────────────────────────────
+// ── 수련회 인원조사 명단 ──────────────────────────────────────────────────────
+
+export type AttendanceStatus = '미정' | '정상' | '참석' | '후발' | '불참';
+export type FeeType = 'bus' | 'lodging';
+
+export interface ResearchMemberListItem {
+  member_id: number;
+  member_name: string;
+  generation: number;
+  gender: '남' | '여';
+  gyogu: number;
+  team: number;
+  group_no: number;
+  has_response: boolean;
+  day1_attendance: AttendanceStatus | null;
+  day2_attendance: AttendanceStatus | null;
+  day3_attendance: AttendanceStatus | null;
+  day4_attendance: AttendanceStatus | null;
+  fee_type: FeeType | null;
+}
+
+export interface ResearchListStats {
+  enrolled: number;
+  surveyed: number;
+  fee_paid: number;
+}
+
+// ── 차량조사 명단 ──────────────────────────────────────────────────────────────
+
+export interface BusInfo {
+  bus_name: string;
+  departure_time: string; // e.g. "15:00"
+}
+
+export interface VehicleMemberListItem {
+  member_id: number;
+  member_name: string;
+  generation: number;
+  gender: '남' | '여';
+  gyogu: number;
+  team: number;
+  group_no: number;
+  has_response: boolean;
+  day1_bus: BusInfo[] | null;
+  day2_bus: BusInfo[] | null;
+  day3_bus: BusInfo[] | null;
+  day4_bus: BusInfo[] | null;
+}
+
+export interface VehicleListStats {
+  enrolled: number;
+  responded: number;
+}
+
+// ── 수련회 인원조사 (대시보드용) ──────────────────────────────────────────────
 
 export type GenderFilter = 'all' | 'male' | 'female';
 
