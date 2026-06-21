@@ -10,28 +10,7 @@ import type {
   ResearchListStats,
   ResearchMemberListItem,
 } from '@/models/retreat.types';
-
-// ── 목업 ──────────────────────────────────────────────────────────────────────
-
-const MOCK_RETREAT_FEES = { fee_with_bus: 20000, fee_without_bus: 15000 };
-
-const MOCK_STATS: ResearchListStats = {
-  enrolled: 120,
-  surveyed: 98,
-  fee_paid: 85,
-};
-
-const MOCK_MEMBERS: ResearchMemberListItem[] = [
-  { member_id: 1, member_name: '김민준', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 0, has_response: true,  day1_attendance: '정상', day2_attendance: '참석', day3_attendance: '참석', day4_attendance: null,  fee_type: 'bus' },
-  { member_id: 2, member_name: '이서연', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 0, has_response: true,  day1_attendance: '후발', day2_attendance: '참석', day3_attendance: '참석', day4_attendance: '참석', fee_type: 'bus' },
-  { member_id: 3, member_name: '박지훈', generation: 22, gender: '남', gyogu: 1, team: 1, group_no: 1, has_response: false, day1_attendance: null,  day2_attendance: null,  day3_attendance: null,  day4_attendance: null,  fee_type: null },
-  { member_id: 4, member_name: '최수아',  generation: 25, gender: '여', gyogu: 1, team: 1, group_no: 1, has_response: true,  day1_attendance: '불참', day2_attendance: '불참', day3_attendance: '불참', day4_attendance: '불참', fee_type: 'lodging' },
-  { member_id: 5, member_name: '정도현', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 2, has_response: true,  day1_attendance: '미정', day2_attendance: null,  day3_attendance: null,  day4_attendance: null,  fee_type: null },
-  { member_id: 6, member_name: '한지민', generation: 24, gender: '여', gyogu: 1, team: 2, group_no: 3, has_response: false, day1_attendance: null,  day2_attendance: null,  day3_attendance: null,  day4_attendance: null,  fee_type: null },
-  { member_id: 7, member_name: '오승현', generation: 22, gender: '남', gyogu: 2, team: 3, group_no: 5, has_response: true,  day1_attendance: '정상', day2_attendance: '참석', day3_attendance: '참석', day4_attendance: '참석', fee_type: 'bus' },
-  { member_id: 8, member_name: '윤채원', generation: 25, gender: '여', gyogu: 2, team: 3, group_no: 6, has_response: false, day1_attendance: null,  day2_attendance: null,  day3_attendance: null,  day4_attendance: null,  fee_type: null },
-  { member_id: 9, member_name: '강지수',  generation: 26, gender: '여', gyogu: 2, team: 4, group_no: 7, has_response: true,  day1_attendance: '정상', day2_attendance: '참석', day3_attendance: '후발', day4_attendance: null,  fee_type: 'lodging' },
-];
+import { fetchResearchList } from '@/api/retreat';
 
 // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────────────
 
@@ -66,17 +45,9 @@ const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
 
 // ── Select 옵션 ───────────────────────────────────────────────────────────────
 
-const GYOGU_OPTIONS = [
-  { value: '',  label: '전체 교구' },
-  { value: '1', label: '1교구' },
-  { value: '2', label: '2교구' },
-  { value: '3', label: '3교구' },
-];
-
 const SURVEY_OPTIONS = [
-  { value: '',        label: '전체' },
-  { value: 'done',    label: '조사완료' },
-  { value: 'pending', label: '미조사' },
+  { value: '',     label: '전체' },
+  { value: 'done', label: '조사완료' },
 ];
 
 // ── Styled ────────────────────────────────────────────────────────────────────
@@ -126,30 +97,42 @@ const FilterLabel = styled('span')(({ theme }) => ({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const RetreatResearchListPage: React.FC = () => {
-  // TODO: 백엔드 연동 시 useQuery로 교체
   const [stats,       setStats]       = useState<ResearchListStats | null>(null);
   const [members,     setMembers]     = useState<ResearchMemberListItem[]>([]);
-  const [retreatFees, setRetreatFees] = useState(MOCK_RETREAT_FEES);
+  const [retreatFees, setRetreatFees] = useState({ fee_with_bus: 0, fee_without_bus: 0 });
+  const [numDays,     setNumDays]     = useState(3);
   const [gyogu,       setGyogu]       = useState('');
   const [team,        setTeam]        = useState('');
   const [surveyStatus, setSurveyStatus] = useState('');
 
   useEffect(() => {
-    // TODO: fetchResearchMemberList(), fetchRetreatInfo() 호출로 교체
-    setStats(MOCK_STATS);
-    setMembers(MOCK_MEMBERS);
-    setRetreatFees(MOCK_RETREAT_FEES);
+    fetchResearchList()
+      .then((data) => {
+        setStats({ enrolled: data.enrolled, surveyed: data.surveyed, fee_paid: data.fee_paid });
+        setMembers(data.members);
+        setRetreatFees({ fee_with_bus: data.fee_with_bus, fee_without_bus: data.fee_without_bus });
+        setNumDays(data.num_days);
+      })
+      .catch(() => {});
   }, []);
+
+  const gyoguOptions = useMemo(() => {
+    const gyogus = [...new Set(members.map((m) => m.gyogu))].sort((a, b) => a - b);
+    return [
+      { value: '', label: '전체 교구' },
+      ...gyogus.map((g) => ({ value: String(g), label: `${g}교구` })),
+    ];
+  }, [members]);
 
   const teamOptions = useMemo(() => {
     const teams = gyogu
-      ? [...new Set(MOCK_MEMBERS.filter((m) => String(m.gyogu) === gyogu).map((m) => m.team))].sort((a, b) => a - b)
+      ? [...new Set(members.filter((m) => String(m.gyogu) === gyogu).map((m) => m.team))].sort((a, b) => a - b)
       : [];
     return [
       { value: '', label: '전체 팀' },
       ...teams.map((t) => ({ value: String(t), label: `${t}팀` })),
     ];
-  }, [gyogu]);
+  }, [gyogu, members]);
 
   const filtered = useMemo(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
@@ -159,36 +142,44 @@ const RetreatResearchListPage: React.FC = () => {
     return true;
   }), [members, gyogu, team, surveyStatus]);
 
-  const columns = useMemo((): Column<ResearchMemberListItem>[] => [
-    { id: 'gyogu',           label: '교구',    align: 'center', width: 80,  render: (v) => `${v}교구` },
-    { id: 'team',            label: '팀',      align: 'center', width: 80,  render: (v) => `${v}팀` },
-    { id: 'group_no',        label: '그룹',    align: 'center', width: 80,  render: (v) => `${v}그룹` },
-    { id: 'generation',      label: '기수',    align: 'center', width: 80,  render: (v) => `${v}기` },
-    { id: 'gender',          label: '성별',    align: 'center', width: 60 },
-    { id: 'member_name',     label: '이름',    align: 'left',   width: 100 },
-    { id: 'day1_attendance', label: '1일차',   align: 'center', width: 90,  render: renderAttendance },
-    { id: 'day2_attendance', label: '2일차',   align: 'center', width: 90,  render: renderAttendance },
-    { id: 'day3_attendance', label: '3일차',   align: 'center', width: 90,  render: renderAttendance },
-    { id: 'day4_attendance', label: '4일차',   align: 'center', width: 90,  render: renderAttendance },
-    {
-      id: 'fee_type',
-      label: '회비납부',
-      align: 'center',
-      width: 220,
-      render: (_value, row) => {
-        if (!row.has_response) return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
-        const chipBase: React.CSSProperties = {
-          display: 'inline-block', padding: '2px 10px', borderRadius: 999,
-          fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
-        };
-        if (!row.fee_type)
-          return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
-        if (row.fee_type === 'bus')
-          return <span style={{ ...chipBase, color: '#2563eb', backgroundColor: '#eff6ff', fontWeight: 600 }}>버스 탑승 ({formatWon(retreatFees.fee_with_bus)})</span>;
-        return <span style={{ ...chipBase, color: '#0f766e', backgroundColor: '#f0fdfa', fontWeight: 600 }}>버스 미탑승+숙박 ({formatWon(retreatFees.fee_without_bus)})</span>;
+  const DAY_ATT_KEYS = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
+
+  const columns = useMemo((): Column<ResearchMemberListItem>[] => {
+    const dayColumns: Column<ResearchMemberListItem>[] = DAY_ATT_KEYS.slice(0, numDays).map((key, i) => ({
+      id: key,
+      label: `${i + 1}일차`,
+      align: 'center' as const,
+      width: 90,
+      render: renderAttendance,
+    }));
+    return [
+      { id: 'gyogu',       label: '교구', align: 'center', width: 80,  render: (v) => `${v}교구` },
+      { id: 'team',        label: '팀',   align: 'center', width: 80,  render: (v) => `${v}팀` },
+      { id: 'group_no',    label: '그룹', align: 'center', width: 80,  render: (v) => `${v}그룹` },
+      { id: 'generation',  label: '기수', align: 'center', width: 80,  render: (v) => `${v}기` },
+      { id: 'gender',      label: '성별', align: 'center', width: 60 },
+      { id: 'member_name', label: '이름', align: 'left',   width: 100 },
+      ...dayColumns,
+      {
+        id: 'fee_type',
+        label: '회비납부',
+        align: 'center' as const,
+        width: 220,
+        render: (_value: unknown, row: ResearchMemberListItem) => {
+          if (!row.has_response) return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
+          const chipBase: React.CSSProperties = {
+            display: 'inline-block', padding: '2px 10px', borderRadius: 999,
+            fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+          };
+          if (!row.fee_type)
+            return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
+          if (row.fee_type === 'bus')
+            return <span style={{ ...chipBase, color: '#2563eb', backgroundColor: '#eff6ff', fontWeight: 600 }}>버스 탑승 ({formatWon(retreatFees.fee_with_bus)})</span>;
+          return <span style={{ ...chipBase, color: '#0f766e', backgroundColor: '#f0fdfa', fontWeight: 600 }}>버스 미탑승+숙박 ({formatWon(retreatFees.fee_without_bus)})</span>;
+        },
       },
-    },
-  ], [retreatFees]);
+    ];
+  }, [retreatFees, numDays]);
 
   const notSurveyed = (stats?.enrolled ?? 0) - (stats?.surveyed ?? 0);
   const surveyPct   = stats && stats.enrolled > 0
@@ -234,7 +225,7 @@ const RetreatResearchListPage: React.FC = () => {
           <FilterLabel>교구</FilterLabel>
           <Select
             value={gyogu}
-            options={GYOGU_OPTIONS}
+            options={gyoguOptions}
             onChange={handleGyoguChange}
             width={120}
           />

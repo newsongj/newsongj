@@ -4,20 +4,9 @@ import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
 import type { Column } from '@components/common/DataTable/DataTable.types';
 import type { BusInfo, VehicleMemberListItem } from '@/models/retreat.types';
+import { fetchVehicleMemberList } from '@/api/retreat';
 
-// ── 목업 ─────────────────────────────────────────────────────────────────────
-
-const MOCK_MEMBERS: VehicleMemberListItem[] = [
-  { member_id: 1, member_name: '김민준', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 0, has_response: true,  day1_bus: [{ bus_name: '후발버스1', departure_time: '15:00' }], day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: null },
-  { member_id: 2, member_name: '이서연', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 0, has_response: false, day1_bus: null,                                                  day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: null },
-  { member_id: 3, member_name: '박지훈', generation: 22, gender: '남', gyogu: 1, team: 1, group_no: 1, has_response: true,  day1_bus: [{ bus_name: '픽업버스1', departure_time: '11:30' }], day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: [{ bus_name: '귀경버스1', departure_time: '05:30' }] },
-  { member_id: 4, member_name: '최수아', generation: 25, gender: '여', gyogu: 1, team: 1, group_no: 1, has_response: true,  day1_bus: null,                                                  day2_bus: [{ bus_name: '후발버스1', departure_time: '15:00' }],                          day3_bus: null,                                             day4_bus: null },
-  { member_id: 5, member_name: '정도현', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 2, has_response: false, day1_bus: null,                                                  day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: null },
-  { member_id: 6, member_name: '한지민', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 2, has_response: true,  day1_bus: null,                                                  day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: [{ bus_name: '귀경버스1', departure_time: '22:00' }] },
-  { member_id: 7, member_name: '오승현', generation: 22, gender: '남', gyogu: 2, team: 3, group_no: 5, has_response: true,  day1_bus: [{ bus_name: '후발버스2', departure_time: '18:00' }], day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: null },
-  { member_id: 8, member_name: '윤채원', generation: 25, gender: '여', gyogu: 2, team: 3, group_no: 6, has_response: false, day1_bus: null,                                                  day2_bus: null,                                                                         day3_bus: null,                                             day4_bus: null },
-  { member_id: 9, member_name: '강지수', generation: 26, gender: '여', gyogu: 2, team: 4, group_no: 7, has_response: true,  day1_bus: null,                                                  day2_bus: [{ bus_name: '픽업버스1', departure_time: '11:30' }, { bus_name: '픽업버스2', departure_time: '15:00' }], day3_bus: null, day4_bus: null },
-];
+const DAY_BUS_KEYS = ['day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'] as const;
 
 // ── 렌더 헬퍼 ────────────────────────────────────────────────────────────────
 
@@ -39,8 +28,6 @@ const chipBase: React.CSSProperties = {
   fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
 };
 
-type DayBusKey = 'day1_bus' | 'day2_bus' | 'day3_bus' | 'day4_bus';
-
 // busType/departureTime 필터 기준으로 해당 일차에서 보여줄 버스만 반환
 const filterBuses = (
   buses: BusInfo[] | null,
@@ -55,7 +42,7 @@ const filterBuses = (
   });
 };
 
-const makeRenderBus = (dayKey: DayBusKey, busType: string, departureTime: string) =>
+const makeRenderBus = (dayKey: typeof DAY_BUS_KEYS[number], busType: string, departureTime: string) =>
   (_value: unknown, row: VehicleMemberListItem): React.ReactNode => {
     if (!row.has_response) return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
     const displayBuses = filterBuses(row[dayKey], busType, departureTime);
@@ -77,13 +64,6 @@ const makeRenderBus = (dayKey: DayBusKey, busType: string, departureTime: string
 
 // ── Select 옵션 ───────────────────────────────────────────────────────────────
 
-const GYOGU_OPTIONS = [
-  { value: '',  label: '전체 교구' },
-  { value: '1', label: '1교구' },
-  { value: '2', label: '2교구' },
-  { value: '3', label: '3교구' },
-];
-
 const BUS_TYPE_OPTIONS = [
   { value: '',   label: '전체 유형' },
   { value: '후발', label: '후발' },
@@ -92,9 +72,8 @@ const BUS_TYPE_OPTIONS = [
 ];
 
 const SURVEY_OPTIONS = [
-  { value: '',        label: '전체' },
-  { value: 'done',    label: '조사완료' },
-  { value: 'pending', label: '미조사' },
+  { value: '',     label: '전체' },
+  { value: 'done', label: '조사완료' },
 ];
 
 // ── Styled ────────────────────────────────────────────────────────────────────
@@ -141,6 +120,7 @@ const FilterLabel = styled('span')(({ theme }) => ({
 
 const RetreatVehicleListPage: React.FC = () => {
   const [members, setMembers] = useState<VehicleMemberListItem[]>([]);
+  const [numDays, setNumDays] = useState(3);
   const [gyogu,          setGyogu]          = useState('');
   const [team,           setTeam]           = useState('');
   const [busType,        setBusType]        = useState('');
@@ -148,50 +128,66 @@ const RetreatVehicleListPage: React.FC = () => {
   const [surveyStatus,   setSurveyStatus]   = useState('');
 
   useEffect(() => {
-    // TODO: fetchVehicleMemberList() 호출로 교체
-    setMembers(MOCK_MEMBERS);
+    fetchVehicleMemberList()
+      .then((data) => {
+        setMembers(data.members);
+        setNumDays(data.num_days);
+      })
+      .catch(() => {});
   }, []);
+
+  const gyoguOptions = useMemo(() => {
+    const gyogus = [...new Set(members.map((m) => m.gyogu))].sort((a, b) => a - b);
+    return [
+      { value: '', label: '전체 교구' },
+      ...gyogus.map((g) => ({ value: String(g), label: `${g}교구` })),
+    ];
+  }, [members]);
 
   const teamOptions = useMemo(() => {
     const teams = gyogu
-      ? [...new Set(MOCK_MEMBERS.filter((m) => String(m.gyogu) === gyogu).map((m) => m.team))].sort((a, b) => a - b)
+      ? [...new Set(members.filter((m) => String(m.gyogu) === gyogu).map((m) => m.team))].sort((a, b) => a - b)
       : [];
     return [
       { value: '', label: '전체 팀' },
       ...teams.map((t) => ({ value: String(t), label: `${t}팀` })),
     ];
-  }, [gyogu]);
+  }, [gyogu, members]);
 
-  // busType 선택 시 해당 유형의 고유 출발 시간 목록 생성
   const timeOptions = useMemo(() => {
     if (!busType) return [{ value: '', label: '전체 시간' }];
     const times = new Set<string>();
-    MOCK_MEMBERS.forEach((m) => {
-      ([m.day1_bus, m.day2_bus, m.day3_bus, m.day4_bus].filter(Boolean) as BusInfo[][])
-        .flat()
-        .forEach((bus) => {
+    members.forEach((m) => {
+      DAY_BUS_KEYS.slice(0, numDays).forEach((key) => {
+        (m[key] ?? []).forEach((bus) => {
           if (bus.bus_name.startsWith(busType)) times.add(bus.departure_time);
         });
+      });
     });
     return [
       { value: '', label: '전체 시간' },
       ...[...times].sort().map((t) => ({ value: t, label: t })),
     ];
-  }, [busType]);
+  }, [busType, members, numDays]);
 
-  // columns은 busType/departureTime 변경 시 재생성 (셀 렌더가 필터를 반영해야 함)
-  const columns = useMemo<Column<VehicleMemberListItem>[]>(() => [
-    { id: 'gyogu',       label: '교구', align: 'center', width: 80,  render: (v) => `${v}교구` },
-    { id: 'team',        label: '팀',   align: 'center', width: 60,  render: (v) => `${v}팀` },
-    { id: 'group_no',    label: '그룹', align: 'center', width: 70,  render: (v) => `${v}그룹` },
-    { id: 'generation',  label: '기수', align: 'center', width: 60,  render: (v) => `${v}기` },
-    { id: 'gender',      label: '성별', align: 'center', width: 60 },
-    { id: 'member_name', label: '이름', align: 'left',   width: 90 },
-    { id: 'day1_bus', label: '1일차', align: 'center', width: 180, render: makeRenderBus('day1_bus', busType, departureTime) },
-    { id: 'day2_bus', label: '2일차', align: 'center', width: 180, render: makeRenderBus('day2_bus', busType, departureTime) },
-    { id: 'day3_bus', label: '3일차', align: 'center', width: 180, render: makeRenderBus('day3_bus', busType, departureTime) },
-    { id: 'day4_bus', label: '4일차', align: 'center', width: 180, render: makeRenderBus('day4_bus', busType, departureTime) },
-  ], [busType, departureTime]);
+  const columns = useMemo<Column<VehicleMemberListItem>[]>(() => {
+    const dayColumns: Column<VehicleMemberListItem>[] = DAY_BUS_KEYS.slice(0, numDays).map((key, i) => ({
+      id: key,
+      label: `${i + 1}일차`,
+      align: 'center' as const,
+      width: 180,
+      render: makeRenderBus(key, busType, departureTime),
+    }));
+    return [
+      { id: 'gyogu',       label: '교구', align: 'center', width: 80,  render: (v) => `${v}교구` },
+      { id: 'team',        label: '팀',   align: 'center', width: 60,  render: (v) => `${v}팀` },
+      { id: 'group_no',    label: '그룹', align: 'center', width: 70,  render: (v) => `${v}그룹` },
+      { id: 'generation',  label: '기수', align: 'center', width: 60,  render: (v) => `${v}기` },
+      { id: 'gender',      label: '성별', align: 'center', width: 60 },
+      { id: 'member_name', label: '이름', align: 'left',   width: 90 },
+      ...dayColumns,
+    ];
+  }, [busType, departureTime, numDays]);
 
   const filtered = useMemo(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
@@ -200,9 +196,7 @@ const RetreatVehicleListPage: React.FC = () => {
     if (surveyStatus === 'pending' &&  m.has_response) return false;
     // busType 또는 departureTime 필터: 해당 조건에 맞는 버스가 하나라도 있어야 포함
     if (busType || departureTime) {
-      const allBuses = ([m.day1_bus, m.day2_bus, m.day3_bus, m.day4_bus]
-        .filter(Boolean) as BusInfo[][])
-        .flat();
+      const allBuses = (DAY_BUS_KEYS.slice(0, numDays).map((k) => m[k]).filter(Boolean) as BusInfo[][]).flat();
       if (!allBuses.some((bus) => {
         const typeMatch = !busType || bus.bus_name.startsWith(busType);
         const timeMatch = !departureTime || bus.departure_time === departureTime;
@@ -229,7 +223,7 @@ const RetreatVehicleListPage: React.FC = () => {
           <FilterLabel>교구</FilterLabel>
           <Select
             value={gyogu}
-            options={GYOGU_OPTIONS}
+            options={gyoguOptions}
             onChange={handleGyoguChange}
             width={120}
           />

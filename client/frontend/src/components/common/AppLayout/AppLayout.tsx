@@ -34,13 +34,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
     const navigate = useNavigate();
     const user = getStoredUser();
 
-    const roleLabel = !user
-        ? undefined
-        : user.role === 'admin'
-        ? '관리자'
-        : user.role === 'team_leader'
-        ? `${user.gyogu}교구 ${user.team}팀 팀장`
-        : `${user.gyogu}교구 ${user.team}팀 ${user.group_no}그룹 그룹장`;
+    const roleLabel = (() => {
+        if (!user) return undefined;
+        const parts: string[] = [];
+        if (user.gyogu)    parts.push(`${user.gyogu}교구`);
+        if (user.team)     parts.push(`${user.team}팀`);
+        if (user.group_no) parts.push(`${user.group_no}그룹`);
+        if (user.leader_names?.length) parts.push(...user.leader_names);
+        return parts.length ? parts.join(' ') : undefined;
+    })();
 
     const handleLogout = async () => {
         await apiLogout();

@@ -15,11 +15,14 @@ import {
 import {
   fetchRetreatAccommodation,
   fetchRetreatHeadcount,
+  fetchRetreatVehicle,
 } from '@/api/retreat';
 import {
-  RetreatAccommodationResponse,
+  BusDashboardItem,
   RetreatDayHeadcount,
   RetreatHeadcountResponse,
+  RetreatAccommodationResponse,
+  VehicleDashboardData,
 } from '@/models/retreat.types';
 import StatCard from '@components/common/StatCard';
 import ChartContainer from '@components/common/ChartContainer';
@@ -142,11 +145,7 @@ const DayTotalValue = styled('span')({
 
 // ── Select Options ────────────────────────────────────────────────────────────
 
-const DAY_OPTIONS = [
-  { value: 'day1', label: '첫째날' },
-  { value: 'day2', label: '둘째날' },
-  { value: 'day3', label: '셋째날' },
-];
+const DAY_LABEL_LIST = ['첫째날', '둘째날', '셋째날', '넷째날'];
 
 // ── 진행율 바 ─────────────────────────────────────────────────────────────────
 
@@ -184,8 +183,6 @@ const TooltipStyle = {
 
 // ── 인원조사 탭 ───────────────────────────────────────────────────────────────
 
-type DayKey = 'day1' | 'day2' | 'day3';
-
 const buildChartData = (day: RetreatDayHeadcount, isDay1: boolean) => {
   if (isDay1) {
     return [
@@ -203,39 +200,27 @@ const buildChartData = (day: RetreatDayHeadcount, isDay1: boolean) => {
   ];
 };
 
-const DAY_LABELS: Record<DayKey, string> = {
-  day1: '첫째날',
-  day2: '둘째날',
-  day3: '셋째날',
-};
-
-const RETREAT_HEADCOUNT_MOCK: RetreatHeadcountResponse = {
-  enrolled: 120,
-  surveyed: 98,
-  total: 95,
-  male: 52,
-  female: 43,
-  day1: { total: 88, undecided: 10, absent: 22, normal: 45, attend: 0, late: 11 },
-  day2: { total: 92, undecided:  8, absent: 18, normal:  0, attend: 58, late: 14 },
-  day3: { total: 90, undecided:  9, absent: 20, normal:  0, attend: 55, late: 15 },
-};
-
 const HeadcountTab: React.FC = () => {
   const [data, setData] = useState<RetreatHeadcountResponse | null>(null);
-  const [selectedDay, setSelectedDay] = useState<DayKey>('day1');
+  const [selectedDayIdx, setSelectedDayIdx] = useState(0);
 
   useEffect(() => {
     fetchRetreatHeadcount()
       .then(setData)
-      .catch(() => setData(RETREAT_HEADCOUNT_MOCK));
+      .catch(() => {});
   }, []);
+
+  const dayOptions = useMemo(
+    () => (data?.days ?? []).map((_, i) => ({ value: String(i), label: DAY_LABEL_LIST[i] ?? `${i + 1}일차` })),
+    [data],
+  );
 
   const surveyPct = data && data.enrolled > 0
     ? Math.round(data.surveyed / data.enrolled * 100)
     : 0;
 
-  const dayData = data ? data[selectedDay] : null;
-  const isDay1 = selectedDay === 'day1';
+  const dayData = data ? (data.days[selectedDayIdx] ?? null) : null;
+  const isDay1 = selectedDayIdx === 0;
   const chartData = dayData ? buildChartData(dayData, isDay1) : [];
 
   return (
@@ -288,21 +273,21 @@ const HeadcountTab: React.FC = () => {
       <FilterRow>
         <FilterLabel>날짜</FilterLabel>
         <Select
-          value={selectedDay}
-          options={DAY_OPTIONS}
-          onChange={(v) => setSelectedDay(v as DayKey)}
+          value={String(selectedDayIdx)}
+          options={dayOptions}
+          onChange={(v) => setSelectedDayIdx(Number(v))}
           width={110}
         />
         {dayData && (
           <DayTotalBadge>
-            <DayTotalLabel>{DAY_LABELS[selectedDay]} 총인원</DayTotalLabel>
+            <DayTotalLabel>{DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 총인원</DayTotalLabel>
             <DayTotalValue>{dayData.total}명</DayTotalValue>
           </DayTotalBadge>
         )}
       </FilterRow>
 
       <ChartContainer
-        title={`${DAY_LABELS[selectedDay]} 인원 현황`}
+        title={`${DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 인원 현황`}
         description={isDay1 ? '미정 · 불참 · 정상 · 후발' : '미정 · 불참 · 참석 · 후발'}
       >
         <ResponsiveContainer width="100%" height={280}>
@@ -346,40 +331,6 @@ const HeadcountTab: React.FC = () => {
 
 // ── 차량조사 타입 & 목업 ─────────────────────────────────────────────────────
 
-interface BusDashboardItem {
-  bus_id:           number;
-  bus_name:         string;
-  departure_date:   string;
-  departure_time:   string;
-  passenger_count:  number;
-  seat_count:       number;
-}
-
-interface VehicleDashboardData {
-  retreat_start_date: string;
-  normal_depart:      number;
-  buses:              BusDashboardItem[];
-}
-
-const RETREAT_VEHICLE_MOCK: VehicleDashboardData = {
-  retreat_start_date: '2026-08-12',
-  normal_depart: 12,
-  buses: [
-    // 후발 — 1일차(8/12), 2일차(8/13) 양일 운행
-    { bus_id: 1, bus_name: '후발버스1', departure_date: '2026-08-12', departure_time: '15:00', passenger_count: 23, seat_count: 45 },
-    { bus_id: 2, bus_name: '후발버스2', departure_date: '2026-08-12', departure_time: '18:00', passenger_count: 18, seat_count: 45 },
-    { bus_id: 6, bus_name: '후발버스1', departure_date: '2026-08-13', departure_time: '12:00', passenger_count:  9, seat_count: 45 },
-    { bus_id: 7, bus_name: '후발버스2', departure_date: '2026-08-13', departure_time: '16:00', passenger_count: 14, seat_count: 45 },
-    // 픽업 — 2일차(8/13), 3일차(8/14)
-    { bus_id: 5, bus_name: '픽업버스1', departure_date: '2026-08-13', departure_time: '11:30', passenger_count: 12, seat_count: 28 },
-    { bus_id: 8, bus_name: '픽업버스2', departure_date: '2026-08-13', departure_time: '17:00', passenger_count:  7, seat_count: 28 },
-    { bus_id: 9, bus_name: '픽업버스1', departure_date: '2026-08-14', departure_time: '10:00', passenger_count:  5, seat_count: 28 },
-    // 귀경 — 3일차(8/14) 새벽귀경, 4일차(8/15) 새벽+밤귀경
-    { bus_id: 10, bus_name: '귀경버스1', departure_date: '2026-08-14', departure_time: '05:30', passenger_count:  8, seat_count: 45 },
-    { bus_id:  3, bus_name: '귀경버스1', departure_date: '2026-08-15', departure_time: '05:30', passenger_count: 15, seat_count: 45 },
-    { bus_id:  4, bus_name: '귀경버스2', departure_date: '2026-08-15', departure_time: '22:00', passenger_count: 30, seat_count: 45 },
-  ],
-};
 
 const getDayLabel = (date: string, startDate: string) => {
   if (!startDate || !date) return date;
@@ -523,8 +474,9 @@ const VehicleTab: React.FC = () => {
   const [data, setData] = useState<VehicleDashboardData | null>(null);
 
   useEffect(() => {
-    // TODO: fetchRetreatVehicle() → VehicleDashboardData 연동
-    setData(RETREAT_VEHICLE_MOCK);
+    fetchRetreatVehicle()
+      .then(setData)
+      .catch(() => {});
   }, []);
 
   return (
@@ -558,24 +510,6 @@ const VehicleTab: React.FC = () => {
 
 // ── 숙소/야식 인원 탭 ────────────────────────────────────────────────────────
 
-const ACCOMMODATION_DAY_OPTIONS = [
-  { value: 'day1', label: '첫째날' },
-  { value: 'day2', label: '둘째날' },
-  { value: 'day3', label: '셋째날' },
-];
-
-const ACCOMMODATION_DAY_LABELS: Record<string, string> = {
-  day1: '첫째날',
-  day2: '둘째날',
-  day3: '셋째날',
-};
-
-const RETREAT_ACCOMMODATION_MOCK: RetreatAccommodationResponse = {
-  day1: { total: 0, male: 0, female: 0 },
-  day2: { total: 0, male: 0, female: 0 },
-  day3: { total: 0, male: 0, female: 0 },
-};
-
 const GYOGU_OPTIONS = [
   { value: '',        label: '전체 교구' },
   { value: '1',       label: '1교구' },
@@ -605,7 +539,7 @@ const FilterDivider = styled('div')(({ theme }) => ({
 
 const AccommodationTab: React.FC = () => {
   const [data, setData] = useState<RetreatAccommodationResponse | null>(null);
-  const [selectedDay, setSelectedDay] = useState<'day1' | 'day2' | 'day3'>('day1');
+  const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const [gyogu, setGyogu] = useState('');
   const [team, setTeam] = useState('');
 
@@ -617,10 +551,15 @@ const AccommodationTab: React.FC = () => {
 
     fetchRetreatAccommodation({ gyogu_no, team_no, is_imwondan })
       .then(setData)
-      .catch(() => setData(RETREAT_ACCOMMODATION_MOCK));
+      .catch(() => {});
   }, [gyogu, team]);
 
-  const dayData = data ? data[selectedDay] : null;
+  const dayOptions = useMemo(
+    () => (data?.days ?? []).map((_, i) => ({ value: String(i), label: DAY_LABEL_LIST[i] ?? `${i + 1}일차` })),
+    [data],
+  );
+
+  const dayData = data ? (data.days[selectedDayIdx] ?? null) : null;
 
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
     setGyogu(String(v));
@@ -632,9 +571,9 @@ const AccommodationTab: React.FC = () => {
       <FilterRow>
         <FilterLabel>날짜</FilterLabel>
         <Select
-          value={selectedDay}
-          options={ACCOMMODATION_DAY_OPTIONS}
-          onChange={(v) => setSelectedDay(v as 'day1' | 'day2' | 'day3')}
+          value={String(selectedDayIdx)}
+          options={dayOptions}
+          onChange={(v) => setSelectedDayIdx(Number(v))}
           width={110}
         />
 
@@ -661,7 +600,7 @@ const AccommodationTab: React.FC = () => {
         <StatCard
           label="총 인원"
           value={dayData ? `${dayData.total}명` : '-'}
-          change={ACCOMMODATION_DAY_LABELS[selectedDay]}
+          change={DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`}
           isPositive={true}
           icon={<Home size={24} />}
           iconBgColor="#e0f2fe"

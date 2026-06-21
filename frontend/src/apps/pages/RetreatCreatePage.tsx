@@ -8,6 +8,7 @@ import { Button } from '@components/common/Button';
 import { Snackbar } from '@components/common/Snackbar';
 import { BaseModal } from '@components/common/BaseModal';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
+import { createRetreat, createBus } from '@/api/retreat';
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ const RetreatCreatePage: React.FC = () => {
 
   const [form, setForm] = useState<BasicForm>(DEFAULT_FORM);
   const [buses, setBuses] = useState<LocalBus[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [busModal, setBusModal] = useState<Omit<LocalBus, 'localId'>>(DEFAULT_BUS);
   const [modalError, setModalError] = useState('');
@@ -272,28 +274,41 @@ const RetreatCreatePage: React.FC = () => {
     setBuses([]);
   };
 
-  const handleSave = () => {
-    const payload = {
-      retreat_name: form.retreatName,
-      start_date: form.startDate,
-      end_date: form.endDate,
-      fee_with_bus: Number(parseCurrency(form.busFare) || 0),
-      fee_without_bus: Number(parseCurrency(form.lodgingFare) || 0),
-      meal_price: Number(parseCurrency(form.mealPrice) || 0),
-      suspended_meal_count: Number(form.suspendedMealCount || 0),
-    };
-    const busPayloads = buses.map((b) => ({
-      bus_name: b.bus_name,
-      seat_count: Number(b.seat_count),
-      departure_date: b.departure_date,
-      departure_time: b.departure_time,
-      departure_place: b.departure_place,
-      arrival_place: b.arrival_place,
-    }));
-    // TODO: POST /api/retreat → retreat_id 수신 후 각 버스 POST /api/bus
-    console.log('retreat payload', payload);
-    console.log('bus payloads', busPayloads);
-    showSnackbar('수련회 생성 설정값을 저장할 준비가 되었습니다.', 'success');
+  const handleSave = async () => {
+    if (!form.retreatName || !form.startDate || !form.endDate) {
+      showSnackbar('수련회 이름, 시작일, 종료일을 입력해주세요.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await createRetreat({
+        retreat_name: form.retreatName,
+        start_date: form.startDate,
+        end_date: form.endDate,
+        fee_with_bus: Number(parseCurrency(form.busFare) || 0),
+        fee_without_bus: Number(parseCurrency(form.lodgingFare) || 0),
+        meal_price: Number(parseCurrency(form.mealPrice) || 0),
+        suspended_meal_count: Number(form.suspendedMealCount || 0),
+      });
+      await Promise.all(
+        buses.map((b) =>
+          createBus({
+            bus_name: b.bus_name,
+            seat_count: Number(b.seat_count),
+            departure_date: b.departure_date,
+            departure_time: b.departure_time,
+            departure_place: b.departure_place,
+            arrival_place: b.arrival_place,
+          })
+        )
+      );
+      showSnackbar('수련회가 생성되었습니다.', 'success');
+      handleReset();
+    } catch (e: any) {
+      showSnackbar(e?.message || '저장 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -399,7 +414,7 @@ const RetreatCreatePage: React.FC = () => {
 
       <FooterActions>
         <Button variant="outlined" onClick={handleReset}>초기화</Button>
-        <Button variant="filled" onClick={handleSave}>수련회 생성 설정 저장</Button>
+        <Button variant="filled" onClick={handleSave} disabled={isSaving}>{isSaving ? '저장 중...' : '수련회 생성 설정 저장'}</Button>
       </FooterActions>
 
       {/* 버스 추가 모달 */}

@@ -4,4 +4,6 @@ export interface BadgeProps {
   variant: BadgeVariant;
   children: React.ReactNode;
   size?: 'small' | 'medium' | 'large';
+  style?: React.CSSProperties;
+  onClick?: () => void;
 }

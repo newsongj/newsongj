@@ -15,7 +15,9 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
     (res) => res,
     (error) => {
-        if (error.response?.status === 401) {
+        const url = error.config?.url ?? '';
+        const isLoginRequest = url === '/auth/login' || url === '/auth/member-login';
+        if (error.response?.status === 401 && !isLoginRequest) {
             storage.removeToken();
             window.location.href = '/login';
         }

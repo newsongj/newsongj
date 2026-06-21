@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { IconButton } from '@mui/material';
@@ -8,18 +9,10 @@ import { Button } from '@components/common/Button';
 import { Snackbar } from '@components/common/Snackbar';
 import { BaseModal } from '@components/common/BaseModal';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
+import { getActiveRetreat, updateRetreat, createBus, deleteBus, completeRetreat } from '@/api/retreat';
+import { BusResponse } from '@/models/retreat.types';
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-
-interface ServerBus {
-  bus_id: number;
-  bus_name: string;
-  departure_date: string;
-  departure_time: string;
-  seat_count: number;
-  departure_place: string;
-  arrival_place: string;
-}
 
 interface LocalBus {
   localId: string;
@@ -45,26 +38,6 @@ interface BasicForm {
 const DEFAULT_BUS: Omit<LocalBus, 'localId'> = {
   bus_name: '', departure_date: '', departure_time: '',
   seat_count: '', departure_place: '', arrival_place: '',
-};
-
-// ── 목업 (TODO: GET /api/retreat/active 로 교체) ─────────────────────────────
-
-const MOCK_RETREAT = {
-  retreat_id: 1,
-  retreat_name: '2026 뉴송 여름 수련회',
-  start_date: '2026-08-12',
-  end_date: '2026-08-15',
-  fee_with_bus: 35000,
-  fee_without_bus: 20000,
-  meal_price: 7000,
-  suspended_meal_count: 5,
-  buses: [
-    { bus_id: 1, bus_name: '후발버스1', seat_count: 45, departure_date: '2026-08-12', departure_time: '15:00', departure_place: '강남역', arrival_place: '수련회장' },
-    { bus_id: 2, bus_name: '후발버스2', seat_count: 45, departure_date: '2026-08-12', departure_time: '18:00', departure_place: '강남역', arrival_place: '수련회장' },
-    { bus_id: 3, bus_name: '귀경버스1', seat_count: 45, departure_date: '2026-08-15', departure_time: '05:30', departure_place: '수련회장', arrival_place: '강남역' },
-    { bus_id: 4, bus_name: '귀경버스2', seat_count: 45, departure_date: '2026-08-15', departure_time: '22:00', departure_place: '수련회장', arrival_place: '강남역' },
-    { bus_id: 5, bus_name: '픽업버스1', seat_count: 28, departure_date: '2026-08-13', departure_time: '11:30', departure_place: '강남역', arrival_place: '수련회장' },
-  ] as ServerBus[],
 };
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
@@ -95,7 +68,7 @@ const getBusStyle = (name: string) => {
   return { color: '#595959', bg: '#f5f5f5' };
 };
 
-const serverBusToLocal = (b: ServerBus): LocalBus => ({
+const serverBusToLocal = (b: BusResponse): LocalBus => ({
   localId: nextId(),
   bus_id: b.bus_id,
   bus_name: b.bus_name,
@@ -233,12 +206,35 @@ const FooterActions = styled('div')(({ theme }) => ({
   display: 'flex', justifyContent: 'flex-end', gap: theme.custom.spacing.sm,
 }));
 
+const EmptyStateWrapper = styled('div')(({ theme }) => ({
+  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+  gap: theme.custom.spacing.lg,
+  padding: `${theme.custom.spacing.xl} ${theme.custom.spacing.lg}`,
+  minHeight: 320,
+  backgroundColor: theme.custom.colors.neutral._99,
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: theme.custom.borderRadius,
+  boxShadow: '0 10px 30px rgba(15,23,42,0.04)',
+}));
+
+const EmptyStateText = styled('p')(({ theme }) => ({
+  margin: 0,
+  fontSize: theme.custom.typography.subtitle.fontSize,
+  fontWeight: 600,
+  color: theme.custom.colors.text.medium,
+  textAlign: 'center',
+}));
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const RetreatEditPage: React.FC = () => {
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
+  const navigate = useNavigate();
 
   const [retreatId, setRetreatId] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [noActiveRetreat, setNoActiveRetreat] = useState(false);
+  const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [form, setForm] = useState<BasicForm>({
     retreatName: '', startDate: '', endDate: '',
     busFare: '', lodgingFare: '', mealPrice: '', suspendedMealCount: '',
@@ -251,24 +247,33 @@ const RetreatEditPage: React.FC = () => {
   const [busModal, setBusModal] = useState<Omit<LocalBus, 'localId'>>(DEFAULT_BUS);
   const [modalError, setModalError] = useState('');
 
-  // TODO: fetchRetreatActive() API 연동으로 교체
   useEffect(() => {
-    const r = MOCK_RETREAT;
-    const loadedForm: BasicForm = {
-      retreatName: r.retreat_name,
-      startDate: r.start_date,
-      endDate: r.end_date,
-      busFare: r.fee_with_bus.toLocaleString('ko-KR'),
-      lodgingFare: r.fee_without_bus.toLocaleString('ko-KR'),
-      mealPrice: r.meal_price.toLocaleString('ko-KR'),
-      suspendedMealCount: String(r.suspended_meal_count),
-    };
-    const loadedBuses = sortBuses(r.buses.map(serverBusToLocal));
-    setRetreatId(r.retreat_id);
-    setForm(loadedForm);
-    setBuses(loadedBuses);
-    setOriginal({ form: loadedForm, buses: loadedBuses });
-  }, []);
+    (async () => {
+      try {
+        const r = await getActiveRetreat();
+        const loadedForm: BasicForm = {
+          retreatName: r.retreat_name,
+          startDate: r.start_date,
+          endDate: r.end_date,
+          busFare: r.fee_with_bus.toLocaleString('ko-KR'),
+          lodgingFare: r.fee_without_bus.toLocaleString('ko-KR'),
+          mealPrice: r.meal_price.toLocaleString('ko-KR'),
+          suspendedMealCount: String(r.suspended_meal_count),
+        };
+        const loadedBuses = sortBuses(r.buses.map(serverBusToLocal));
+        setRetreatId(r.retreat_id);
+        setForm(loadedForm);
+        setBuses(loadedBuses);
+        setOriginal({ form: loadedForm, buses: loadedBuses });
+      } catch (e: any) {
+        if (e?.status === 404) {
+          setNoActiveRetreat(true);
+        } else {
+          showSnackbar(e?.message || '수련회 정보를 불러오지 못했습니다.', 'error');
+        }
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = (field: keyof BasicForm, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
@@ -339,35 +344,86 @@ const RetreatEditPage: React.FC = () => {
     };
   }, [form, buses, deletedBusIds]);
 
-  const handleSave = () => {
-    const payload = {
-      retreat_name: form.retreatName,
-      start_date: form.startDate,
-      end_date: form.endDate,
-      fee_with_bus: Number(parseCurrency(form.busFare) || 0),
-      fee_without_bus: Number(parseCurrency(form.lodgingFare) || 0),
-      meal_price: Number(parseCurrency(form.mealPrice) || 0),
-      suspended_meal_count: Number(form.suspendedMealCount || 0),
-    };
-    const newBusPayloads = buses
-      .filter((b) => b.bus_id === undefined)
-      .map((b) => ({
-        bus_name: b.bus_name,
-        seat_count: Number(b.seat_count),
-        departure_date: b.departure_date,
-        departure_time: b.departure_time,
-        departure_place: b.departure_place,
-        arrival_place: b.arrival_place,
-      }));
-    // TODO:
-    // 1. PUT /api/retreat/:retreatId  → payload
-    // 2. DELETE /api/bus/:busId       → deletedBusIds 각각
-    // 3. POST /api/bus                → newBusPayloads 각각
-    console.log('PUT /api/retreat/', retreatId, payload);
-    console.log('DELETE bus ids', deletedBusIds);
-    console.log('POST new buses', newBusPayloads);
-    showSnackbar('수련회 설정 수정 내용을 저장할 준비가 되었습니다.', 'success');
+  const handleComplete = async () => {
+    if (!retreatId) return;
+    setConfirmCompleteOpen(false);
+    setIsSaving(true);
+    try {
+      await completeRetreat(retreatId);
+      setNoActiveRetreat(true);
+      showSnackbar('수련회가 완료 처리되었습니다.', 'success');
+    } catch (e: any) {
+      showSnackbar(e?.message || '완료 처리 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const handleSave = async () => {
+    if (!retreatId) return;
+    setIsSaving(true);
+    try {
+      await updateRetreat(retreatId, {
+        retreat_name: form.retreatName,
+        start_date: form.startDate,
+        end_date: form.endDate,
+        fee_with_bus: Number(parseCurrency(form.busFare) || 0),
+        fee_without_bus: Number(parseCurrency(form.lodgingFare) || 0),
+        meal_price: Number(parseCurrency(form.mealPrice) || 0),
+        suspended_meal_count: Number(form.suspendedMealCount || 0),
+      });
+      await Promise.all(deletedBusIds.map((id) => deleteBus(id)));
+      await Promise.all(
+        buses
+          .filter((b) => b.bus_id === undefined)
+          .map((b) =>
+            createBus({
+              bus_name: b.bus_name,
+              seat_count: Number(b.seat_count),
+              departure_date: b.departure_date,
+              departure_time: b.departure_time,
+              departure_place: b.departure_place,
+              arrival_place: b.arrival_place,
+            })
+          )
+      );
+      // 저장 후 최신 데이터로 갱신
+      const r = await getActiveRetreat();
+      const refreshedForm: BasicForm = {
+        retreatName: r.retreat_name,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        busFare: r.fee_with_bus.toLocaleString('ko-KR'),
+        lodgingFare: r.fee_without_bus.toLocaleString('ko-KR'),
+        mealPrice: r.meal_price.toLocaleString('ko-KR'),
+        suspendedMealCount: String(r.suspended_meal_count),
+      };
+      const refreshedBuses = sortBuses(r.buses.map(serverBusToLocal));
+      setForm(refreshedForm);
+      setBuses(refreshedBuses);
+      setDeletedBusIds([]);
+      setOriginal({ form: refreshedForm, buses: refreshedBuses });
+      showSnackbar('수련회 설정이 수정되었습니다.', 'success');
+    } catch (e: any) {
+      showSnackbar(e?.message || '저장 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (noActiveRetreat) {
+    return (
+      <PageWrapper>
+        <EmptyStateWrapper>
+          <EmptyStateText>진행 중인 수련회가 없습니다.</EmptyStateText>
+          <Button variant="filled" onClick={() => navigate('/retreat/create')}>
+            수련회 생성 바로가기
+          </Button>
+        </EmptyStateWrapper>
+        <Snackbar open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={hideSnackbar} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
@@ -481,8 +537,11 @@ const RetreatEditPage: React.FC = () => {
       </FormSection>
 
       <FooterActions>
+        <Button variant="outlined" onClick={() => setConfirmCompleteOpen(true)} disabled={isSaving}>
+          수련회 완료
+        </Button>
         <Button variant="outlined" onClick={handleReset}>되돌리기</Button>
-        <Button variant="filled" onClick={handleSave}>수련회 설정 수정 저장</Button>
+        <Button variant="filled" onClick={handleSave} disabled={isSaving}>{isSaving ? '저장 중...' : '수련회 설정 수정 저장'}</Button>
       </FooterActions>
 
       {/* 버스 추가 모달 */}
@@ -563,6 +622,28 @@ const RetreatEditPage: React.FC = () => {
               fullWidth
             />
           </ModalGrid>
+        </ModalBody>
+      </BaseModal>
+
+      {/* 수련회 완료 확인 모달 */}
+      <BaseModal
+        open={confirmCompleteOpen}
+        title="수련회 완료 처리"
+        onClose={() => setConfirmCompleteOpen(false)}
+        size="small"
+        actions={
+          <ModalActions>
+            <Button variant="outlined" onClick={() => setConfirmCompleteOpen(false)}>취소</Button>
+            <Button variant="filled" onClick={handleComplete}>완료 처리</Button>
+          </ModalActions>
+        }
+      >
+        <ModalBody>
+          <p style={{ margin: 0, color: '#595959', lineHeight: 1.7 }}>
+            수련회를 완료 처리하면 인원조사, 차량조사, 서스펜디드밀 화면이 비활성화되고
+            사용자 페이지가 닫힙니다.<br />
+            계속하시겠습니까?
+          </p>
         </ModalBody>
       </BaseModal>
 

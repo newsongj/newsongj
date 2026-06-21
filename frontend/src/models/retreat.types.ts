@@ -59,6 +59,16 @@ export interface ResearchListStats {
   fee_paid: number;
 }
 
+export interface ResearchListResponse {
+  fee_with_bus: number;
+  fee_without_bus: number;
+  enrolled: number;
+  surveyed: number;
+  fee_paid: number;
+  num_days: number;
+  members: ResearchMemberListItem[];
+}
+
 // ── 차량조사 명단 ──────────────────────────────────────────────────────────────
 
 export interface BusInfo {
@@ -81,6 +91,11 @@ export interface VehicleMemberListItem {
   day4_bus: BusInfo[] | null;
 }
 
+export interface VehicleMemberListResponse {
+  num_days: number;
+  members: VehicleMemberListItem[];
+}
+
 export interface VehicleListStats {
   enrolled: number;
   responded: number;
@@ -100,14 +115,31 @@ export interface RetreatDayHeadcount {
 }
 
 export interface RetreatHeadcountResponse {
-  enrolled: number;    // 재적 인원
-  surveyed: number;    // 조사 완료 인원
-  total: number;       // 수련회 전체 기간 총인원
+  enrolled: number;
+  surveyed: number;
+  total: number;
   male: number;
   female: number;
-  day1: RetreatDayHeadcount;
-  day2: RetreatDayHeadcount;
-  day3: RetreatDayHeadcount;
+  num_days: number;
+  days: RetreatDayHeadcount[];
+}
+
+// ── 대시보드 차량탭 ───────────────────────────────────────────────────────────
+
+export interface BusDashboardItem {
+  bus_id:          number;
+  bus_name:        string;
+  departure_date:  string;
+  departure_time:  string;
+  passenger_count: number;
+  seat_count:      number;
+}
+
+export interface VehicleDashboardData {
+  retreat_start_date: string;
+  normal_depart:      number;
+  num_days:           number;
+  buses:              BusDashboardItem[];
 }
 
 // ── 수련회 차량조사 ───────────────────────────────────────────────────────────
@@ -144,7 +176,61 @@ export interface RetreatAccommodationDayData {
 }
 
 export interface RetreatAccommodationResponse {
-  day1: RetreatAccommodationDayData;
-  day2: RetreatAccommodationDayData;
-  day3: RetreatAccommodationDayData;
+  days: RetreatAccommodationDayData[];
+}
+
+// ── 수련회 설정 API ────────────────────────────────────────────────────────────
+
+export interface BusResponse {
+  bus_id: number;
+  bus_name: string;
+  seat_count: number;
+  departure_date: string;
+  departure_time: string;
+  departure_place: string;
+  arrival_place: string;
+}
+
+export interface RetreatActiveResponse {
+  retreat_id: number;
+  retreat_name: string;
+  start_date: string;
+  end_date: string;
+  fee_with_bus: number;
+  fee_without_bus: number;
+  meal_price: number;
+  suspended_meal_count: number;
+  buses: BusResponse[];
+}
+
+export interface RetreatCreateBody {
+  retreat_name: string;
+  start_date: string;
+  end_date: string;
+  fee_with_bus: number;
+  fee_without_bus: number;
+  meal_price: number;
+  suspended_meal_count: number;
+}
+
+export type RetreatUpdateBody = RetreatCreateBody;
+
+export interface BusCreateBody {
+  bus_name: string;
+  seat_count: number;
+  departure_date: string;
+  departure_time: string;
+  departure_place: string;
+  arrival_place: string;
+}
+
+export interface RetreatCreateResponse {
+  retreat_id: number;
+  retreat_name: string;
+  start_date: string;
+  end_date: string;
+  fee_with_bus: number;
+  fee_without_bus: number;
+  meal_price: number;
+  suspended_meal_count: number;
 }

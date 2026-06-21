@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Alert, Checkbox, Snackbar, Tooltip } from '@mui/material';
+import { Alert, Checkbox, CircularProgress, Snackbar, Tooltip } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
 import Button from '@components/common/Button/Button';
@@ -9,42 +9,7 @@ import type {
     SuspendedMealDraft,
     SuspendedMealMember,
 } from '@models/suspendedMeal.types';
-
-// ─── 목업 데이터 (백엔드 연동 전 임시) ────────────────────────────────────────
-
-const MOCK_MEMBERS: SuspendedMealMember[] = [
-    { member_id: 1, name: '김민준', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 0, application: null },
-    { member_id: 2, name: '이서연', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 0, application: null },
-    {
-        member_id: 3, name: '박지훈', generation: 22, gender: '남', gyogu: 1, team: 1, group_no: 1,
-        application: {
-            application_id: 1, meal_count: 3, fee_support: true,
-            applicant_reason: '지방 일정으로 첫날 저녁부터 참석 가능합니다.',
-            applied_at: '2026-06-10T10:00:00', review_status: 'PENDING', review_comment: null, reviewed_at: null,
-        },
-    },
-    {
-        member_id: 4, name: '최수아', generation: 25, gender: '여', gyogu: 1, team: 1, group_no: 1,
-        application: {
-            application_id: 2, meal_count: 2, fee_support: true,
-            applicant_reason: '직장 일정으로 늦게 참석 예정입니다.',
-            applied_at: '2026-06-10T11:00:00', review_status: 'APPROVED',
-            review_comment: '확인했습니다.', reviewed_at: '2026-06-11T09:00:00',
-        },
-    },
-    {
-        member_id: 5, name: '정도현', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 2,
-        application: {
-            application_id: 3, meal_count: 1, fee_support: false,
-            applicant_reason: null, applied_at: '2026-06-10T12:00:00',
-            review_status: 'REJECTED', review_comment: '내용이 불충분합니다. 재신청 바랍니다.',
-            reviewed_at: '2026-06-11T10:00:00',
-        },
-    },
-    { member_id: 6, name: '한지민', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 2, application: null },
-    { member_id: 7, name: '오승현', generation: 22, gender: '남', gyogu: 1, team: 2, group_no: 3, application: null },
-    { member_id: 8, name: '윤채원', generation: 25, gender: '여', gyogu: 1, team: 2, group_no: 4, application: null },
-];
+import { fetchSuspendedMealMembers, submitSuspendedMeal } from '@api/retreat';
 
 // ─── Select 옵션 ───────────────────────────────────────────────────────────────
 
@@ -223,41 +188,61 @@ const ReasonInput = styled('input')(({ theme }) => ({
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const SuspendedMealPage: React.FC = () => {
-    // TODO: 백엔드 연동 시 useQuery로 교체
-    const members = MOCK_MEMBERS;
-
-    const [drafts, setDrafts] = useState<Map<number, SuspendedMealDraft>>(() => {
-        const map = new Map<number, SuspendedMealDraft>();
-        members.forEach((m) => {
-            map.set(m.member_id, {
-                meal_count:       m.application?.meal_count       ?? 0,
-                fee_support:      m.application?.fee_support       ?? false,
-                applicant_reason: m.application?.applicant_reason ?? '',
-            });
-        });
-        return map;
+    const [members,   setMembers]   = useState<SuspendedMealMember[]>([]);
+    const [loading,   setLoading]   = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [noRetreat, setNoRetreat] = useState(false);
+    const [drafts,    setDrafts]    = useState<Map<number, SuspendedMealDraft>>(new Map());
+    const [snackbar,  setSnackbar]  = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+        open: false, message: '', severity: 'success',
     });
 
-    const getDraft = useCallback((member: SuspendedMealMember): SuspendedMealDraft => (
-        drafts.get(member.member_id) ?? { meal_count: 0, fee_support: false, applicant_reason: '' }
-    ), [drafts]);
+    const loadMembers = useCallback(async () => {
+        try {
+            const data = await fetchSuspendedMealMembers();
+            setMembers(data);
+        } catch (err: any) {
+            if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+                setNoRetreat(true);
+            } else {
+                setLoadError('데이터를 불러오지 못했습니다.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { loadMembers(); }, [loadMembers]);
+
+    const getDraft = useCallback((member: SuspendedMealMember): SuspendedMealDraft => {
+        const override = drafts.get(member.member_id);
+        if (override) return override;
+        return {
+            meal_count:       member.application?.meal_count       ?? 0,
+            fee_support:      member.application?.fee_support       ?? false,
+            applicant_reason: member.application?.applicant_reason ?? '',
+        };
+    }, [drafts]);
 
     const updateDraft = useCallback((memberId: number, patch: Partial<SuspendedMealDraft>) => {
         setDrafts((prev) => {
             const next = new Map(prev);
-            const cur = next.get(memberId) ?? { meal_count: 0, fee_support: false, applicant_reason: '' };
+            const member = members.find((m) => m.member_id === memberId);
+            const cur = next.get(memberId) ?? {
+                meal_count:       member?.application?.meal_count       ?? 0,
+                fee_support:      member?.application?.fee_support       ?? false,
+                applicant_reason: member?.application?.applicant_reason ?? '',
+            };
             next.set(memberId, { ...cur, ...patch });
             return next;
         });
-    }, []);
+    }, [members]);
 
     const canSubmit = useCallback((member: SuspendedMealMember): boolean => {
         const { meal_count, fee_support, applicant_reason } = getDraft(member);
         if (!member.application) {
-            // 신규: 식사수 변경 또는 회비지원 신청 여부가 기본값과 다를 때 활성화
             return meal_count !== 0 || fee_support;
         }
-        // 수정: 저장된 값과 하나라도 다를 때 활성화
         const app = member.application;
         return (
             meal_count !== app.meal_count ||
@@ -270,28 +255,44 @@ const SuspendedMealPage: React.FC = () => {
         member.application?.review_status === 'APPROVED' ||
         member.application?.review_status === 'REJECTED';
 
-    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
-        open: false, message: '', severity: 'success',
-    });
-
-    const handleSubmit = useCallback(async (_memberId: number, isUpdate: boolean) => {
+    const handleSubmit = useCallback(async (memberId: number, isUpdate: boolean) => {
+        const draft = getDraft(members.find((m) => m.member_id === memberId)!);
         try {
-            // TODO: 백엔드 연동 시 실제 API 호출로 교체
-            // const draft = drafts.get(memberId)!;
-            // await submitSuspendedMeal(memberId, {
-            //     meal_count: draft.meal_count,
-            //     fee_support: draft.fee_support,
-            //     applicant_reason: draft.fee_support ? draft.applicant_reason || null : null,
-            // });
-            await new Promise((r) => setTimeout(r, 300));
+            await submitSuspendedMeal(memberId, {
+                meal_count:       draft.meal_count,
+                fee_support:      draft.fee_support,
+                applicant_reason: draft.fee_support ? draft.applicant_reason || null : null,
+            });
+            setDrafts((prev) => { const next = new Map(prev); next.delete(memberId); return next; });
+            await loadMembers();
             setSnackbar({ open: true, message: isUpdate ? '수정이 완료되었습니다.' : '신청이 완료되었습니다.', severity: 'success' });
         } catch {
             setSnackbar({ open: true, message: '처리 중 오류가 발생했습니다.', severity: 'error' });
         }
-    }, []);
+    }, [getDraft, loadMembers, members]);
 
     const totalCount   = members.length;
     const appliedCount = members.filter((m) => m.application !== null).length;
+
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+                <CircularProgress size={32} />
+            </div>
+        );
+    }
+
+    if (noRetreat) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <span style={{ fontSize: 16, color: '#8c8c8c' }}>수련회 기간이 아닙니다.</span>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return <Alert severity="error" sx={{ mt: 2 }}>{loadError}</Alert>;
+    }
 
     return (
         <PageWrapper>

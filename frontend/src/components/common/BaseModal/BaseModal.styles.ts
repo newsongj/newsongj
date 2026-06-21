@@ -25,6 +25,8 @@ export const StyledDialogContent = styled(DialogContent)({
   padding: 0,
   display: 'flex',
   flexDirection: 'column',
+  overflow: 'auto',
+  flex: 1,
 });
 
 export const StyledDialogActions = styled(DialogActions)(({ theme }) => ({

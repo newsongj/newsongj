@@ -149,52 +149,6 @@ const ModalActions = styled('div')({
   },
 });
 
-const SUSPENDED_MEAL_MOCK: SuspendedMealApplication[] = [
-  {
-    application_id: 1,
-    member_id: 101,
-    member_name: '김민수',
-    meal_count: 3,
-    fee_support: true,
-    applicant_reason: '아르바이트를 그만둬서 생활비가 부족해졌습니다. 회비 지원을 요청드립니다.',
-    applied_at: '2026-04-10T10:23:00',
-    review_status: 'PENDING',
-    review_comment: null,
-    reviewed_at: null,
-  },
-  {
-    application_id: 2,
-    member_id: 102,
-    member_name: '이서준',
-    meal_count: 2,
-    fee_support: false,
-    applicant_reason: '아르바이트를 그만둬서 생활비가 부족해졌습니다. ',
-    applied_at: '2026-04-10T11:05:00',
-    review_status: 'PENDING',
-    review_comment: null,
-    reviewed_at: null,
-  },
-  {
-    application_id: 3,
-    member_id: 103,
-    member_name: '박지훈',
-    meal_count: 1,
-    fee_support: true,
-    applicant_reason: '아르바이트를 그만둬서 생활비가 부족해졌습니다. 회비 지원을 요청드립니다.',
-    applied_at: '2026-04-10T13:47:00',
-    review_status: 'APPROVED',
-    review_comment: '사유 확인 완료. 승인합니다.',
-    reviewed_at: '2026-04-11T09:00:00',
-  },
-];
-
-const MOCK_STATS: SuspendedMealStats = {
-  total: SUSPENDED_MEAL_MOCK.length,
-  pending: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'PENDING').length,
-  approved: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'APPROVED').length,
-  rejected: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'REJECTED').length,
-};
-
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: '전체' },
   { value: 'PENDING', label: '승인 대기' },
@@ -238,7 +192,7 @@ const SuspendedMealPage: React.FC = () => {
   const loadStats = useCallback(() => {
     fetchSuspendedMealStats()
       .then(setStats)
-      .catch(() => setStats(MOCK_STATS));
+      .catch(() => {});
   }, []);
 
   const loadList = useCallback(() => {
@@ -252,17 +206,7 @@ const SuspendedMealPage: React.FC = () => {
         setItems(res.items);
         setTotal(res.total);
       })
-      .catch(() => {
-        const filtered =
-          statusFilter && statusFilter !== 'PENDING'
-            ? SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === statusFilter)
-            : statusFilter === 'PENDING'
-            ? SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'PENDING')
-            : SUSPENDED_MEAL_MOCK;
-        const start = page * rowsPerPage;
-        setItems(filtered.slice(start, start + rowsPerPage));
-        setTotal(filtered.length);
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [page, rowsPerPage, statusFilter]);
 
