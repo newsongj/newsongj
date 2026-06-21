@@ -27,6 +27,8 @@ export const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
 }));
 
 export const StyledTable = styled(Table)(({ theme }) => ({
+  width: 'max-content',
+  minWidth: '100%',
   borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
 
   '& .MuiTableCell-stickyHeader': {
@@ -58,8 +60,9 @@ export const StyledHeaderCell = styled(TableCell)(({ theme }) => ({
   fontWeight: theme.custom.typography.body1.fontWeight,
   fontSize: theme.custom.typography.body1.fontSize,
   color: theme.custom.colors.text.medium,
-  padding: theme.custom.spacing.xs,
+  padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.xs}`,
   borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+  whiteSpace: 'nowrap',
 }));
 
 export const StyledTableCell = styled(TableCell)(({ theme }) => ({
@@ -67,7 +70,8 @@ export const StyledTableCell = styled(TableCell)(({ theme }) => ({
   fontWeight: theme.custom.typography.body2.fontWeight,
   color: theme.custom.colors.text.high,
   borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-  padding: theme.custom.spacing.xs,
+  padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.xs}`,
+  whiteSpace: 'nowrap',
 }));
 
 export const StyledTableHeader = styled(Box)(({ theme }) => ({

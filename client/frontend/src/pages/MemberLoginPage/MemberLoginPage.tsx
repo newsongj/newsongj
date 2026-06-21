@@ -2,22 +2,22 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@components/common/Button';
 import { TextField } from '@components/common/TextField';
-import { login as apiLogin } from '@api/auth';
+import { memberLogin } from '@api/auth';
 import { storage } from '@utils/storage';
-import * as S from './LoginPage.styles';
+import * as S from '../LoginPage/LoginPage.styles';
 import newsongjLogo from '@assets/J_logo.png';
 
-const LoginPage: React.FC = () => {
+const MemberLoginPage: React.FC = () => {
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({ login_id: '', password: '' });
+    const [formData, setFormData] = useState({ phone: '', name: '' });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleInputChange = (field: 'login_id' | 'password') => (
+    const handleInputChange = (field: 'phone' | 'name') => (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
     ) => {
-        const value = field === 'login_id'
+        const value = field === 'phone'
             ? e.target.value.replace(/-/g, '')
             : e.target.value;
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -27,17 +27,17 @@ const LoginPage: React.FC = () => {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!formData.login_id) { setError('전화번호를 입력해주세요.'); return; }
-        if (!formData.password) { setError('비밀번호를 입력해주세요.'); return; }
+        if (!formData.phone) { setError('전화번호를 입력해주세요.'); return; }
+        if (!formData.name)  { setError('이름을 입력해주세요.'); return; }
 
         setIsLoading(true);
         setError(null);
 
         try {
-            const data = await apiLogin({ login_id: formData.login_id, password: formData.password });
+            const data = await memberLogin({ phone: formData.phone, name: formData.name });
             storage.setToken(data.token);
             localStorage.setItem('client_user', JSON.stringify(data));
-            navigate('/research', { replace: true });
+            navigate('/vehicle', { replace: true });
         } catch (err: any) {
             setError(err.response?.data?.detail || err.message || '로그인에 실패했습니다.');
         } finally {
@@ -50,7 +50,7 @@ const LoginPage: React.FC = () => {
             <S.StyledLogo>
                 <img src={newsongjLogo} alt="NewsongJ" height="40" style={{ marginBottom: 8 }} />
                 <br />
-                NEWSONGJ 대학부
+                NEWSONGJ 차량조사
             </S.StyledLogo>
 
             <S.StyledLoginCard>
@@ -59,18 +59,18 @@ const LoginPage: React.FC = () => {
                         <TextField
                             label="전화번호"
                             type="text"
-                            value={formData.login_id}
-                            onChange={handleInputChange('login_id')}
+                            value={formData.phone}
+                            onChange={handleInputChange('phone')}
                             placeholder="- 없이 입력 (예: 01012345678)"
                             disabled={isLoading}
                             fullWidth
                         />
                         <TextField
-                            label="비밀번호"
-                            type="password"
-                            value={formData.password}
-                            onChange={handleInputChange('password')}
-                            placeholder="비밀번호를 입력하세요"
+                            label="이름"
+                            type="text"
+                            value={formData.name}
+                            onChange={handleInputChange('name')}
+                            placeholder="이름을 입력하세요"
                             disabled={isLoading}
                             fullWidth
                         />
@@ -89,7 +89,7 @@ const LoginPage: React.FC = () => {
                             disabled={isLoading}
                             fullWidth
                         >
-                            {isLoading ? '로그인 중...' : '로그인'}
+                            {isLoading ? '확인 중...' : '입장하기'}
                         </Button>
                     </S.StyledButtonGroup>
                 </S.StyledForm>
@@ -98,4 +98,4 @@ const LoginPage: React.FC = () => {
     );
 };
 
-export default LoginPage;
+export default MemberLoginPage;

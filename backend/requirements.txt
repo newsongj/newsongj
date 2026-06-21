@@ -6,4 +6,5 @@ pydantic
 pydantic-settings  # BaseSettings로 환경변수 관리
 python-dotenv
 python-jose[cryptography]
+bcrypt
 # alembic

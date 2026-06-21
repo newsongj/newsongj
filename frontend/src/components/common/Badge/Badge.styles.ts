@@ -4,6 +4,7 @@ import { BadgeVariant } from './Badge.types';
 interface StyledBadgeProps {
   $variant: BadgeVariant;
   $size: 'small' | 'medium' | 'large';
+  $clickable?: boolean;
 }
 
 export const StyledBadge = styled.span<StyledBadgeProps>`
@@ -13,6 +14,11 @@ export const StyledBadge = styled.span<StyledBadgeProps>`
   border-radius: 16px;
   white-space: nowrap;
   transition: ${({ theme }) => theme.custom.transitions.fast};
+  ${({ $clickable }) => $clickable && `
+    cursor: pointer;
+    &:hover { filter: brightness(0.92); }
+    &:active { filter: brightness(0.84); }
+  `}
   
   /* Variant styles */
   ${({ $variant, theme }) => {

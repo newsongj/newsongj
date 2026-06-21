@@ -1,7 +1,11 @@
 export interface AuthUser {
-    token:    string;
-    role:     'group_leader' | 'team_leader' | 'admin';
-    gyogu:    number;
-    team:     number;
-    group_no: number;
+    token:                   string;
+    data_scope:              'all' | 'team' | 'group' | 'member';
+    member_id:               number | null;
+    gyogu:                   number | null;
+    team:                    number | null;
+    group_no:                number | null;
+    requires_password_change: boolean;
+    menus:                   string[];
+    leader_names:            string[];
 }

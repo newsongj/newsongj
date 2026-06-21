@@ -1270,7 +1270,7 @@ const NewcomerMemberPage: React.FC = () => {
               선택한 <strong style={{ color: '#52c41a' }}>{selectedIds.length}명</strong>을{' '}
               <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?
               <br />
-              <strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
+              <strong style={{ color: '#52c41a' }}>교적 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
             </>
           }
           onCancel={() => setBulkEnrollOpen(false)}
@@ -1289,7 +1289,7 @@ const NewcomerMemberPage: React.FC = () => {
               <strong style={{ color: '#52c41a' }}>{selectedRow?.name}</strong>을{' '}
               <strong style={{ color: '#52c41a' }}>등반 처리</strong>하시겠습니까?
               <br />
-              <strong style={{ color: '#52c41a' }}>사용자 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
+              <strong style={{ color: '#52c41a' }}>교적 명단</strong>으로 이동되어 출석 관리 대상에 포함됩니다.
             </>
           }
           onCancel={() => setSingleEnrollOpen(false)}

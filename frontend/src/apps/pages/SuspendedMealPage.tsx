@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
+import { Tooltip } from '@mui/material';
 import { Users, CheckCircle, XCircle, Clock } from 'lucide-react';
 import {
   fetchSuspendedMealList,
@@ -148,57 +149,11 @@ const ModalActions = styled('div')({
   },
 });
 
-const SUSPENDED_MEAL_MOCK: SuspendedMealApplication[] = [
-  {
-    application_id: 1,
-    member_id: 101,
-    member_name: '김민수',
-    meal_count: 3,
-    fee_support: true,
-    applicant_reason: '지방 일정으로 첫날 저녁부터 참석 가능합니다.',
-    applied_at: '2026-04-10T10:23:00',
-    review_status: null,
-    review_comment: null,
-    reviewed_at: null,
-  },
-  {
-    application_id: 2,
-    member_id: 102,
-    member_name: '이서준',
-    meal_count: 2,
-    fee_support: false,
-    applicant_reason: '직장 일정으로 인해 첫날 저녁까지 불참합니다.',
-    applied_at: '2026-04-10T11:05:00',
-    review_status: null,
-    review_comment: null,
-    reviewed_at: null,
-  },
-  {
-    application_id: 3,
-    member_id: 103,
-    member_name: '박지훈',
-    meal_count: 1,
-    fee_support: true,
-    applicant_reason: '가족 행사로 인해 첫날 점심 식사만 어렵습니다.',
-    applied_at: '2026-04-10T13:47:00',
-    review_status: 'APPROVED',
-    review_comment: '사유 확인 완료. 승인합니다.',
-    reviewed_at: '2026-04-11T09:00:00',
-  },
-];
-
-const MOCK_STATS: SuspendedMealStats = {
-  total: SUSPENDED_MEAL_MOCK.length,
-  pending: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === null).length,
-  approved: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'APPROVED').length,
-  rejected: SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === 'REJECTED').length,
-};
-
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: '전체' },
   { value: 'PENDING', label: '승인 대기' },
-  { value: 'APPROVED', label: '승인됨' },
-  { value: 'REJECTED', label: '반려됨' },
+  { value: 'APPROVED', label: '승인' },
+  { value: 'REJECTED', label: '반려' },
 ];
 
 const formatDateTime = (dateStr: string | null) => {
@@ -212,8 +167,8 @@ const formatDateTime = (dateStr: string | null) => {
   });
 };
 
-const ReviewStatusBadge: React.FC<{ status: ReviewStatus | null }> = ({ status }) => {
-  if (!status) return <Badge variant="warning">승인 대기</Badge>;
+const ReviewStatusBadge: React.FC<{ status: ReviewStatus }> = ({ status }) => {
+  if (status === 'PENDING')  return <Badge variant="warning">승인 대기</Badge>;
   if (status === 'APPROVED') return <Badge variant="success">승인</Badge>;
   return <Badge variant="error">반려</Badge>;
 };
@@ -237,7 +192,7 @@ const SuspendedMealPage: React.FC = () => {
   const loadStats = useCallback(() => {
     fetchSuspendedMealStats()
       .then(setStats)
-      .catch(() => setStats(MOCK_STATS));
+      .catch(() => {});
   }, []);
 
   const loadList = useCallback(() => {
@@ -251,17 +206,7 @@ const SuspendedMealPage: React.FC = () => {
         setItems(res.items);
         setTotal(res.total);
       })
-      .catch(() => {
-        const filtered =
-          statusFilter && statusFilter !== 'PENDING'
-            ? SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === statusFilter)
-            : statusFilter === 'PENDING'
-            ? SUSPENDED_MEAL_MOCK.filter((m) => m.review_status === null)
-            : SUSPENDED_MEAL_MOCK;
-        const start = page * rowsPerPage;
-        setItems(filtered.slice(start, start + rowsPerPage));
-        setTotal(filtered.length);
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [page, rowsPerPage, statusFilter]);
 
@@ -354,7 +299,23 @@ const SuspendedMealPage: React.FC = () => {
       id: 'applicant_reason',
       label: '신청 사유',
       minWidth: 200,
-      render: (v: string | null) => v ?? '-',
+      render: (v: string | null) => {
+        if (!v) return '-';
+        return (
+          <Tooltip title={v} placement="top" arrow>
+            <span style={{
+              display: 'block',
+              maxWidth: 240,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: 'default',
+            }}>
+              {v}
+            </span>
+          </Tooltip>
+        );
+      },
     },
     {
       id: 'applied_at',
@@ -399,7 +360,7 @@ const SuspendedMealPage: React.FC = () => {
           iconBgColor="#fef9c3"
         />
         <StatCard
-          label="승인됨"
+          label=""
           value={stats ? `${stats.approved}건` : '-'}
           change=""
           isPositive
@@ -407,7 +368,7 @@ const SuspendedMealPage: React.FC = () => {
           iconBgColor="#dcfce7"
         />
         <StatCard
-          label="반려됨"
+          label="반려"
           value={stats ? `${stats.rejected}건` : '-'}
           change=""
           isPositive={false}

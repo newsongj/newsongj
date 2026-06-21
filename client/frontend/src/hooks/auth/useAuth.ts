@@ -15,14 +15,18 @@ const parseStoredUser = (): AuthUser | null => {
 export const useAuth = () => {
     const [user, setUser] = useState<AuthUser | null>(parseStoredUser);
 
-    const login = useCallback(async (username: string, password: string) => {
-        const data = await apiLogin({ username, password });
+    const login = useCallback(async (login_id: string, password: string) => {
+        const data = await apiLogin({ login_id, password });
         const authUser: AuthUser = {
-            token:    data.token,
-            role:     data.role as AuthUser['role'],
-            gyogu:    data.gyogu,
-            team:     data.team,
-            group_no: data.group_no,
+            token:                    data.token,
+            data_scope:               data.data_scope,
+            member_id:                data.member_id,
+            gyogu:                    data.gyogu,
+            team:                     data.team,
+            group_no:                 data.group_no,
+            requires_password_change: data.requires_password_change,
+            menus:                    data.menus,
+            leader_names:             data.leader_names ?? [],
         };
         storage.setToken(data.token);
         localStorage.setItem('client_user', JSON.stringify(authUser));

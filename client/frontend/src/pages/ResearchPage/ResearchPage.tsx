@@ -1,33 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
+import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
+import Button from '@components/common/Button/Button';
 import type { AttendanceStatus, FeeType, RetreatInfo, ResearchMember, ResearchResponseBody } from '@models/research.types';
-
-// ─── 목업 데이터 (백엔드 연동 전 임시) ────────────────────────────────────────
-
-const MOCK_RETREAT: RetreatInfo = {
-    retreat_custom_id: 1,
-    retreat_name:      '2026 뉴송 여름 수련회',
-    start_date:        '2026-08-12',
-    end_date:          '2026-08-15',
-    bus_types:         ['후발', '귀경', '픽업'],
-    fee_with_bus:      20000,
-    fee_without_bus:   15000,
-    buses:             [],
-};
-
-const MOCK_MEMBERS: ResearchMember[] = [
-    { member_id: 1, name: '김민준', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 0, response: null },
-    { member_id: 2, name: '이서연', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 0, response: null },
-    { member_id: 3, name: '박지훈', generation: 22, gender: '남', gyogu: 1, team: 1, group_no: 1, response: { day1_attendance: '정상', day2_attendance: '정상', day3_attendance: '정상', day4_attendance: '정상', fee_type: 'bus' } },
-    { member_id: 4, name: '최수아', generation: 25, gender: '여', gyogu: 1, team: 1, group_no: 1, response: { day1_attendance: '참석', day2_attendance: '후발', day3_attendance: '불참', day4_attendance: null, fee_type: 'lodging' } },
-    { member_id: 5, name: '정도현', generation: 23, gender: '남', gyogu: 1, team: 1, group_no: 2, response: null },
-    { member_id: 6, name: '한지민', generation: 24, gender: '여', gyogu: 1, team: 1, group_no: 2, response: null },
-    { member_id: 7, name: '오승현', generation: 22, gender: '남', gyogu: 1, team: 2, group_no: 3, response: { day1_attendance: '미정', day2_attendance: null, day3_attendance: null, day4_attendance: null, fee_type: null } },
-    { member_id: 8, name: '윤채원', generation: 25, gender: '여', gyogu: 1, team: 2, group_no: 3, response: null },
-    { member_id: 9, name: '강지수', generation: 26, gender: '여', gyogu: 1, team: 2, group_no: 4, response: null },
-];
+import { fetchRetreatInfo, fetchResearchMembers, saveResearchResponse } from '@api/retreat';
 
 // ─── 드롭박스 옵션 ─────────────────────────────────────────────────────────────
 
@@ -81,11 +60,6 @@ const FilterLabel = styled('span')(({ theme }) => ({
     whiteSpace: 'nowrap',
 }));
 
-const SaveStatus = styled('span')<{ $saving: boolean }>(({ theme, $saving }) => ({
-    fontSize: theme.custom.typography.body2.fontSize,
-    color: $saving ? theme.custom.colors.primary._500 : theme.custom.colors.text.medium,
-    marginLeft: 'auto',
-}));
 
 const TableWrapper = styled('div')(({ theme }) => ({
     borderRadius: theme.custom.borderRadius,
@@ -155,6 +129,39 @@ const CountLabel = styled('span')(({ theme }) => ({
     },
 }));
 
+const ConfirmDialog = styled(Dialog)(({ theme }) => ({
+    '& .MuiDialog-paper': {
+        borderRadius: theme.custom.borderRadius,
+        boxShadow: '0 24px 48px rgba(15, 23, 42, 0.12)',
+        margin: '12px',
+        width: '100%',
+        maxWidth: 400,
+    },
+}));
+
+const ConfirmTitle = styled(DialogTitle)(({ theme }) => ({
+    fontSize: theme.custom.typography.body1.fontSize,
+    fontWeight: 700,
+    color: theme.custom.colors.text.high,
+    borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+    padding: theme.custom.spacing.md,
+}));
+
+const ConfirmContent = styled(DialogContent)(({ theme }) => ({
+    padding: theme.custom.spacing.md,
+    paddingTop: `${theme.custom.spacing.md} !important`,
+    fontSize: theme.custom.typography.body2.fontSize,
+    color: theme.custom.colors.text.medium,
+    lineHeight: 1.6,
+}));
+
+const ConfirmActions = styled(DialogActions)(({ theme }) => ({
+    padding: theme.custom.spacing.md,
+    borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
+    gap: theme.custom.spacing.sm,
+    justifyContent: 'flex-end',
+}));
+
 // ─── Types / Helpers ──────────────────────────────────────────────────────────
 
 type DayKey = 'day1' | 'day2' | 'day3' | 'day4';
@@ -167,7 +174,7 @@ const getStoredUser = () => {
 const getDayCount = (info: RetreatInfo) => {
     const diff = Math.round(
         (new Date(info.end_date).getTime() - new Date(info.start_date).getTime()) / 86400000
-    ) + 1;
+    );
     return Math.min(Math.max(diff, 1), 4);
 };
 
@@ -176,23 +183,50 @@ const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const ResearchPage: React.FC = () => {
-    const user         = getStoredUser();
-    // 유저 없으면(로그인 우회 중) 팀장 권한으로 처리
-    const isTeamLeader = user === null || user?.role === 'team_leader' || user?.role === 'admin';
+    const user       = getStoredUser();
+    const dataScope  = user?.data_scope ?? 'all';
+    const isTeamLeader = dataScope === 'all' || dataScope === 'team' || user === null;
 
-    // TODO: 백엔드 연동 시 useQuery로 교체
-    const retreatInfo = MOCK_RETREAT;
-    const allMembers  = MOCK_MEMBERS;
+    const [retreatInfo, setRetreatInfo] = useState<RetreatInfo | null>(null);
+    const [allMembers,  setAllMembers]  = useState<ResearchMember[]>([]);
+    const [loading,     setLoading]     = useState(true);
+    const [loadError,   setLoadError]   = useState<string | null>(null);
+    const [noRetreat,   setNoRetreat]   = useState(false);
 
     const [groupNo, setGroupNo] = useState<number | ''>(() =>
         !isTeamLeader && user?.group_no != null ? user.group_no : ''
     );
-    const [drafts,  setDrafts]  = useState<Map<number, ResearchResponseBody>>(new Map());
-    const [saving,  setSaving]  = useState(false);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pendingRef   = useRef<Map<number, ResearchResponseBody>>(new Map());
+    const [drafts,   setDrafts]   = useState<Map<number, ResearchResponseBody>>(new Map());
+    const [isDirty,  setIsDirty]  = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+        open: false, message: '', severity: 'success',
+    });
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const [retreat, members] = await Promise.all([
+                    fetchRetreatInfo(),
+                    fetchResearchMembers(),
+                ]);
+                setRetreatInfo(retreat);
+                setAllMembers(members);
+            } catch (err: any) {
+                if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+                    setNoRetreat(true);
+                } else {
+                    setLoadError('데이터를 불러오지 못했습니다.');
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
 
     const days: DayKey[] = useMemo(() => {
+        if (!retreatInfo) return [];
         const count = getDayCount(retreatInfo);
         return (['day1', 'day2', 'day3', 'day4'] as DayKey[]).slice(0, count);
     }, [retreatInfo]);
@@ -211,39 +245,53 @@ const ResearchPage: React.FC = () => {
         ...(drafts.get(member.member_id) ?? {}),
     }), [drafts]);
 
-    const flushSave = useCallback(async () => {
-        const toSave = new Map(pendingRef.current);
-        if (toSave.size === 0) return;
-        pendingRef.current.clear();
-        setSaving(true);
-        try {
-            // TODO: 백엔드 연동 시 주석 해제
-            // await Promise.all(Array.from(toSave.entries()).map(([id, body]) => saveResearchResponse(id, body)));
-            await new Promise((r) => setTimeout(r, 300));
-        } finally { setSaving(false); }
-    }, []);
-
-    const scheduleSave = useCallback((memberId: number, patch: ResearchResponseBody) => {
-        pendingRef.current.set(memberId, { ...(pendingRef.current.get(memberId) ?? {}), ...patch });
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(flushSave, 500);
-    }, [flushSave]);
-
     const updateDraft = useCallback((memberId: number, patch: ResearchResponseBody) => {
         setDrafts((prev) => {
             const next = new Map(prev);
             next.set(memberId, { ...(prev.get(memberId) ?? {}), ...patch });
             return next;
         });
-        scheduleSave(memberId, patch);
-    }, [scheduleSave]);
+        setIsDirty(true);
+    }, []);
 
-    useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
+    const handleSave = useCallback(async () => {
+        setIsSaving(true);
+        try {
+            await Promise.all(
+                Array.from(drafts.keys()).map((memberId) => {
+                    const member = allMembers.find((m) => m.member_id === memberId)!;
+                    return saveResearchResponse(memberId, getRow(member));
+                })
+            );
+            const updated = await fetchResearchMembers();
+            setAllMembers(updated);
+            setDrafts(new Map());
+            setIsDirty(false);
+            setSnackbar({ open: true, message: '저장되었습니다.', severity: 'success' });
+        } catch {
+            setSnackbar({ open: true, message: '저장 중 오류가 발생했습니다.', severity: 'error' });
+        } finally {
+            setIsSaving(false);
+        }
+    }, [allMembers, drafts, getRow]);
+
+    const blocker = useBlocker(
+        ({ currentLocation, nextLocation }) =>
+            isDirty && currentLocation.pathname !== nextLocation.pathname
+    );
+
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
 
     const feeOptions: SelectOption[] = useMemo(() => [
-        { value: '',        label: '선택 안 함' },
-        { value: 'bus',     label: `버스 탑승 회비 (${formatWon(retreatInfo.fee_with_bus)})` },
-        { value: 'lodging', label: `버스 미탑승+숙박 (${formatWon(retreatInfo.fee_without_bus)})` },
+        { value: '',           label: '선택 안 함' },
+        { value: 'bus',        label: `버스 탑승 회비 (${formatWon(retreatInfo?.fee_with_bus ?? 0)})` },
+        { value: 'lodging_only', label: `버스 미탑승+숙박 (${formatWon(retreatInfo?.fee_without_bus ?? 0)})` },
     ], [retreatInfo]);
 
     const groupOptions: SelectOption[] = useMemo(() => [
@@ -251,7 +299,31 @@ const ResearchPage: React.FC = () => {
         ...groupNos.map((g) => ({ value: g, label: `${g}그룹` })),
     ], [groupNos]);
 
-    const paidCount = members.filter((m) => getRow(m).fee_type != null).length;
+    const surveyedCount = members.filter((m) => m.response !== null).length;
+
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+                <CircularProgress size={32} />
+            </div>
+        );
+    }
+
+    if (noRetreat) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <span style={{ fontSize: 16, color: '#8c8c8c' }}>수련회 기간이 아닙니다.</span>
+            </div>
+        );
+    }
+
+    if (loadError || !retreatInfo) {
+        return (
+            <Alert severity="error" sx={{ mt: 2 }}>
+                {loadError ?? '데이터를 불러오지 못했습니다.'}
+            </Alert>
+        );
+    }
 
     return (
         <PageWrapper>
@@ -266,9 +338,16 @@ const ResearchPage: React.FC = () => {
                     disabled={!isTeamLeader}
                     width={140}
                 />
-                <SaveStatus $saving={saving}>
-                    {saving ? '저장 중...' : '자동저장'}
-                </SaveStatus>
+                <div style={{ marginLeft: 'auto' }}>
+                    <Button
+                        variant="filled"
+                        size="small"
+                        onClick={handleSave}
+                        disabled={!isDirty || isSaving}
+                    >
+                        {isSaving ? '저장 중...' : '저장'}
+                    </Button>
+                </div>
             </FilterPanel>
 
             {/* 테이블 */}
@@ -348,13 +427,45 @@ const ResearchPage: React.FC = () => {
             <Footer>
                 <CountLabel>
                     총 {members.length}명&nbsp;|&nbsp;
-                    <span style={{ color: '#1677ff', fontWeight: 600 }}>납부 완료 {paidCount}명</span>&nbsp;|&nbsp;
-                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미납부 {members.length - paidCount}명</span>
+                    <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
                 </CountLabel>
             </Footer>
+
+            {/* 이탈 확인 다이얼로그 */}
+            <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>
+                <ConfirmTitle>저장하지 않은 변경 사항</ConfirmTitle>
+                <ConfirmContent>
+                    변경 사항을 저장하지 않고 이동하시겠습니까?<br />
+                    저장하지 않으면 변경 내용이 사라집니다.
+                </ConfirmContent>
+                <ConfirmActions>
+                    <Button variant="outlined" size="small" onClick={() => blocker.reset?.()}>
+                        취소
+                    </Button>
+                    <Button variant="filled" size="small" onClick={() => blocker.proceed?.()}>
+                        나가기
+                    </Button>
+                </ConfirmActions>
+            </ConfirmDialog>
+
+            {/* 저장 완료 스낵바 */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageWrapper>
     );
 };
 
 export default ResearchPage;
-

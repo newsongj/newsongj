@@ -6,9 +6,11 @@ export const Badge: React.FC<BadgeProps> = ({
   variant,
   children,
   size = 'medium',
+  style,
+  onClick,
 }) => {
   return (
-    <S.StyledBadge $variant={variant} $size={size}>
+    <S.StyledBadge $variant={variant} $size={size} $clickable={!!onClick} style={style} onClick={onClick}>
       {children}
     </S.StyledBadge>
   );

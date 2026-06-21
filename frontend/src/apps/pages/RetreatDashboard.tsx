@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Users, Car, Home, ClipboardList } from 'lucide-react';
 import {
@@ -18,10 +18,11 @@ import {
   fetchRetreatVehicle,
 } from '@/api/retreat';
 import {
-  RetreatAccommodationResponse,
+  BusDashboardItem,
   RetreatDayHeadcount,
   RetreatHeadcountResponse,
-  RetreatVehicleResponse,
+  RetreatAccommodationResponse,
+  VehicleDashboardData,
 } from '@/models/retreat.types';
 import StatCard from '@components/common/StatCard';
 import ChartContainer from '@components/common/ChartContainer';
@@ -144,11 +145,7 @@ const DayTotalValue = styled('span')({
 
 // ── Select Options ────────────────────────────────────────────────────────────
 
-const DAY_OPTIONS = [
-  { value: 'day1', label: '첫째날' },
-  { value: 'day2', label: '둘째날' },
-  { value: 'day3', label: '셋째날' },
-];
+const DAY_LABEL_LIST = ['첫째날', '둘째날', '셋째날', '넷째날'];
 
 // ── 진행율 바 ─────────────────────────────────────────────────────────────────
 
@@ -186,8 +183,6 @@ const TooltipStyle = {
 
 // ── 인원조사 탭 ───────────────────────────────────────────────────────────────
 
-type DayKey = 'day1' | 'day2' | 'day3';
-
 const buildChartData = (day: RetreatDayHeadcount, isDay1: boolean) => {
   if (isDay1) {
     return [
@@ -205,39 +200,27 @@ const buildChartData = (day: RetreatDayHeadcount, isDay1: boolean) => {
   ];
 };
 
-const DAY_LABELS: Record<DayKey, string> = {
-  day1: '첫째날',
-  day2: '둘째날',
-  day3: '셋째날',
-};
-
-const RETREAT_HEADCOUNT_MOCK: RetreatHeadcountResponse = {
-  enrolled: 120,
-  surveyed: 98,
-  total: 95,
-  male: 52,
-  female: 43,
-  day1: { total: 88, undecided: 10, absent: 22, normal: 45, attend: 0, late: 11 },
-  day2: { total: 92, undecided:  8, absent: 18, normal:  0, attend: 58, late: 14 },
-  day3: { total: 90, undecided:  9, absent: 20, normal:  0, attend: 55, late: 15 },
-};
-
 const HeadcountTab: React.FC = () => {
   const [data, setData] = useState<RetreatHeadcountResponse | null>(null);
-  const [selectedDay, setSelectedDay] = useState<DayKey>('day1');
+  const [selectedDayIdx, setSelectedDayIdx] = useState(0);
 
   useEffect(() => {
     fetchRetreatHeadcount()
       .then(setData)
-      .catch(() => setData(RETREAT_HEADCOUNT_MOCK));
+      .catch(() => {});
   }, []);
+
+  const dayOptions = useMemo(
+    () => (data?.days ?? []).map((_, i) => ({ value: String(i), label: DAY_LABEL_LIST[i] ?? `${i + 1}일차` })),
+    [data],
+  );
 
   const surveyPct = data && data.enrolled > 0
     ? Math.round(data.surveyed / data.enrolled * 100)
     : 0;
 
-  const dayData = data ? data[selectedDay] : null;
-  const isDay1 = selectedDay === 'day1';
+  const dayData = data ? (data.days[selectedDayIdx] ?? null) : null;
+  const isDay1 = selectedDayIdx === 0;
   const chartData = dayData ? buildChartData(dayData, isDay1) : [];
 
   return (
@@ -290,21 +273,21 @@ const HeadcountTab: React.FC = () => {
       <FilterRow>
         <FilterLabel>날짜</FilterLabel>
         <Select
-          value={selectedDay}
-          options={DAY_OPTIONS}
-          onChange={(v) => setSelectedDay(v as DayKey)}
+          value={String(selectedDayIdx)}
+          options={dayOptions}
+          onChange={(v) => setSelectedDayIdx(Number(v))}
           width={110}
         />
         {dayData && (
           <DayTotalBadge>
-            <DayTotalLabel>{DAY_LABELS[selectedDay]} 총인원</DayTotalLabel>
+            <DayTotalLabel>{DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 총인원</DayTotalLabel>
             <DayTotalValue>{dayData.total}명</DayTotalValue>
           </DayTotalBadge>
         )}
       </FilterRow>
 
       <ChartContainer
-        title={`${DAY_LABELS[selectedDay]} 인원 현황`}
+        title={`${DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 인원 현황`}
         description={isDay1 ? '미정 · 불참 · 정상 · 후발' : '미정 · 불참 · 참석 · 후발'}
       >
         <ResponsiveContainer width="100%" height={280}>
@@ -346,47 +329,13 @@ const HeadcountTab: React.FC = () => {
   );
 };
 
-// ── 차량조사 mock ─────────────────────────────────────────────────────────────
+// ── 차량조사 타입 & 목업 ─────────────────────────────────────────────────────
 
-const PICKUP_SLOTS = [
-  { time: '11:30', count: 0 },
-  { time: '15:00', count: 0 },
-  { time: '17:00', count: 0 },
-  { time: '18:30', count: 0 },
-  { time: '22:30', count: 0 },
-];
 
-const LATE_SLOTS = [
-  { time: '15:00', count: 0 },
-  { time: '18:00', count: 0 },
-  { time: '19:00', count: 0 },
-  { time: '20:00', count: 0 },
-];
-
-const RETURN_SLOTS = [
-  { time: '05:30 (새벽귀경)', count: 0 },
-  { time: '22:30 (밤귀경)',  count: 0 },
-];
-
-const RETREAT_VEHICLE_MOCK: RetreatVehicleResponse = {
-  normal_depart: 0,
-  late: {
-    day1: { total: 0, slots: LATE_SLOTS.map(s => ({ ...s })) },
-    day2: { total: 0, slots: LATE_SLOTS.map(s => ({ ...s })) },
-    day3: { total: 0, slots: LATE_SLOTS.map(s => ({ ...s })) },
-  },
-  pickup: {
-    // 첫째날은 11:30 없음
-    day1: { total: 0, slots: PICKUP_SLOTS.filter(s => s.time !== '11:30').map(s => ({ ...s })) },
-    day2: { total: 0, slots: PICKUP_SLOTS.map(s => ({ ...s })) },
-    day3: { total: 0, slots: PICKUP_SLOTS.map(s => ({ ...s })) },
-  },
-  return: {
-    // 첫째날은 새벽귀경 없음
-    day1: { total: 0, slots: RETURN_SLOTS.filter(s => !s.time.includes('새벽')).map(s => ({ ...s })) },
-    day2: { total: 0, slots: RETURN_SLOTS.map(s => ({ ...s })) },
-    day3: { total: 0, slots: RETURN_SLOTS.map(s => ({ ...s })) },
-  },
+const getDayLabel = (date: string, startDate: string) => {
+  if (!startDate || !date) return date;
+  const diff = Math.round((new Date(date).getTime() - new Date(startDate).getTime()) / 86400000);
+  return `${diff + 1}일차 (${date.slice(5).replace('-', '/')})`;
 };
 
 // ── 차량 유형별 패널 ──────────────────────────────────────────────────────────
@@ -419,20 +368,6 @@ const VehiclePanelTitle = styled('span')(({ theme }) => ({
   minWidth: 40,
 }));
 
-const VehiclePanelFilters = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.custom.spacing.sm,
-  flexWrap: 'wrap',
-  '@media (max-width: 760px)': {
-    width: '100%',
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    '& .MuiFormControl-root': {
-      width: '100% !important',
-    },
-  },
-}));
 
 const SlotList = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -466,78 +401,69 @@ const SlotCount = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
   opacity: $selected ? 1 : 0.75,
 }));
 
-const EmptySlot = styled('span')(({ theme }) => ({
-  fontSize: 13,
+
+const DaySectionLabel = styled('div')(({ theme }) => ({
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 600,
   color: theme.custom.colors.text.medium,
+  marginTop: theme.custom.spacing.xs,
+  paddingBottom: 4,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
 }));
 
-type VehicleTypeKey = 'late' | 'pickup' | 'return';
-
-const VEHICLE_TYPE_LABELS: Record<VehicleTypeKey, string> = {
-  late: '후발',
-  pickup: '픽업',
-  return: '귀경',
-};
-
-const VEHICLE_DAY_OPTIONS = [
-  { value: 'day1', label: '첫째날' },
-  { value: 'day2', label: '둘째날' },
-  { value: 'day3', label: '셋째날' },
-];
+const VEHICLE_TYPES: ('후발' | '픽업' | '귀경')[] = ['후발', '픽업', '귀경'];
 
 const VehicleTypePanel: React.FC<{
-  typeKey: VehicleTypeKey;
-  typeData: RetreatVehicleResponse['late'] | null;
-}> = ({ typeKey, typeData }) => {
-  const [selectedDay, setSelectedDay] = useState<'day1' | 'day2' | 'day3'>('day1');
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  type: '후발' | '픽업' | '귀경';
+  buses: BusDashboardItem[];
+  startDate: string;
+}> = ({ type, buses, startDate }) => {
+  // departure_date 기준 그룹핑 (시간 순 정렬)
+  const dayMap = useMemo(() => {
+    const map = new Map<string, BusDashboardItem[]>();
+    [...buses]
+      .sort((a, b) => a.departure_time.localeCompare(b.departure_time))
+      .forEach(b => {
+        if (!map.has(b.departure_date)) map.set(b.departure_date, []);
+        map.get(b.departure_date)!.push(b);
+      });
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [buses]);
 
-  const dayData = typeData ? typeData[selectedDay] : null;
-  const slots = dayData?.slots ?? [];
-
-  // 날짜 변경 시 시간 선택 초기화
-  const handleDayChange = (v: string | number | (string | number)[]) => {
-    setSelectedDay(v as 'day1' | 'day2' | 'day3');
-    setSelectedTime(null);
-  };
+  const totalPassengers = buses.reduce((s, b) => s + b.passenger_count, 0);
+  const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
+  const multiDay = dayMap.length > 1;
 
   return (
     <VehiclePanel>
       <VehiclePanelHeader>
-        <VehiclePanelTitle>{VEHICLE_TYPE_LABELS[typeKey]}</VehiclePanelTitle>
-        <VehiclePanelFilters>
-          <FilterLabel>날짜</FilterLabel>
-          <Select
-            value={selectedDay}
-            options={VEHICLE_DAY_OPTIONS}
-            onChange={handleDayChange}
-            width={100}
-          />
-          {dayData && (
-            <DayTotalBadge style={{ marginLeft: 0 }}>
-              <DayTotalLabel>총인원</DayTotalLabel>
-              <DayTotalValue>{dayData.total}명</DayTotalValue>
-            </DayTotalBadge>
-          )}
-        </VehiclePanelFilters>
+        <VehiclePanelTitle>{type}</VehiclePanelTitle>
+        <DayTotalBadge style={{ marginLeft: 'auto' }}>
+          <DayTotalLabel>총인원</DayTotalLabel>
+          <DayTotalValue>{totalPassengers}명</DayTotalValue>
+        </DayTotalBadge>
       </VehiclePanelHeader>
 
-      {slots.length > 0 ? (
-        <SlotList>
-          {slots.map(slot => (
-            <SlotChip
-              key={slot.time}
-              $selected={selectedTime === slot.time}
-              onClick={() => setSelectedTime(selectedTime === slot.time ? null : slot.time)}
-            >
-              {slot.time}
-              <SlotCount $selected={selectedTime === slot.time}>{slot.count}명</SlotCount>
-            </SlotChip>
-          ))}
-        </SlotList>
-      ) : (
-        <EmptySlot>해당 날짜 차량 없음</EmptySlot>
-      )}
+      {dayMap.map(([date, dayBuses]) => (
+        <div key={date} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {multiDay && (
+            <DaySectionLabel>{getDayLabel(date, startDate)}</DaySectionLabel>
+          )}
+          <SlotList>
+            {dayBuses.map(bus => (
+              <SlotChip
+                key={bus.bus_id}
+                $selected={selectedBusId === bus.bus_id}
+                onClick={() => setSelectedBusId(prev => prev === bus.bus_id ? null : bus.bus_id)}
+              >
+                {bus.bus_name}
+                <span style={{ opacity: 0.7, marginLeft: 4, fontSize: 12 }}>{bus.departure_time}</span>
+                <SlotCount $selected={selectedBusId === bus.bus_id}>{bus.passenger_count}명</SlotCount>
+              </SlotChip>
+            ))}
+          </SlotList>
+        </div>
+      ))}
     </VehiclePanel>
   );
 };
@@ -545,15 +471,13 @@ const VehicleTypePanel: React.FC<{
 // ── 차량조사 탭 ───────────────────────────────────────────────────────────────
 
 const VehicleTab: React.FC = () => {
-  const [data, setData] = useState<RetreatVehicleResponse | null>(null);
+  const [data, setData] = useState<VehicleDashboardData | null>(null);
 
   useEffect(() => {
     fetchRetreatVehicle()
       .then(setData)
-      .catch(() => setData(RETREAT_VEHICLE_MOCK));
+      .catch(() => {});
   }, []);
-
-  const vehicleTypes: VehicleTypeKey[] = ['late', 'pickup', 'return'];
 
   return (
     <TabContent>
@@ -568,36 +492,23 @@ const VehicleTab: React.FC = () => {
         />
       </StatsGrid3>
 
-      {vehicleTypes.map(typeKey => (
-        <VehicleTypePanel
-          key={typeKey}
-          typeKey={typeKey}
-          typeData={data ? data[typeKey] : null}
-        />
-      ))}
+      {VEHICLE_TYPES.map(type => {
+        const typeBuses = data?.buses.filter(b => b.bus_name.startsWith(type)) ?? [];
+        if (typeBuses.length === 0) return null;
+        return (
+          <VehicleTypePanel
+            key={type}
+            type={type}
+            buses={typeBuses}
+            startDate={data?.retreat_start_date ?? ''}
+          />
+        );
+      })}
     </TabContent>
   );
 };
 
 // ── 숙소/야식 인원 탭 ────────────────────────────────────────────────────────
-
-const ACCOMMODATION_DAY_OPTIONS = [
-  { value: 'day1', label: '첫째날' },
-  { value: 'day2', label: '둘째날' },
-  { value: 'day3', label: '셋째날' },
-];
-
-const ACCOMMODATION_DAY_LABELS: Record<string, string> = {
-  day1: '첫째날',
-  day2: '둘째날',
-  day3: '셋째날',
-};
-
-const RETREAT_ACCOMMODATION_MOCK: RetreatAccommodationResponse = {
-  day1: { total: 0, male: 0, female: 0 },
-  day2: { total: 0, male: 0, female: 0 },
-  day3: { total: 0, male: 0, female: 0 },
-};
 
 const GYOGU_OPTIONS = [
   { value: '',        label: '전체 교구' },
@@ -628,7 +539,7 @@ const FilterDivider = styled('div')(({ theme }) => ({
 
 const AccommodationTab: React.FC = () => {
   const [data, setData] = useState<RetreatAccommodationResponse | null>(null);
-  const [selectedDay, setSelectedDay] = useState<'day1' | 'day2' | 'day3'>('day1');
+  const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const [gyogu, setGyogu] = useState('');
   const [team, setTeam] = useState('');
 
@@ -640,10 +551,15 @@ const AccommodationTab: React.FC = () => {
 
     fetchRetreatAccommodation({ gyogu_no, team_no, is_imwondan })
       .then(setData)
-      .catch(() => setData(RETREAT_ACCOMMODATION_MOCK));
+      .catch(() => {});
   }, [gyogu, team]);
 
-  const dayData = data ? data[selectedDay] : null;
+  const dayOptions = useMemo(
+    () => (data?.days ?? []).map((_, i) => ({ value: String(i), label: DAY_LABEL_LIST[i] ?? `${i + 1}일차` })),
+    [data],
+  );
+
+  const dayData = data ? (data.days[selectedDayIdx] ?? null) : null;
 
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
     setGyogu(String(v));
@@ -655,9 +571,9 @@ const AccommodationTab: React.FC = () => {
       <FilterRow>
         <FilterLabel>날짜</FilterLabel>
         <Select
-          value={selectedDay}
-          options={ACCOMMODATION_DAY_OPTIONS}
-          onChange={(v) => setSelectedDay(v as 'day1' | 'day2' | 'day3')}
+          value={String(selectedDayIdx)}
+          options={dayOptions}
+          onChange={(v) => setSelectedDayIdx(Number(v))}
           width={110}
         />
 
@@ -684,7 +600,7 @@ const AccommodationTab: React.FC = () => {
         <StatCard
           label="총 인원"
           value={dayData ? `${dayData.total}명` : '-'}
-          change={ACCOMMODATION_DAY_LABELS[selectedDay]}
+          change={DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`}
           isPositive={true}
           icon={<Home size={24} />}
           iconBgColor="#e0f2fe"

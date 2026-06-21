@@ -43,10 +43,11 @@ client.interceptors.response.use(
       return Promise.reject(new Error('Unauthorized'));
     }
 
-    if (error.response?.status === 400 && error.response?.data?.detail) {
-      // 백엔드의 { "detail": string } 형식 에러를 처리
-      const customError = new Error(error.response.data.detail);
+    if (error.response?.data?.detail) {
+      // 백엔드의 { "detail": string } 형식 에러를 처리 (모든 상태코드 공통)
+      const customError: any = new Error(error.response.data.detail);
       customError.name = 'APIError';
+      customError.status = error.response.status;
       return Promise.reject(customError);
     }
     return Promise.reject(error);
@@ -69,6 +70,12 @@ export const post = async <T>(url: string, data?: any, config?: AxiosRequestConf
 export const put = async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
   ensureBackendEnabled();
   const response = await client.put<T>(url, data, config);
+  return response.data;
+};
+
+export const patch = async <T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
+  ensureBackendEnabled();
+  const response = await client.patch<T>(url, data, config);
   return response.data;
 };
 

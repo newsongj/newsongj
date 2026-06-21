@@ -40,7 +40,7 @@ export const useUserManagement = () => {
     rowsPerPage: 10
   });
 
-  // 사용자 명단 로드
+  // 교적 명단 로드
   const loadUsers = useCallback(async (page: number = 1, pageSize: number = 10) => {
     setUsersData(prev => ({ ...prev, loading: true }));
 

@@ -11,17 +11,16 @@ export interface BusInfo {
 }
 
 export interface RetreatInfo {
-    retreat_custom_id: number;
-    retreat_name:      string;
-    start_date:        string;
-    end_date:          string;
-    bus_types:         string[];
-    fee_with_bus:      number;
-    fee_without_bus:   number;
-    buses:             BusInfo[];
+    retreat_id:      number;
+    retreat_name:    string;
+    start_date:      string;
+    end_date:        string;
+    fee_with_bus:    number;
+    fee_without_bus: number;
+    buses:           BusInfo[];
 }
 
-export type FeeType = 'bus' | 'lodging' | null;
+export type FeeType = 'bus' | 'lodging_only' | null;
 
 export interface ResearchResponse {
     day1_attendance: AttendanceStatus | null;
