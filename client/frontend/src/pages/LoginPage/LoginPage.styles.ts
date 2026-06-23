@@ -40,8 +40,10 @@ export const StyledLogo = styled(Typography)(({ theme }) => ({
   marginBottom: theme.custom.spacing.lg,
   whiteSpace: 'nowrap',
   '@media (max-width: 480px)': {
-    fontSize: '32px',
-    lineHeight: '42px',
+    fontSize: '28px',
+    lineHeight: '38px',
+    whiteSpace: 'normal',
+    wordBreak: 'keep-all',
   },
 }));
 

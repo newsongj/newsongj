@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Alert, Snackbar } from '@mui/material';
 import { Button } from '@components/common/Button';
 import { TextField } from '@components/common/TextField';
@@ -10,6 +10,14 @@ import newsongjLogo from '@assets/J_logo.png';
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const redirectTo = new URLSearchParams(location.search).get('redirect') || '/research';
+
+    const PAGE_TITLES: Record<string, string> = {
+        '/research':     'NEWSONGJ 인원조사',
+        '/suspendedmeal': 'NEWSONGJ 서스펜디드밀',
+    };
+    const pageTitle = PAGE_TITLES[redirectTo] ?? 'NEWSONGJ 대학부';
 
     const [formData, setFormData] = useState({ login_id: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +49,7 @@ const LoginPage: React.FC = () => {
             const data = await apiLogin({ login_id: formData.login_id, password: formData.password });
             storage.setToken(data.token);
             localStorage.setItem('client_user', JSON.stringify(data));
-            navigate('/research', { replace: true });
+            navigate(redirectTo, { replace: true });
         } catch (err: any) {
             showError(err.response?.data?.detail || err.message || '로그인에 실패했습니다.');
         } finally {
@@ -54,7 +62,7 @@ const LoginPage: React.FC = () => {
             <S.StyledLogo>
                 <img src={newsongjLogo} alt="NewsongJ" height="40" style={{ marginBottom: 8 }} />
                 <br />
-                NEWSONGJ 대학부
+                {pageTitle}
             </S.StyledLogo>
 
             <S.StyledLoginCard>
