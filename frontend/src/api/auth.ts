@@ -1,7 +1,6 @@
 import { get, post, put } from './client.ts';
 import {
   LoginRequest,
-  LoginResponse,
   MeResponse,
   LogoutResponse,
   PasswordChangeRequest,
