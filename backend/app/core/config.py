@@ -40,10 +40,10 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     API_PREFIX: str = "/api/v1"
 
-    # JWT 설정 — SECRET_KEY는 프로덕션 전환 시 .env로 교체 필요
-    SECRET_KEY: str = "changeme"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24시간
+    # JWT
+    JWT_SECRET_KEY: str = Field("dev-secret-newsongj-2026", env="JWT_SECRET_KEY")
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_HOURS: int = 24
 
     @property
     def cors_origins(self) -> List[str]:

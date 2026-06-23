@@ -6,7 +6,7 @@ import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
 import Button from '@components/common/Button/Button';
 import type { AttendanceStatus, FeeType, RetreatInfo, ResearchMember, ResearchResponseBody } from '@models/research.types';
-import { fetchRetreatInfo, fetchResearchMembers, saveResearchResponse } from '@api/retreat';
+import { fetchRetreatInfo, fetchGyoguList, fetchResearchMembers, saveResearchResponse } from '@api/retreat';
 
 // ─── 드롭박스 옵션 ─────────────────────────────────────────────────────────────
 
@@ -50,14 +50,37 @@ const FilterPanel = styled('section')(({ theme }) => ({
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
     '@media (max-width: 480px)': {
         padding: theme.custom.spacing.sm,
+        gap: theme.custom.spacing.xs,
+        alignItems: 'stretch',
     },
 }));
+
+const FilterGroup = styled('div')({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    '@media (max-width: 480px)': {
+        width: '100%',
+        '& .MuiFormControl-root': { flex: 1 },
+    },
+});
+
+const FilterActions = styled('div')({
+    marginLeft: 'auto',
+    '@media (max-width: 480px)': {
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        marginTop: 2,
+    },
+});
 
 const FilterLabel = styled('span')(({ theme }) => ({
     fontSize: theme.custom.typography.body1.fontSize,
     fontWeight: 700,
     color: theme.custom.colors.text.high,
     whiteSpace: 'nowrap',
+    minWidth: 52,
 }));
 
 
@@ -185,6 +208,7 @@ const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
 const ResearchPage: React.FC = () => {
     const user       = getStoredUser();
     const dataScope  = user?.data_scope ?? 'all';
+    const isAllScope  = dataScope === 'all';
     const isTeamLeader = dataScope === 'all' || dataScope === 'team' || user === null;
 
     const [retreatInfo, setRetreatInfo] = useState<RetreatInfo | null>(null);
@@ -193,6 +217,9 @@ const ResearchPage: React.FC = () => {
     const [loadError,   setLoadError]   = useState<string | null>(null);
     const [noRetreat,   setNoRetreat]   = useState(false);
 
+    const [gyogu,      setGyogu]      = useState<number | ''>('');
+    const [teamFilter, setTeamFilter] = useState<number | ''>('');
+    const [gyoguNos,   setGyoguNos]   = useState<number[]>([]);
     const [groupNo, setGroupNo] = useState<number | ''>(() =>
         !isTeamLeader && user?.group_no != null ? user.group_no : ''
     );
@@ -203,15 +230,33 @@ const ResearchPage: React.FC = () => {
         open: false, message: '', severity: 'success',
     });
 
+    const loadMembers = useCallback(async (g?: number, t?: number) => {
+        setLoading(true);
+        setLoadError(null);
+        try {
+            const members = await fetchResearchMembers({ gyogu: g, team: t });
+            setAllMembers(members);
+        } catch {
+            setLoadError('데이터를 불러오지 못했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         const load = async () => {
             try {
-                const [retreat, members] = await Promise.all([
+                const [retreat, gyoguList] = await Promise.all([
                     fetchRetreatInfo(),
-                    fetchResearchMembers(),
+                    isAllScope ? fetchGyoguList() : Promise.resolve([] as number[]),
                 ]);
                 setRetreatInfo(retreat);
-                setAllMembers(members);
+                if (isAllScope) {
+                    setGyoguNos(gyoguList);
+                } else {
+                    const members = await fetchResearchMembers();
+                    setAllMembers(members);
+                }
             } catch (err: any) {
                 if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
                     setNoRetreat(true);
@@ -223,13 +268,37 @@ const ResearchPage: React.FC = () => {
             }
         };
         load();
-    }, []);
+    }, [isAllScope]);
+
+    const handleGyoguChange = useCallback((val: number | '') => {
+        setGyogu(val);
+        setTeamFilter('');
+        setGroupNo('');
+        setDrafts(new Map());
+        setIsDirty(false);
+        if (val !== '') loadMembers(val as number, undefined);
+        else setAllMembers([]);
+    }, [loadMembers]);
+
+    const handleTeamFilterChange = useCallback((val: number | '') => {
+        setTeamFilter(val);
+        setGroupNo('');
+        setDrafts(new Map());
+        setIsDirty(false);
+        if (gyogu !== '') loadMembers(gyogu as number, val === '' ? undefined : val as number);
+    }, [gyogu, loadMembers]);
 
     const days: DayKey[] = useMemo(() => {
         if (!retreatInfo) return [];
         const count = getDayCount(retreatInfo);
         return (['day1', 'day2', 'day3', 'day4'] as DayKey[]).slice(0, count);
     }, [retreatInfo]);
+
+    const teamNos = useMemo(() => {
+        if (!isAllScope) return [];
+        const set = new Set(allMembers.map((m) => m.team));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [allMembers, isAllScope]);
 
     const groupNos = useMemo(() => {
         const set = new Set(allMembers.map((m) => m.group_no));
@@ -263,7 +332,9 @@ const ResearchPage: React.FC = () => {
                     return saveResearchResponse(memberId, getRow(member));
                 })
             );
-            const updated = await fetchResearchMembers();
+            const updated = await fetchResearchMembers(
+                isAllScope ? { gyogu: gyogu as number, team: teamFilter === '' ? undefined : teamFilter as number } : {}
+            );
             setAllMembers(updated);
             setDrafts(new Map());
             setIsDirty(false);
@@ -294,6 +365,16 @@ const ResearchPage: React.FC = () => {
         { value: 'lodging_only', label: `버스 미탑승+숙박 (${formatWon(retreatInfo?.fee_without_bus ?? 0)})` },
     ], [retreatInfo]);
 
+    const gyoguOptions: SelectOption[] = useMemo(() => [
+        { value: '', label: '교구 선택' },
+        ...gyoguNos.map((g) => ({ value: g, label: `${g}교구` })),
+    ], [gyoguNos]);
+
+    const teamOptions: SelectOption[] = useMemo(() => [
+        { value: '', label: '전체 팀' },
+        ...teamNos.map((t) => ({ value: t, label: `${t}팀` })),
+    ], [teamNos]);
+
     const groupOptions: SelectOption[] = useMemo(() => [
         { value: '', label: '전체' },
         ...groupNos.map((g) => ({ value: g, label: `${g}그룹` })),
@@ -301,7 +382,7 @@ const ResearchPage: React.FC = () => {
 
     const surveyedCount = members.filter((m) => m.response !== null).length;
 
-    if (loading) {
+    if (loading && !isAllScope) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
                 <CircularProgress size={32} />
@@ -327,18 +408,51 @@ const ResearchPage: React.FC = () => {
 
     return (
         <PageWrapper>
+            {/* data_scope=all 교구 미선택 안내 */}
+            {isAllScope && gyogu === '' && !noRetreat && (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: '#8c8c8c', fontSize: 15 }}>
+                    교구를 선택하면 인원조사 명단이 표시됩니다.
+                </div>
+            )}
             {/* 필터 바 */}
             <FilterPanel>
-                <FilterLabel>그룹 선택</FilterLabel>
-                <Select
-                    size="small"
-                    value={groupNo}
-                    options={groupOptions}
-                    onChange={(v) => setGroupNo(v === '' ? '' : Number(v))}
-                    disabled={!isTeamLeader}
-                    width={140}
-                />
-                <div style={{ marginLeft: 'auto' }}>
+                {isAllScope && (
+                    <>
+                        <FilterGroup>
+                            <FilterLabel>교구</FilterLabel>
+                            <Select
+                                size="small"
+                                value={gyogu}
+                                options={gyoguOptions}
+                                onChange={(v) => handleGyoguChange(v === '' ? '' : Number(v))}
+                                width={120}
+                            />
+                        </FilterGroup>
+                        <FilterGroup>
+                            <FilterLabel>팀</FilterLabel>
+                            <Select
+                                size="small"
+                                value={teamFilter}
+                                options={teamOptions}
+                                onChange={(v) => handleTeamFilterChange(v === '' ? '' : Number(v))}
+                                disabled={gyogu === '' || teamNos.length === 0}
+                                width={110}
+                            />
+                        </FilterGroup>
+                    </>
+                )}
+                <FilterGroup>
+                    <FilterLabel>그룹</FilterLabel>
+                    <Select
+                        size="small"
+                        value={groupNo}
+                        options={groupOptions}
+                        onChange={(v) => setGroupNo(v === '' ? '' : Number(v))}
+                        disabled={!isTeamLeader || (isAllScope && gyogu === '')}
+                        width={140}
+                    />
+                </FilterGroup>
+                <FilterActions>
                     <Button
                         variant="filled"
                         size="small"
@@ -347,11 +461,17 @@ const ResearchPage: React.FC = () => {
                     >
                         {isSaving ? '저장 중...' : '저장'}
                     </Button>
-                </div>
+                </FilterActions>
             </FilterPanel>
 
+            {loading && isAllScope && gyogu !== '' && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                    <CircularProgress size={32} />
+                </div>
+            )}
+
             {/* 테이블 */}
-            <TableWrapper>
+            {(!isAllScope || gyogu !== '') && !loading && <TableWrapper>
                 <TableScroll>
                     <Table>
                         <thead>
@@ -421,16 +541,16 @@ const ResearchPage: React.FC = () => {
                         </tbody>
                     </Table>
                 </TableScroll>
-            </TableWrapper>
+            </TableWrapper>}
 
-            {/* 하단 집계 */}
+            {(!isAllScope || gyogu !== '') && !loading && (
             <Footer>
                 <CountLabel>
                     총 {members.length}명&nbsp;|&nbsp;
                     <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
                     <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
                 </CountLabel>
-            </Footer>
+            </Footer>)}
 
             {/* 이탈 확인 다이얼로그 */}
             <ConfirmDialog open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>

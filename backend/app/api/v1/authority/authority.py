@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Path
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_any_admin, require_menu
 from app.crud.authority import (
     bulk_deactivate_accounts,
     bulk_delete_accounts,
@@ -54,20 +55,24 @@ from app.services.authority import (
 
 router = APIRouter(prefix="/api/admin", tags=["권한관리"])
 
+_accounts = Depends(require_menu("admin.authority.accounts"))
+_policies = Depends(require_menu("admin.authority.policies"))
+_any_admin = Depends(require_any_admin())
+
 
 # ── 계정 ─────────────────────────────────────────────────────────────────────
 
-@router.get("/accounts", response_model=List[AccountResponse], summary="계정 목록")
+@router.get("/accounts", response_model=List[AccountResponse], summary="계정 목록", dependencies=[_accounts])
 def get_accounts(db: Session = Depends(get_db)):
     return svc_list_accounts(db)
 
 
-@router.post("/accounts", response_model=AccountResponse, status_code=201, summary="계정 생성")
+@router.post("/accounts", response_model=AccountResponse, status_code=201, summary="계정 생성", dependencies=[_accounts])
 def post_account(body: AccountCreate, db: Session = Depends(get_db)):
     return svc_create_account(db, body)
 
 
-@router.put("/accounts/{account_id}/password", status_code=200, summary="비밀번호 초기화")
+@router.put("/accounts/{account_id}/password", status_code=200, summary="비밀번호 초기화", dependencies=[_accounts])
 def put_account_password(
     account_id: int = Path(...),
     body: AccountPasswordUpdate = ...,
@@ -77,7 +82,7 @@ def put_account_password(
     return {"ok": True}
 
 
-@router.patch("/accounts/{account_id}/scope", status_code=200, summary="데이터 범위 변경")
+@router.patch("/accounts/{account_id}/scope", status_code=200, summary="데이터 범위 변경", dependencies=[_accounts])
 def patch_account_scope(
     account_id: int = Path(...),
     body: AccountScopeUpdate = ...,
@@ -87,7 +92,7 @@ def patch_account_scope(
     return {"ok": True}
 
 
-@router.patch("/accounts/{account_id}/status", status_code=200, summary="계정 활성/비활성")
+@router.patch("/accounts/{account_id}/status", status_code=200, summary="계정 활성/비활성", dependencies=[_accounts])
 def patch_account_status(
     account_id: int = Path(...),
     body: AccountStatusUpdate = ...,
@@ -97,25 +102,25 @@ def patch_account_status(
     return {"ok": True}
 
 
-@router.patch("/accounts/bulk-deactivate", status_code=200, summary="계정 일괄 비활성화")
+@router.patch("/accounts/bulk-deactivate", status_code=200, summary="계정 일괄 비활성화", dependencies=[_accounts])
 def patch_bulk_deactivate(body: BulkDeactivateRequest, db: Session = Depends(get_db)):
     bulk_deactivate_accounts(db, body.account_ids)
     return {"ok": True}
 
 
-@router.delete("/accounts/{account_id}", status_code=200, summary="계정 삭제")
+@router.delete("/accounts/{account_id}", status_code=200, summary="계정 삭제", dependencies=[_accounts])
 def delete_account_route(account_id: int = Path(...), db: Session = Depends(get_db)):
     delete_account(db, account_id)
     return {"ok": True}
 
 
-@router.post("/accounts/bulk-delete", status_code=200, summary="계정 일괄 삭제")
+@router.post("/accounts/bulk-delete", status_code=200, summary="계정 일괄 삭제", dependencies=[_accounts])
 def post_bulk_delete(body: BulkDeleteRequest, db: Session = Depends(get_db)):
     bulk_delete_accounts(db, body.account_ids)
     return {"ok": True}
 
 
-@router.patch("/accounts/{account_id}/policy", status_code=200, summary="계정 정책 할당")
+@router.patch("/accounts/{account_id}/policy", status_code=200, summary="계정 정책 할당", dependencies=[_accounts])
 def patch_account_policy(
     account_id: int = Path(...),
     body: AccountPolicyUpdate = ...,
@@ -127,39 +132,39 @@ def patch_account_policy(
 
 # ── 리더 일괄 계정 생성 ──────────────────────────────────────────────────────
 
-@router.get("/accounts/preview", response_model=List[LeaderPreviewItem], summary="계정 생성 대상 미리보기")
+@router.get("/accounts/preview", response_model=List[LeaderPreviewItem], summary="계정 생성 대상 미리보기", dependencies=[_accounts])
 def get_account_preview(db: Session = Depends(get_db)):
     return svc_get_leader_preview(db)
 
 
-@router.get("/accounts/leaders-all", response_model=List[LeaderWithAccountItem], summary="전체 리더 계정 현황")
+@router.get("/accounts/leaders-all", response_model=List[LeaderWithAccountItem], summary="전체 리더 계정 현황", dependencies=[_accounts])
 def get_all_leaders(db: Session = Depends(get_db)):
     return svc_get_all_leaders_with_account_status(db)
 
 
-@router.post("/accounts/bulk", response_model=List[BulkLeaderCreateResultItem], status_code=201, summary="일괄 계정 생성")
+@router.post("/accounts/bulk", response_model=List[BulkLeaderCreateResultItem], status_code=201, summary="일괄 계정 생성", dependencies=[_accounts])
 def post_bulk_accounts(body: BulkLeaderCreateRequest, db: Session = Depends(get_db)):
     return svc_bulk_create_leader_accounts(db, body)
 
 
-@router.post("/accounts/bulk-sync", response_model=BulkSyncResult, status_code=200, summary="계정 일괄 동기화 (생성+비활성화)")
+@router.post("/accounts/bulk-sync", response_model=BulkSyncResult, status_code=200, summary="계정 일괄 동기화", dependencies=[_accounts])
 def post_bulk_sync(body: BulkSyncRequest, db: Session = Depends(get_db)):
     return svc_bulk_sync_accounts(db, body)
 
 
 # ── 정책 ─────────────────────────────────────────────────────────────────────
 
-@router.get("/policies", response_model=List[PolicyResponse], summary="정책 목록")
+@router.get("/policies", response_model=List[PolicyResponse], summary="정책 목록", dependencies=[_policies])
 def get_policies(db: Session = Depends(get_db)):
     return svc_list_policies(db)
 
 
-@router.post("/policies", response_model=PolicyResponse, status_code=201, summary="정책 생성")
+@router.post("/policies", response_model=PolicyResponse, status_code=201, summary="정책 생성", dependencies=[_policies])
 def post_policy(body: PolicyCreate, db: Session = Depends(get_db)):
     return svc_create_policy(db, body)
 
 
-@router.put("/policies/{policy_id}", response_model=PolicyResponse, summary="정책 수정")
+@router.put("/policies/{policy_id}", response_model=PolicyResponse, summary="정책 수정", dependencies=[_policies])
 def put_policy(
     policy_id: int = Path(...),
     body: PolicyUpdate = ...,
@@ -168,20 +173,20 @@ def put_policy(
     return svc_update_policy(db, policy_id, body)
 
 
-@router.delete("/policies/{policy_id}", status_code=200, summary="정책 삭제")
+@router.delete("/policies/{policy_id}", status_code=200, summary="정책 삭제", dependencies=[_policies])
 def delete_policy_route(policy_id: int = Path(...), db: Session = Depends(get_db)):
     delete_policy(db, policy_id)
     return {"ok": True}
 
 
-# ── 범위별 정책 할당 ──────────────────────────────────────────────────────────
+# ── 범위별 정책 ───────────────────────────────────────────────────────────────
 
-@router.get("/scope-policies", response_model=ScopePoliciesResponse, summary="범위별 정책 조회")
+@router.get("/scope-policies", response_model=ScopePoliciesResponse, summary="범위별 정책 조회", dependencies=[_any_admin])
 def get_scope_policies(db: Session = Depends(get_db)):
     return svc_get_scope_policies(db)
 
 
-@router.put("/scope-policies", status_code=200, summary="범위별 정책 일괄 업데이트")
+@router.put("/scope-policies", status_code=200, summary="범위별 정책 업데이트", dependencies=[_any_admin])
 def put_scope_policies(body: ScopePoliciesUpdate, db: Session = Depends(get_db)):
     update_scope_policies(db, body)
     return {"ok": True}
@@ -189,7 +194,7 @@ def put_scope_policies(body: ScopePoliciesUpdate, db: Session = Depends(get_db))
 
 # ── 메뉴 키 목록 ──────────────────────────────────────────────────────────────
 
-@router.get("/menu-keys", summary="메뉴 키 목록 (그룹별)")
+@router.get("/menu-keys", summary="메뉴 키 목록", dependencies=[_any_admin])
 def get_menu_keys():
     return {
         group: [{"key": k, "label": MENU_LABELS[k]} for k in keys]

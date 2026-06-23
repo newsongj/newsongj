@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.security import require_menu
 from app.services.newcomers import (
     build_newcomer_list_response,
     create_newcomer as svc_create_newcomer,
@@ -19,7 +20,7 @@ from app.schemas.newcomers import (
     NewcomerBulkDeleteRequest, EnrollRequest, BulkEnrollRequest,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_menu("admin.gyojeok.newcomers"))])
 
 
 @router.get("/members/newcomers", response_model=MemberListResponse, tags=["미등반새가족"], summary="미등반 새가족 목록 조회")

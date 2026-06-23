@@ -1,32 +1,18 @@
-"""인증 API — 로그인 / 내 정보 / 로그아웃 (프론트 스펙 일치)"""
+"""인증 API — 내 정보 / 로그아웃"""
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
 
 from app.core.security import verify_token
-from app.schemas.auth import (
-    LoginRequest,
-    LoginResponse,
-    LogoutResponse,
-    MeResponse,
-)
-from app.services.auth import (
-    build_login_response,
-    build_logout_response,
-    build_me_response,
-)
+from app.schemas.auth import LogoutResponse, MeResponse
+from app.services.auth import build_logout_response, build_me_response
 
 router = APIRouter()
 
 
-@router.post("/api/v1/local/login", response_model=LoginResponse, tags=["인증"], summary="로컬 로그인")
-def create_local_login(body: LoginRequest) -> LoginResponse:
-    return build_login_response(body)
-
-
 @router.get("/api/v1/me", response_model=MeResponse, tags=["인증"], summary="내 정보 조회")
 def get_me(payload: Dict[str, Any] = Depends(verify_token)) -> MeResponse:
-    return build_me_response(email=payload.get("sub", ""))
+    return build_me_response(payload)
 
 
 @router.post("/api/v1/logout", response_model=LogoutResponse, tags=["인증"], summary="로그아웃")

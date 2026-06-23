@@ -1,37 +1,20 @@
-"""인증 서비스 — 로그인 검증 + 응답 빌드"""
-from fastapi import HTTPException, status
+"""인증 서비스 — /api/v1/me 응답 빌드."""
+from typing import Any, Dict, List
 
-from app.core.security import (
-    ADMIN_EMAIL,
-    ADMIN_PASSWORD,
-    create_access_token,
-)
-from app.schemas.auth import LoginRequest, LoginResponse, LogoutResponse, MeResponse
+from app.schemas.auth import MenuInfo, MeResponse, LogoutResponse
 
 
-def build_login_response(body: LoginRequest) -> LoginResponse:
-    if body.email != ADMIN_EMAIL or body.password != ADMIN_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
-        )
-    token = create_access_token(subject=body.email)
-    return LoginResponse(
-        access_token=token,
-        token_type="bearer",
-        requires_password_change=False,
-    )
-
-
-def build_me_response(email: str) -> MeResponse:
+def build_me_response(payload: Dict[str, Any]) -> MeResponse:
+    menus_from_token: List[str] = payload.get("menus", [])
     return MeResponse(
-        user_idx=1,
-        email=email,
-        name="관리자",
-        dept_idx=None,
-        roles=["admin"],
-        menus=[],
-        requires_password_change=False,
+        user_idx=int(payload["sub"]) if str(payload.get("sub", "")).isdigit() else 0,
+        email=str(payload.get("sub", "")),
+        name="사용자",
+        roles=[],
+        menus=[
+            MenuInfo(menu_idx=i, name=key, code=key, is_activated=True)
+            for i, key in enumerate(menus_from_token)
+        ],
     )
 
 

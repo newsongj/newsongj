@@ -25,8 +25,13 @@ export interface VehicleSubmitBody {
 export const fetchRetreatInfo = () =>
     apiClient.get<RetreatInfo>('/retreat/active').then((r) => r.data);
 
-export const fetchResearchMembers = (groupNo?: number) =>
-    apiClient.get<ResearchMember[]>('/retreat/research/members', { params: { group_no: groupNo } }).then((r) => r.data);
+export const fetchGyoguList = () =>
+    apiClient.get<number[]>('/gyogu-list').then((r) => r.data);
+
+export const fetchResearchMembers = (params?: { groupNo?: number; gyogu?: number; team?: number }) =>
+    apiClient.get<ResearchMember[]>('/retreat/research/members', {
+        params: { group_no: params?.groupNo, gyogu: params?.gyogu, team: params?.team },
+    }).then((r) => r.data);
 
 export const saveResearchResponse = (memberId: number, body: ResearchResponseBody) =>
     apiClient.put(`/retreat/research/response/${memberId}`, body).then((r) => r.data);
@@ -37,8 +42,10 @@ export const fetchVehicleMy = () =>
 export const submitVehicle = (body: VehicleSubmitBody) =>
     apiClient.post('/vehicle', body).then((r) => r.data);
 
-export const fetchSuspendedMealMembers = () =>
-    apiClient.get<SuspendedMealMember[]>('/retreat/suspended-meal/members').then((r) => r.data);
+export const fetchSuspendedMealMembers = (params?: { gyogu?: number; team?: number }) =>
+    apiClient.get<SuspendedMealMember[]>('/retreat/suspended-meal/members', {
+        params: { gyogu: params?.gyogu, team: params?.team },
+    }).then((r) => r.data);
 
 export const submitSuspendedMeal = (memberId: number, body: SuspendedMealSubmitBody) =>
     apiClient.put(`/retreat/suspended-meal/response/${memberId}`, body).then((r) => r.data);

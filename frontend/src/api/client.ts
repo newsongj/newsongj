@@ -33,14 +33,16 @@ client.interceptors.response.use(
   (response) => response,
   (error: any) => {
     if (error.response?.status === 401) {
-      // 로그인/인증 초기화 엔드포인트의 401은 호출부에서 직접 처리
-      if (error.config?.url?.includes('/local/login') || error.config?.url?.includes('/me')) {
+      // 로그인 엔드포인트의 401은 호출부(LoginPage)에서 직접 처리
+      if (
+        error.config?.url?.includes('/api/auth/login') ||
+        error.config?.url?.includes('/me')
+      ) {
         return Promise.reject(error);
       }
       removeAccessToken();
-      alert('세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.');
       window.location.href = '/admin/login';
-      return Promise.reject(new Error('Unauthorized'));
+      return Promise.reject(error);
     }
 
     if (error.response?.data?.detail) {

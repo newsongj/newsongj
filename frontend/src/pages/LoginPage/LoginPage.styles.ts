@@ -10,6 +10,10 @@ export const StyledContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
   backgroundColor: theme.custom.colors.neutral._99,
   padding: theme.custom.spacing.lg,
+  '@media (max-width: 480px)': {
+    gap: theme.custom.spacing.lg,
+    padding: theme.custom.spacing.md,
+  },
 }));
 
 export const StyledLoginCard = styled(Box)(({ theme }) => ({
@@ -22,6 +26,9 @@ export const StyledLoginCard = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.custom.spacing.xl,
+  '@media (max-width: 480px)': {
+    padding: theme.custom.spacing.lg,
+  },
 }));
 
 export const StyledLogo = styled(Typography)(({ theme }) => ({
@@ -31,6 +38,11 @@ export const StyledLogo = styled(Typography)(({ theme }) => ({
   color: theme.custom.colors.primary._500,
   textAlign: 'center',
   marginBottom: theme.custom.spacing.lg,
+  whiteSpace: 'nowrap',
+  '@media (max-width: 480px)': {
+    fontSize: '32px',
+    lineHeight: '42px',
+  },
 }));
 
 export const StyledForm = styled('form')({
@@ -48,12 +60,5 @@ export const StyledButtonGroup = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.custom.spacing.md,
-  marginTop: theme.custom.spacing.sm,
-}));
-
-export const StyledErrorMessage = styled(Typography)(({ theme }) => ({
-  fontSize: theme.custom.typography.caption.fontSize,
-  color: theme.custom.colors.on.error,
-  textAlign: 'center',
   marginTop: theme.custom.spacing.sm,
 }));

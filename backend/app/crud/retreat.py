@@ -104,6 +104,28 @@ def delete_bus(db: Session, bus_id: int) -> None:
     db.commit()
 
 
+# ── 교구 목록 ─────────────────────────────────────────────────────────────────
+
+def get_distinct_gyogu_list(db: Session) -> List[int]:
+    """삭제되지 않은 회원의 최신 프로필 기준으로 존재하는 교구 번호 목록 반환."""
+    latest_sq = (
+        db.query(MemberProfile.member_id, func.max(MemberProfile.profile_id).label("max_id"))
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
+    rows = (
+        db.query(MemberProfile.gyogu)
+        .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_id)
+        .join(Member, Member.member_id == MemberProfile.member_id)
+        .filter(Member.deleted_at.is_(None))
+        .filter(MemberProfile.gyogu.isnot(None))
+        .distinct()
+        .order_by(MemberProfile.gyogu)
+        .all()
+    )
+    return [r.gyogu for r in rows]
+
+
 # ── 인원조사 ──────────────────────────────────────────────────────────────────
 
 def _latest_profile_subquery(db: Session):
@@ -121,6 +143,8 @@ def get_research_members(
     team: Optional[int],
     group_no: Optional[int],
     query_group_no: Optional[int] = None,
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
 ) -> List[Tuple]:
     latest_sq = _latest_profile_subquery(db)
     q = (
@@ -140,8 +164,13 @@ def get_research_members(
             q = q.filter(MemberProfile.group_no == query_group_no)
     elif data_scope == "group":
         q = q.filter(MemberProfile.group_no == group_no)
-    elif data_scope == "all" and query_group_no is not None:
-        q = q.filter(MemberProfile.group_no == query_group_no)
+    elif data_scope == "all":
+        if query_gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == query_gyogu)
+        if query_team is not None:
+            q = q.filter(MemberProfile.team == query_team)
+        if query_group_no is not None:
+            q = q.filter(MemberProfile.group_no == query_group_no)
     return (
         q.order_by(MemberProfile.gyogu, MemberProfile.team, MemberProfile.group_no, Member.name)
         .all()
@@ -324,6 +353,8 @@ def get_suspended_meal_members(
     data_scope: str,
     team: Optional[int],
     group_no: Optional[int],
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
 ) -> List[Tuple]:
     latest_sq = _latest_profile_subquery(db)
     q = (
@@ -337,6 +368,11 @@ def get_suspended_meal_members(
         q = q.filter(MemberProfile.team == team)
     elif data_scope == "group":
         q = q.filter(MemberProfile.group_no == group_no)
+    elif data_scope == "all":
+        if query_gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == query_gyogu)
+        if query_team is not None:
+            q = q.filter(MemberProfile.team == query_team)
     return (
         q.order_by(MemberProfile.gyogu, MemberProfile.team, MemberProfile.group_no, Member.name)
         .all()

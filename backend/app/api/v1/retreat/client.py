@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import verify_client_token
+from app.core.security import require_menu, verify_token
 from app.schemas.retreat import (
     ResearchMemberResponse, ResearchResponseUpdate,
     VehicleMyResponse, VehicleSubmitBody,
     SuspendedMealMemberResponse, SuspendedMealSubmitBody,
 )
+from app.crud.retreat import get_distinct_gyogu_list
 from app.services.retreat import (
     svc_get_research_members,
     svc_upsert_research_response,
@@ -24,14 +25,28 @@ router = APIRouter()
 
 
 @router.get(
+    "/api/gyogu-list",
+    response_model=List[int],
+    tags=["공통"],
+    summary="실제 존재하는 교구 번호 목록",
+    dependencies=[Depends(verify_token)],
+)
+def get_gyogu_list(db: Session = Depends(get_db)):
+    return get_distinct_gyogu_list(db)
+
+
+@router.get(
     "/api/retreat/research/members",
     response_model=List[ResearchMemberResponse],
     tags=["사용자 인원조사"],
     summary="인원조사 멤버 목록",
+    dependencies=[Depends(require_menu("user.research"))],
 )
 def get_research_members(
     group_no: Optional[int] = Query(None),
-    payload: dict = Depends(verify_client_token),
+    gyogu:    Optional[int] = Query(None),
+    team:     Optional[int] = Query(None),
+    payload: dict = Depends(require_menu("user.research")),
     db: Session = Depends(get_db),
 ):
     return svc_get_research_members(
@@ -40,6 +55,8 @@ def get_research_members(
         team=payload.get("team"),
         group_no=payload.get("group_no"),
         query_group_no=group_no,
+        query_gyogu=gyogu,
+        query_team=team,
     )
 
 
@@ -48,11 +65,11 @@ def get_research_members(
     status_code=200,
     tags=["사용자 인원조사"],
     summary="인원조사 응답 저장",
+    dependencies=[Depends(require_menu("user.research"))],
 )
 def save_research_response(
     member_id: int = Path(...),
     body: ResearchResponseUpdate = ...,
-    payload: dict = Depends(verify_client_token),
     db: Session = Depends(get_db),
 ):
     svc_upsert_research_response(db, member_id, body)
@@ -66,7 +83,7 @@ def save_research_response(
     summary="내 차량 신청 내역 조회",
 )
 def get_vehicle_my(
-    payload: dict = Depends(verify_client_token),
+    payload: dict = Depends(require_menu("user.vehicle")),
     db: Session = Depends(get_db),
 ):
     member_id = payload.get("member_id")
@@ -84,7 +101,7 @@ def get_vehicle_my(
 )
 def submit_vehicle(
     body: VehicleSubmitBody,
-    payload: dict = Depends(verify_client_token),
+    payload: dict = Depends(require_menu("user.vehicle")),
     db: Session = Depends(get_db),
 ):
     member_id = payload.get("member_id")
@@ -102,7 +119,9 @@ def submit_vehicle(
     summary="서스펜디드밀 멤버 목록",
 )
 def get_suspended_meal_members(
-    payload: dict = Depends(verify_client_token),
+    gyogu: Optional[int] = Query(None),
+    team:  Optional[int] = Query(None),
+    payload: dict = Depends(require_menu("user.suspended_meal")),
     db: Session = Depends(get_db),
 ):
     return svc_get_suspended_meal_members(
@@ -110,6 +129,8 @@ def get_suspended_meal_members(
         data_scope=payload["data_scope"],
         team=payload.get("team"),
         group_no=payload.get("group_no"),
+        query_gyogu=gyogu,
+        query_team=team,
     )
 
 
@@ -118,11 +139,11 @@ def get_suspended_meal_members(
     status_code=200,
     tags=["사용자 서스펜디드밀"],
     summary="서스펜디드밀 신청/수정",
+    dependencies=[Depends(require_menu("user.suspended_meal"))],
 )
 def submit_suspended_meal(
     member_id: int = Path(...),
     body: SuspendedMealSubmitBody = ...,
-    payload: dict = Depends(verify_client_token),
     db: Session = Depends(get_db),
 ):
     svc_upsert_suspended_meal(db, member_id, body)

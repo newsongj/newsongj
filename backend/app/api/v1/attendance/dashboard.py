@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.date_utils import is_saturday
 from app.core.database import get_db
+from app.core.security import require_menu
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard import build_dashboard_response
 
@@ -20,7 +21,11 @@ class PeriodUnit(str, Enum):
     custom = "custom"
 
 
-router = APIRouter(prefix="/api/attendance/dashboard", tags=["출석 대시보드"])
+router = APIRouter(
+    prefix="/api/attendance/dashboard",
+    tags=["출석 대시보드"],
+    dependencies=[Depends(require_menu("admin.gyojeok.attendance_dashboard"))],
+)
 
 
 _TREND_LOOKBACK_WEEKS = 12   # weekly: 직전 12주

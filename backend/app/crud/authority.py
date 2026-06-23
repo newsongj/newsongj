@@ -76,7 +76,6 @@ def create_account(db: Session, data: AccountCreate) -> UserAccount:
         policy_id=data.policy_id if data.policy_id else None,
         member_id=member.member_id if member else None,
         is_active=1,
-        requires_password_change=0,
     )
     db.add(account)
     db.commit()
@@ -89,7 +88,6 @@ def update_account_password(db: Session, account_id: int, new_password: str) -> 
     if not account:
         raise NotFoundError("계정을 찾을 수 없습니다.")
     account.password = _hash_pw(new_password)
-    account.requires_password_change = 1
     db.commit()
 
 
@@ -273,7 +271,7 @@ def bulk_sync_accounts(db: Session, all_leader_member_ids: List[int], active_mem
                         login_id=login_id, password=_hash_pw(plain_pw),
                         data_scope=data_scope, policy_id=policy_id,
                         member_id=member_id, is_active=1,
-                        requires_password_change=1, created_at=now,
+                        created_at=now,
                     ))
                     created.append({"name": member.name, "login_id": login_id, "password": plain_pw})
         elif not acc.is_active:
@@ -322,7 +320,6 @@ def bulk_create_leader_accounts(db: Session, member_ids: List[int], data_scope: 
             policy_id=policy_id,
             member_id=member.member_id,
             is_active=1,
-            requires_password_change=1,
             created_at=now,
         ))
         result.append({"name": member.name, "login_id": login_id, "password": plain_pw})

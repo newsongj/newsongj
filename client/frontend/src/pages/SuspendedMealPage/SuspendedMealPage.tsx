@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Alert, Checkbox, CircularProgress, Snackbar, Tooltip } from '@mui/material';
 import { Select } from '@components/common/Select';
@@ -9,7 +9,7 @@ import type {
     SuspendedMealDraft,
     SuspendedMealMember,
 } from '@models/suspendedMeal.types';
-import { fetchSuspendedMealMembers, submitSuspendedMeal } from '@api/retreat';
+import { fetchRetreatInfo, fetchGyoguList, fetchSuspendedMealMembers, submitSuspendedMeal } from '@api/retreat';
 
 // ─── Select 옵션 ───────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ const PageWrapper = styled('div')(({ theme }) => ({
     },
 }));
 
-const InfoBar = styled('section')(({ theme }) => ({
+const FilterPanel = styled('section')(({ theme }) => ({
     display: 'flex',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -78,21 +78,35 @@ const InfoBar = styled('section')(({ theme }) => ({
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
     '@media (max-width: 480px)': {
         padding: theme.custom.spacing.sm,
+        gap: theme.custom.spacing.xs,
+        alignItems: 'stretch',
     },
 }));
 
-const InfoTitle = styled('span')(({ theme }) => ({
+const FilterGroup = styled('div')({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    '@media (max-width: 480px)': {
+        width: '100%',
+        '& .MuiFormControl-root': { flex: 1 },
+    },
+});
+
+const FilterLabel = styled('span')(({ theme }) => ({
     fontSize: theme.custom.typography.body1.fontSize,
     fontWeight: 700,
     color: theme.custom.colors.text.high,
     whiteSpace: 'nowrap',
+    minWidth: 28,
 }));
 
-const InfoDivider = styled('span')(({ theme }) => ({
-    width: 1,
-    height: 14,
-    backgroundColor: theme.custom.colors.primary.outline,
-    flexShrink: 0,
+const Footer = styled('div')(({ theme }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: theme.custom.spacing.xs,
+    paddingTop: theme.custom.spacing.xs,
 }));
 
 const TableWrapper = styled('div')(({ theme }) => ({
@@ -188,18 +202,26 @@ const ReasonInput = styled('input')(({ theme }) => ({
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const SuspendedMealPage: React.FC = () => {
-    const [members,   setMembers]   = useState<SuspendedMealMember[]>([]);
-    const [loading,   setLoading]   = useState(true);
-    const [loadError, setLoadError] = useState<string | null>(null);
-    const [noRetreat, setNoRetreat] = useState(false);
-    const [drafts,    setDrafts]    = useState<Map<number, SuspendedMealDraft>>(new Map());
-    const [snackbar,  setSnackbar]  = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    const user      = (() => { try { return JSON.parse(localStorage.getItem('client_user') ?? 'null'); } catch { return null; } })();
+    const dataScope = user?.data_scope ?? 'all';
+    const isAllScope = dataScope === 'all';
+
+    const [members,     setMembers]     = useState<SuspendedMealMember[]>([]);
+    const [loading,     setLoading]     = useState(true);
+    const [loadError,   setLoadError]   = useState<string | null>(null);
+    const [noRetreat,   setNoRetreat]   = useState(false);
+    const [gyogu,       setGyogu]       = useState<number | ''>('');
+    const [teamFilter,  setTeamFilter]  = useState<number | ''>('');
+    const [gyoguNos,    setGyoguNos]    = useState<number[]>([]);
+    const [drafts,      setDrafts]      = useState<Map<number, SuspendedMealDraft>>(new Map());
+    const [snackbar,    setSnackbar]    = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
         open: false, message: '', severity: 'success',
     });
 
-    const loadMembers = useCallback(async () => {
+    const loadMembers = useCallback(async (g?: number, t?: number) => {
+        setLoading(true);
         try {
-            const data = await fetchSuspendedMealMembers();
+            const data = await fetchSuspendedMealMembers(g !== undefined ? { gyogu: g, team: t } : undefined);
             setMembers(data);
         } catch (err: any) {
             if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
@@ -212,7 +234,57 @@ const SuspendedMealPage: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => { loadMembers(); }, [loadMembers]);
+    useEffect(() => {
+        const init = async () => {
+            try {
+                // 수련회 존재 여부 + 교구 목록 병렬 조회
+                const [, gyoguList] = await Promise.all([
+                    fetchRetreatInfo(),
+                    isAllScope ? fetchGyoguList() : Promise.resolve([]),
+                ]);
+                setGyoguNos(gyoguList);
+                if (!isAllScope) await loadMembers();
+            } catch (err: any) {
+                if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+                    setNoRetreat(true);
+                } else {
+                    setLoadError('데이터를 불러오지 못했습니다.');
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        init();
+    }, [isAllScope]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const teamNos = useMemo(() => {
+        const set = new Set(members.map((m) => m.team));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [members]);
+
+    const gyoguOptions = useMemo(() => [
+        { value: '', label: '교구 선택' },
+        ...gyoguNos.map((g) => ({ value: g, label: `${g}교구` })),
+    ], [gyoguNos]);
+
+    const teamOptions = useMemo(() => [
+        { value: '', label: '전체 팀' },
+        ...teamNos.map((t) => ({ value: t, label: `${t}팀` })),
+    ], [teamNos]);
+
+    const handleGyoguChange = useCallback((val: number | '') => {
+        setGyogu(val);
+        setTeamFilter('');
+        setDrafts(new Map());
+        if (val !== '') loadMembers(val as number, undefined);
+        else setMembers([]);
+    }, [loadMembers]);
+
+    const handleTeamFilterChange = useCallback((val: number | '') => {
+        setTeamFilter(val);
+        setDrafts(new Map());
+        if (gyogu !== '') loadMembers(gyogu as number, val === '' ? undefined : val as number);
+    }, [gyogu, loadMembers]);
 
     const getDraft = useCallback((member: SuspendedMealMember): SuspendedMealDraft => {
         const override = drafts.get(member.member_id);
@@ -264,7 +336,7 @@ const SuspendedMealPage: React.FC = () => {
                 applicant_reason: draft.fee_support ? draft.applicant_reason || null : null,
             });
             setDrafts((prev) => { const next = new Map(prev); next.delete(memberId); return next; });
-            await loadMembers();
+            await loadMembers(gyogu === '' ? undefined : gyogu as number, teamFilter === '' ? undefined : teamFilter as number);
             setSnackbar({ open: true, message: isUpdate ? '수정이 완료되었습니다.' : '신청이 완료되었습니다.', severity: 'success' });
         } catch {
             setSnackbar({ open: true, message: '처리 중 오류가 발생했습니다.', severity: 'error' });
@@ -274,7 +346,7 @@ const SuspendedMealPage: React.FC = () => {
     const totalCount   = members.length;
     const appliedCount = members.filter((m) => m.application !== null).length;
 
-    if (loading) {
+    if (loading && (gyogu === '' || !isAllScope)) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
                 <CircularProgress size={32} />
@@ -296,17 +368,36 @@ const SuspendedMealPage: React.FC = () => {
 
     return (
         <PageWrapper>
-            {/* 상단 정보 바 */}
-            <InfoBar>
-                <InfoTitle>서스펜디드밀 신청</InfoTitle>
-                <InfoDivider />
-                <CountLabel>
-                    총 {totalCount}명&nbsp;|&nbsp;
-                    <span style={{ color: '#1677ff', fontWeight: 600 }}>신청완료 {appliedCount}명</span>
-                </CountLabel>
-            </InfoBar>
+            {/* 필터 바 (전체 권한만) */}
+            {isAllScope && (
+                <FilterPanel>
+                    <FilterGroup>
+                        <FilterLabel>교구</FilterLabel>
+                        <Select size="small" value={gyogu} options={gyoguOptions}
+                            onChange={(v) => handleGyoguChange(v === '' ? '' : Number(v))} width={120} />
+                    </FilterGroup>
+                    <FilterGroup>
+                        <FilterLabel>팀</FilterLabel>
+                        <Select size="small" value={teamFilter} options={teamOptions}
+                            onChange={(v) => handleTeamFilterChange(v === '' ? '' : Number(v))}
+                            disabled={gyogu === '' || teamNos.length === 0} width={110} />
+                    </FilterGroup>
+                </FilterPanel>
+            )}
+
+            {isAllScope && gyogu === '' && !noRetreat && (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: '#8c8c8c', fontSize: 15 }}>
+                    교구를 선택하면 명단이 표시됩니다.
+                </div>
+            )}
+            {loading && isAllScope && gyogu !== '' && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                    <CircularProgress size={32} />
+                </div>
+            )}
 
             {/* 테이블 */}
+            {(!isAllScope || gyogu !== '') && !loading && <>
             <TableWrapper>
                 <TableScroll>
                     <Table>
@@ -417,6 +508,13 @@ const SuspendedMealPage: React.FC = () => {
                     </Table>
                 </TableScroll>
             </TableWrapper>
+            <Footer>
+                <CountLabel>
+                    총 {totalCount}명&nbsp;|&nbsp;
+                    <span style={{ color: '#1677ff', fontWeight: 600 }}>신청완료 {appliedCount}명</span>
+                </CountLabel>
+            </Footer>
+            </>}
 
             <Snackbar
                 open={snackbar.open}
