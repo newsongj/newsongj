@@ -80,6 +80,23 @@ const SectionRow = styled('div')({
     marginBottom: 12,
     gap: 8,
     flexWrap: 'wrap',
+    '@media (max-width: 600px)': {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+    },
+});
+
+const BtnGroup = styled('div')({
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+    '@media (max-width: 600px)': {
+        width: '100%',
+        flexDirection: 'column',
+        '& > *': {
+            width: '100%',
+        },
+    },
 });
 
 const GroupCard = styled('div')(({ theme }) => ({
@@ -182,6 +199,10 @@ const ModalGrid = styled('div')({
     flexDirection: 'column',
     gap: 14,
     padding: '20px 24px',
+    '@media (max-width: 600px)': {
+        padding: '12px',
+        gap: 10,
+    },
 });
 
 const TableWrapper = styled('div')({
@@ -196,6 +217,34 @@ const ModalTableWrapper = styled('div')({
     width: '100%',
     border: '1px solid #f0f0f0',
     borderRadius: 6,
+    '@media (max-width: 600px)': {
+        maxHeight: 'none',
+        overflowY: 'visible',
+    },
+});
+
+const FilterRow = styled('div')({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+    flexWrap: 'wrap',
+    '@media (max-width: 600px)': {
+        justifyContent: 'flex-start',
+    },
+});
+
+const FilterItem = styled('div')({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    '@media (max-width: 600px)': {
+        flex: '1 1 100%',
+        justifyContent: 'space-between',
+        '& > *:last-child': {
+            flex: 1,
+        },
+    },
 });
 
 const MenuGroupLabel = styled('div')(({ theme }) => ({
@@ -216,6 +265,12 @@ const ModalActions = styled('div')({
     display: 'flex',
     gap: 8,
     justifyContent: 'flex-end',
+    '@media (max-width: 600px)': {
+        flexWrap: 'wrap',
+        '& > *': {
+            flex: '1 1 auto',
+        },
+    },
 });
 
 const PageSectionHeader = styled('div')(({ theme }) => ({
@@ -677,7 +732,7 @@ const PermissionManagementPage: React.FC = () => {
                         <div style={{ fontSize: 13, color: '#555' }}>
                             데이터 범위 그룹별 계정 목록 · 총 {accounts.length}명
                         </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <BtnGroup>
                             {selectedAccountIds.size > 0 && (
                                 <Button variant="outlined" size="small"
                                     style={{ color: '#f5222d', borderColor: '#f5222d' }}
@@ -696,7 +751,7 @@ const PermissionManagementPage: React.FC = () => {
                             <Button variant="filled" size="small" onClick={openCreateModal}>
                                 일괄 계정 생성
                             </Button>
-                        </div>
+                        </BtnGroup>
                     </SectionRow>
 
                     {(['all', 'team', 'group'] as DataScope[]).map(scope => {
@@ -900,18 +955,18 @@ const PermissionManagementPage: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, color: '#595959' }}>정책</span>
+                            <FilterRow>
+                                <FilterItem>
+                                    <span style={{ fontSize: 12, color: '#595959', whiteSpace: 'nowrap' }}>정책</span>
                                     <Select value={createPolicyId}
                                         options={[{ value: '', label: '없음' }, ...policies.map(p => ({ value: p.policy_id, label: p.policy_name }))]}
                                         onChange={v => setCreatePolicyId(v === '' ? '' : Number(v))} width="160px" />
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, color: '#595959' }}>데이터 범위</span>
+                                </FilterItem>
+                                <FilterItem>
+                                    <span style={{ fontSize: 12, color: '#595959', whiteSpace: 'nowrap' }}>데이터 범위</span>
                                     <Select value={createScope} options={SCOPE_OPTIONS} onChange={v => setCreateScope(String(v))} width="140px" />
-                                </div>
-                            </div>
+                                </FilterItem>
+                            </FilterRow>
                             {filtered.length === 0 ? (
                                 <div style={{ fontSize: 12, color: '#aaa', padding: '8px 0' }}>
                                     {createPreview.length === 0 ? '계정 생성 대상이 없습니다.' : '검색 결과가 없습니다.'}

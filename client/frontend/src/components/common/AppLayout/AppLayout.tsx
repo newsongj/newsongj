@@ -1,6 +1,6 @@
 import React from 'react';
 import { styled } from '@mui/material/styles';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '@components/common/Header/Header';
 import { storage } from '@utils/storage';
 import { logout as apiLogout } from '@api/auth';
@@ -32,6 +32,7 @@ const getStoredUser = () => {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = getStoredUser();
 
     const roleLabel = (() => {
@@ -48,7 +49,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, title }) => {
         await apiLogout();
         storage.removeToken();
         localStorage.removeItem('client_user');
-        navigate('/login');
+        if (location.pathname === '/vehicle') {
+            navigate('/member-login');
+        } else {
+            navigate(`/login?redirect=${location.pathname}`);
+        }
     };
 
     return (
