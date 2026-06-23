@@ -3,9 +3,16 @@ import bcrypt as _bcrypt_lib
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.security import create_client_token
-from app.crud.auth_client import get_leader_names_for_member, get_menus_for_policy, get_member_by_phone_and_name, get_member_profile, get_user_account_by_login_id
+from app.core.security import create_token
+from app.crud.auth_client import (
+    get_leader_names_for_member,
+    get_menus_for_policy,
+    get_member_by_phone_and_name,
+    get_member_profile,
+    get_user_account_by_login_id,
+)
 from app.schemas.auth_client import ClientLoginRequest, ClientLoginResponse, MemberLoginRequest
+
 
 def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
     account = get_user_account_by_login_id(db, body.login_id)
@@ -30,8 +37,9 @@ def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
     menus = get_menus_for_policy(db, account.policy_id)
     leader_names = get_leader_names_for_member(db, profile)
 
-    token = create_client_token(
+    token = create_token(
         account_id=account.account_id,
+        menus=menus,
         data_scope=account.data_scope,
         member_id=account.member_id,
         gyogu=gyogu,
@@ -46,7 +54,6 @@ def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
         gyogu=gyogu,
         team=team,
         group_no=group_no,
-        requires_password_change=bool(account.requires_password_change),
         menus=menus,
         leader_names=leader_names,
     )
@@ -63,8 +70,10 @@ def login_member(db: Session, body: MemberLoginRequest) -> ClientLoginResponse:
     profile = get_member_profile(db, member.member_id)
     leader_names = get_leader_names_for_member(db, profile)
 
-    token = create_client_token(
+    menus = ["user.vehicle"]
+    token = create_token(
         account_id=0,
+        menus=menus,
         data_scope="member",
         member_id=member.member_id,
         gyogu=profile.gyogu if profile else None,
@@ -79,7 +88,6 @@ def login_member(db: Session, body: MemberLoginRequest) -> ClientLoginResponse:
         gyogu=profile.gyogu if profile else None,
         team=profile.team if profile else None,
         group_no=profile.group_no if profile else None,
-        requires_password_change=False,
-        menus=["user.vehicle"],
+        menus=menus,
         leader_names=leader_names,
     )

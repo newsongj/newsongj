@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { ChevronDown, ChevronRight, Info, Shield } from 'lucide-react';
@@ -242,17 +242,16 @@ type Tab = 'account' | 'policy';
 type DataScope = 'all' | 'team' | 'group' | 'member';
 
 const SCOPE_META: Record<DataScope, { label: string; color: string; desc: string }> = {
-    all:    { label: '전체 접근',    color: '#eff6ff', desc: '전체 데이터 조회 가능' },
-    team:   { label: '팀 단위 접근', color: '#f0fdf4', desc: '소속 팀 데이터 조회' },
+    all:    { label: '전체 접근',      color: '#eff6ff', desc: '전체 데이터 조회 가능' },
+    team:   { label: '팀 단위 접근',   color: '#f0fdf4', desc: '소속 팀 데이터 조회' },
     group:  { label: '그룹 단위 접근', color: '#fff7ed', desc: '소속 그룹 데이터 조회' },
-    member: { label: '개인 접근',    color: '#fdf4ff', desc: '본인 데이터만 조회' },
+    member: { label: '개인 접근',      color: '#fdf4ff', desc: '본인 데이터만 조회' },
 };
 
 const SCOPE_OPTIONS = [
-    { value: 'all',    label: '전체 접근' },
-    { value: 'team',   label: '팀 단위 접근' },
-    { value: 'group',  label: '그룹 단위 접근' },
-    { value: 'member', label: '개인 접근' },
+    { value: 'all',   label: '전체 접근' },
+    { value: 'team',  label: '팀 단위 접근' },
+    { value: 'group', label: '그룹 단위 접근' },
 ];
 
 const ADMIN_PAGE_GROUPS = ['권한관리', '교적관리', '수련회'];
@@ -304,6 +303,14 @@ const PermissionManagementPage: React.FC = () => {
     // ── 정책 관리 state ──────────────────────────────────────────────────────
     const [policies, setPolicies] = useState<PolicyResponse[]>([]);
     const [menuKeys, setMenuKeys] = useState<MenuKeysResponse>({});
+    const keyLabelMap = useMemo<Record<string, string>>(() => {
+        const map: Record<string, string> = {};
+        Object.values(menuKeys).forEach(items =>
+            (items as MenuKeyItem[]).forEach(({ key, label }) => { map[key] = label; })
+        );
+        return map;
+    }, [menuKeys]);
+
     const [policyModal, setPolicyModal] = useState<{
         open: boolean; editId: number | null;
         name: string; desc: string; menus: string[];
@@ -341,7 +348,7 @@ const PermissionManagementPage: React.FC = () => {
         try {
             const preview = await fetchAccountPreview();
             setCreatePreview(preview);
-            setCreateSelected(new Set(preview.map(p => p.member_id)));
+            setCreateSelected(new Set());
         } catch {
             showSnackbar('로드에 실패했습니다.', 'error');
             setCreateModal(false);
@@ -692,7 +699,7 @@ const PermissionManagementPage: React.FC = () => {
                         </div>
                     </SectionRow>
 
-                    {(['all', 'team', 'group', 'member'] as DataScope[]).map(scope => {
+                    {(['all', 'team', 'group'] as DataScope[]).map(scope => {
                         const meta = SCOPE_META[scope];
                         const count = accountsByScope(scope).length;
                         const isOpen = expandedScope === scope;
@@ -737,7 +744,7 @@ const PermissionManagementPage: React.FC = () => {
                                 <MenuTagList>
                                     {p.menus.length === 0
                                         ? <span style={{ fontSize: 12, color: '#aaa' }}>메뉴 없음</span>
-                                        : p.menus.map(k => <MenuTag key={k}>{k.split('.').pop()}</MenuTag>)
+                                        : p.menus.map(k => <MenuTag key={k}>{keyLabelMap[k] ?? k.split('.').pop()}</MenuTag>)
                                     }
                                 </MenuTagList>
                             </PolicyCard>

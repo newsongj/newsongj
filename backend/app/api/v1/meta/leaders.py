@@ -3,10 +3,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_any_admin
 from app.schemas.meta import LeaderResponse
 from app.services.meta import build_leader_list
 
-router = APIRouter(prefix="/api/meta", tags=["메타"])
+router = APIRouter(
+    prefix="/api/meta",
+    tags=["메타"],
+    dependencies=[Depends(require_any_admin())],
+)
 
 
 @router.get(

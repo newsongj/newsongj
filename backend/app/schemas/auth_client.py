@@ -20,6 +20,5 @@ class ClientLoginResponse(BaseModel):
     gyogu: Optional[int] = None
     team: Optional[int] = None
     group_no: Optional[int] = None
-    requires_password_change: bool = False
     menus: List[str] = []
     leader_names: List[str] = []

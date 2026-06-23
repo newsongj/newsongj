@@ -6,6 +6,7 @@ import datetime
 
 from app.core.database import get_db
 from app.core.date_utils import is_saturday
+from app.core.security import require_menu
 from app.schemas.attendance import AttendanceBatchRequest, AttendanceBatchResponse, AttendanceListResponse
 from app.services.attendance import (
     build_attendance_list_response,
@@ -13,7 +14,11 @@ from app.services.attendance import (
     save_newcomer_attendance_batch,
 )
 
-router = APIRouter(prefix="/api/attendance", tags=["출석"])
+router = APIRouter(
+    prefix="/api/attendance",
+    tags=["출석"],
+    dependencies=[Depends(require_menu("admin.gyojeok.attendance"))],
+)
 
 
 @router.get(

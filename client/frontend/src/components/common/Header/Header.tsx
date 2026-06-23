@@ -83,7 +83,16 @@ const LogoutBtn = styled('button')(({ theme }) => ({
     cursor: 'pointer',
     transition: 'background-color 0.15s',
     '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' },
+    '@media (max-width: 480px)': {
+        padding: '6px 8px',
+    },
 }));
+
+const LogoutText = styled('span')({
+    '@media (max-width: 480px)': {
+        display: 'none',
+    },
+});
 
 interface HeaderProps {
     title?: string;
@@ -104,7 +113,7 @@ const Header: React.FC<HeaderProps> = ({ title = '수련회 인원조사', userN
                     {onLogout && (
                         <LogoutBtn onClick={onLogout}>
                             <LogoutIcon sx={{ fontSize: 16 }} />
-                            로그아웃
+                            <LogoutText>로그아웃</LogoutText>
                         </LogoutBtn>
                     )}
                 </RightPanel>

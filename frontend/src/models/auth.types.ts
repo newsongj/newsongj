@@ -1,5 +1,5 @@
 export interface LoginRequest {
-  email: string;
+  login_id: string;
   password: string;
 }
 
@@ -14,7 +14,6 @@ export interface LogoutResponse {
   success: boolean;
   message: string;
 }
-
 
 export interface MenuInfo {
   menu_idx: number;
@@ -37,4 +36,10 @@ export interface MeResponse {
 export interface PasswordChangeRequest {
   current_password: string;
   new_password: string;
+}
+
+export interface AdminLoginResponse {
+  token: string;
+  menus: string[];
+  requires_password_change: boolean;
 }

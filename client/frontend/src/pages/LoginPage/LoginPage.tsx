@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Alert, Snackbar } from '@mui/material';
 import { Button } from '@components/common/Button';
 import { TextField } from '@components/common/TextField';
 import { login as apiLogin } from '@api/auth';
@@ -12,7 +13,12 @@ const LoginPage: React.FC = () => {
 
     const [formData, setFormData] = useState({ login_id: '', password: '' });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+        open: false, message: '', severity: 'error',
+    });
+
+    const showError = (message: string) =>
+        setSnackbar({ open: true, message, severity: 'error' });
 
     const handleInputChange = (field: 'login_id' | 'password') => (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -20,18 +26,16 @@ const LoginPage: React.FC = () => {
         const value = field === 'login_id'
             ? e.target.value.replace(/-/g, '')
             : e.target.value;
-        setFormData((prev) => ({ ...prev, [field]: value }));
-        setError(null);
+        setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!formData.login_id) { setError('전화번호를 입력해주세요.'); return; }
-        if (!formData.password) { setError('비밀번호를 입력해주세요.'); return; }
+        if (!formData.login_id) { showError('전화번호를 입력해주세요.'); return; }
+        if (!formData.password) { showError('비밀번호를 입력해주세요.'); return; }
 
         setIsLoading(true);
-        setError(null);
 
         try {
             const data = await apiLogin({ login_id: formData.login_id, password: formData.password });
@@ -39,7 +43,7 @@ const LoginPage: React.FC = () => {
             localStorage.setItem('client_user', JSON.stringify(data));
             navigate('/research', { replace: true });
         } catch (err: any) {
-            setError(err.response?.data?.detail || err.message || '로그인에 실패했습니다.');
+            showError(err.response?.data?.detail || err.message || '로그인에 실패했습니다.');
         } finally {
             setIsLoading(false);
         }
@@ -76,12 +80,6 @@ const LoginPage: React.FC = () => {
                         />
                     </S.StyledInputGroup>
 
-                    {error && (
-                        <S.StyledErrorMessage>
-                            {error}
-                        </S.StyledErrorMessage>
-                    )}
-
                     <S.StyledButtonGroup>
                         <Button
                             variant="filled"
@@ -94,6 +92,21 @@ const LoginPage: React.FC = () => {
                     </S.StyledButtonGroup>
                 </S.StyledForm>
             </S.StyledLoginCard>
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </S.StyledContainer>
     );
 };

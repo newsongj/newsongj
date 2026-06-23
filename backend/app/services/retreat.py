@@ -128,11 +128,16 @@ def svc_get_research_members(
     team: Optional[int],
     group_no: Optional[int],
     query_group_no: Optional[int],
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
 ) -> List[ResearchMemberResponse]:
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    rows = crud_get_research_members(db, retreat.retreat_custom_id, data_scope, team, group_no, query_group_no)
+    rows = crud_get_research_members(
+        db, retreat.retreat_custom_id, data_scope, team, group_no,
+        query_group_no, query_gyogu, query_team,
+    )
     result = []
     for member, profile, response in rows:
         result.append(ResearchMemberResponse(
@@ -446,11 +451,13 @@ def svc_get_suspended_meal_members(
     data_scope: str,
     team: Optional[int],
     group_no: Optional[int],
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
 ) -> List[SuspendedMealMemberResponse]:
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    rows = crud_get_suspended_meal_members(db, data_scope, team, group_no)
+    rows = crud_get_suspended_meal_members(db, data_scope, team, group_no, query_gyogu, query_team)
     result = []
     for member, profile, app in rows:
         app_item = None

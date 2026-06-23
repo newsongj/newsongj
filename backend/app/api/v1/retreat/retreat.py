@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import require_any_admin, require_menu, verify_token
 from app.schemas.retreat import (
     RetreatCreate, RetreatUpdate, RetreatCreateResponse, RetreatActiveResponse,
     ResearchListResponse, VehicleMemberListResponse, VehicleDashboardResponse,
@@ -20,23 +21,31 @@ from app.services.retreat import (
 
 router = APIRouter()
 
+_any_admin      = Depends(require_any_admin())
+_create         = Depends(require_menu("admin.retreat.create"))
+_edit           = Depends(require_menu("admin.retreat.edit"))
+_dashboard      = Depends(require_menu("admin.retreat.dashboard"))
+_research_list  = Depends(require_menu("admin.retreat.research_list"))
+_vehicle_list   = Depends(require_menu("admin.retreat.vehicle_list"))
+_suspended_meal = Depends(require_menu("admin.retreat.suspended_meal"))
 
-@router.post("", response_model=RetreatCreateResponse, status_code=201, summary="수련회 생성")
+
+@router.post("", response_model=RetreatCreateResponse, status_code=201, summary="수련회 생성", dependencies=[_create])
 def create_retreat(body: RetreatCreate, db: Session = Depends(get_db)):
     return svc_create_retreat(db, body)
 
 
-@router.get("/active", response_model=RetreatActiveResponse, summary="현재 수련회 + 버스 목록 조회")
+@router.get("/active", response_model=RetreatActiveResponse, summary="현재 수련회 + 버스 목록 조회", dependencies=[Depends(verify_token)])
 def get_active_retreat(db: Session = Depends(get_db)):
     return svc_get_active_retreat(db)
 
 
-@router.get("/headcount", response_model=RetreatHeadcountResponse, summary="인원조사 집계")
+@router.get("/headcount", response_model=RetreatHeadcountResponse, summary="인원조사 집계", dependencies=[_dashboard])
 def get_headcount(db: Session = Depends(get_db)):
     return svc_get_headcount(db)
 
 
-@router.get("/accommodation", response_model=RetreatAccommodationResponse, summary="숙소/야식 인원 집계")
+@router.get("/accommodation", response_model=RetreatAccommodationResponse, summary="숙소/야식 인원 집계", dependencies=[_dashboard])
 def get_accommodation(
     gyogu_no: Optional[int]  = Query(None),
     team_no:  Optional[int]  = Query(None),
@@ -46,12 +55,12 @@ def get_accommodation(
     return svc_get_accommodation(db, gyogu_no, team_no)
 
 
-@router.get("/vehicle", response_model=VehicleDashboardResponse, summary="대시보드 차량탭 집계")
+@router.get("/vehicle", response_model=VehicleDashboardResponse, summary="대시보드 차량탭 집계", dependencies=[_dashboard])
 def get_vehicle_dashboard(db: Session = Depends(get_db)):
     return svc_get_vehicle_dashboard(db)
 
 
-@router.get("/research/list", response_model=ResearchListResponse, summary="인원조사 명단 (관리자)")
+@router.get("/research/list", response_model=ResearchListResponse, summary="인원조사 명단 (관리자)", dependencies=[_research_list])
 def get_research_list(
     gyogu: Optional[int] = Query(None),
     team: Optional[int] = Query(None),
@@ -61,7 +70,7 @@ def get_research_list(
     return svc_get_research_list(db, gyogu, team, survey_status)
 
 
-@router.get("/vehicle-members", response_model=VehicleMemberListResponse, summary="차량조사 명단 (관리자)")
+@router.get("/vehicle-members", response_model=VehicleMemberListResponse, summary="차량조사 명단 (관리자)", dependencies=[_vehicle_list])
 def get_vehicle_member_list(
     gyogu: Optional[int] = Query(None),
     team: Optional[int] = Query(None),
@@ -70,7 +79,7 @@ def get_vehicle_member_list(
     return svc_get_vehicle_member_list(db, gyogu, team)
 
 
-@router.get("/suspended-meal", response_model=AdminSuspendedMealListResponse, summary="서스펜디드밀 신청 목록 (관리자)")
+@router.get("/suspended-meal", response_model=AdminSuspendedMealListResponse, summary="서스펜디드밀 신청 목록 (관리자)", dependencies=[_suspended_meal])
 def get_admin_suspended_meal_list(
     page:          int           = Query(1, ge=1),
     size:          int           = Query(20, ge=1, le=100),
@@ -80,12 +89,12 @@ def get_admin_suspended_meal_list(
     return svc_get_admin_suspended_meal_list(db, review_status, page, size)
 
 
-@router.get("/suspended-meal/stats", response_model=AdminSuspendedMealStats, summary="서스펜디드밀 통계 (관리자)")
+@router.get("/suspended-meal/stats", response_model=AdminSuspendedMealStats, summary="서스펜디드밀 통계 (관리자)", dependencies=[_suspended_meal])
 def get_admin_suspended_meal_stats(db: Session = Depends(get_db)):
     return svc_get_admin_suspended_meal_stats(db)
 
 
-@router.put("/suspended-meal/{application_id}/review", status_code=200, summary="서스펜디드밀 승인/반려")
+@router.put("/suspended-meal/{application_id}/review", status_code=200, summary="서스펜디드밀 승인/반려", dependencies=[_suspended_meal])
 def review_suspended_meal(
     application_id: int = Path(...),
     body: AdminSuspendedMealReviewRequest = ...,
@@ -95,7 +104,7 @@ def review_suspended_meal(
     return {"ok": True}
 
 
-@router.put("/{retreat_id}", status_code=200, summary="수련회 기본 정보 수정")
+@router.put("/{retreat_id}", status_code=200, summary="수련회 기본 정보 수정", dependencies=[_edit])
 def update_retreat(
     retreat_id: int = Path(...),
     body: RetreatUpdate = ...,
@@ -105,7 +114,7 @@ def update_retreat(
     return {"ok": True}
 
 
-@router.put("/{retreat_id}/complete", status_code=200, summary="수련회 완료 처리")
+@router.put("/{retreat_id}/complete", status_code=200, summary="수련회 완료 처리", dependencies=[_edit])
 def complete_retreat(retreat_id: int = Path(...), db: Session = Depends(get_db)):
     svc_complete_retreat(db, retreat_id)
     return {"ok": True}

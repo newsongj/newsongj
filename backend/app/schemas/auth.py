@@ -1,19 +1,7 @@
-"""인증 스키마 — 프론트(`models/auth.types.ts`) 스펙과 일치"""
+"""인증 스키마 — /api/v1/me 응답"""
 from typing import List, Optional
 
 from pydantic import BaseModel
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    requires_password_change: bool = False
-    message: Optional[str] = None
 
 
 class LogoutResponse(BaseModel):
@@ -36,4 +24,3 @@ class MeResponse(BaseModel):
     dept_idx: Optional[int] = None
     roles: List[str]
     menus: List[MenuInfo]
-    requires_password_change: bool = False
