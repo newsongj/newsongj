@@ -20,7 +20,18 @@ export function makeUnifiedTheme(custom: DefaultTheme['custom']): DefaultTheme {
             caption: { fontSize: custom.typography.caption.fontSize, fontWeight: custom.typography.caption.fontWeight, lineHeight: custom.typography.caption.lineHeight },
         },
         shape: { borderRadius: parseInt(custom.borderRadius, 10) || 10 },
-        // shadows/breakpoints 등은 MUI 형식과 다르므로 MUI 쪽은 기본 혹은 별도 매핑
+        components: {
+            MuiSkeleton: {
+                styleOverrides: {
+                    root: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                        '&::after': {
+                            background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.03), transparent)',
+                        },
+                    },
+                },
+            },
+        },
     });
 
     // 🔗 하나의 객체로 합치기: muiTheme에 custom 네임스페이스를 얹는다

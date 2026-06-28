@@ -6,11 +6,13 @@ import {
   fetchSuspendedMealList,
   fetchSuspendedMealStats,
   reviewSuspendedMeal,
+  getActiveRetreat,
 } from '@/api/retreat';
 import {
   ReviewStatus,
   SuspendedMealApplication,
   SuspendedMealStats,
+  RetreatActiveResponse,
 } from '@/models/retreat.types';
 import StatCard from '@components/common/StatCard';
 import { DataTable } from '@components/common/DataTable';
@@ -136,6 +138,39 @@ const ReasonCard = styled('div')(({ theme }) => ({
   padding: theme.custom.spacing.md,
 }));
 
+const CalcBox = styled('div')(({ theme }) => ({
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: theme.custom.borderRadius,
+  backgroundColor: theme.custom.colors.neutral._99,
+  padding: theme.custom.spacing.md,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+}));
+
+const CalcRow = styled('div')(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  fontSize: theme.custom.typography.body2.fontSize,
+  color: theme.custom.colors.text.high,
+}));
+
+const CalcDivider = styled('hr')(({ theme }) => ({
+  border: 'none',
+  borderTop: `1px solid ${theme.custom.colors.primary.outline}`,
+  margin: '4px 0',
+}));
+
+const CalcTotal = styled('div')(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  fontWeight: 700,
+  fontSize: theme.custom.typography.body1.fontSize,
+  color: theme.custom.colors.text.high,
+}));
+
 const ModalActions = styled('div')({
   display: 'flex',
   gap: 8,
@@ -167,6 +202,8 @@ const formatDateTime = (dateStr: string | null) => {
   });
 };
 
+const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
+
 const ReviewStatusBadge: React.FC<{ status: ReviewStatus }> = ({ status }) => {
   if (status === 'PENDING')  return <Badge variant="warning">승인 대기</Badge>;
   if (status === 'APPROVED') return <Badge variant="success">승인</Badge>;
@@ -176,10 +213,11 @@ const ReviewStatusBadge: React.FC<{ status: ReviewStatus }> = ({ status }) => {
 const SuspendedMealPage: React.FC = () => {
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
+  const [retreatInfo, setRetreatInfo] = useState<RetreatActiveResponse | null>(null);
   const [stats, setStats] = useState<SuspendedMealStats | null>(null);
   const [items, setItems] = useState<SuspendedMealApplication[]>([]);
   const [total, setTotal] = useState(0);
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [statusFilter, setStatusFilter] = useState('');
@@ -188,6 +226,10 @@ const SuspendedMealPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getActiveRetreat().then(setRetreatInfo).catch(() => {});
+  }, []);
 
   const loadStats = useCallback(() => {
     fetchSuspendedMealStats()
@@ -360,7 +402,7 @@ const SuspendedMealPage: React.FC = () => {
           iconBgColor="#fef9c3"
         />
         <StatCard
-          label=""
+          label="승인"
           value={stats ? `${stats.approved}건` : '-'}
           change=""
           isPositive
@@ -408,6 +450,7 @@ const SuspendedMealPage: React.FC = () => {
       <DataTable
         columns={columns}
         data={items}
+        loading={loading}
         selectable
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
@@ -497,6 +540,34 @@ const SuspendedMealPage: React.FC = () => {
                 fullWidth
               />
             </InfoRow>
+
+            {retreatInfo && (
+              <InfoRow>
+                <InfoLabel>금액 계산</InfoLabel>
+                <CalcBox>
+                  <CalcRow>
+                    <span>끼니 금액 ({selectedItem.meal_count}끼 × {formatWon(retreatInfo.meal_price)})</span>
+                    <span>{formatWon(selectedItem.meal_count * retreatInfo.meal_price)}</span>
+                  </CalcRow>
+                  {selectedItem.fee_support && (
+                    <CalcRow>
+                      <span>버스 회비 지원</span>
+                      <span>{formatWon(retreatInfo.fee_with_bus)}</span>
+                    </CalcRow>
+                  )}
+                  <CalcDivider />
+                  <CalcTotal>
+                    <span>합계</span>
+                    <span>
+                      {formatWon(
+                        selectedItem.meal_count * retreatInfo.meal_price +
+                        (selectedItem.fee_support ? retreatInfo.fee_with_bus : 0)
+                      )}
+                    </span>
+                  </CalcTotal>
+                </CalcBox>
+              </InfoRow>
+            )}
           </ModalBody>
         )}
       </BaseModal>

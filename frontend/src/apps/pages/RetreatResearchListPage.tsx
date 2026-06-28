@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { ClipboardList, Users } from 'lucide-react';
+import { ClipboardList, Download, Users } from 'lucide-react';
 import StatCard from '@components/common/StatCard';
 import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
@@ -93,6 +93,24 @@ const FilterLabel = styled('span')(({ theme }) => ({
   minWidth: 48,
 }));
 
+const CsvButton = styled('button')(({ theme }) => ({
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.custom.colors.neutral._90}`,
+  background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+  color: theme.custom.colors.text.medium, marginLeft: 'auto',
+  '&:hover': { background: theme.custom.colors.neutral._95 },
+}));
+
+const downloadCsv = (filename: string, rows: string[][]) => {
+  const bom = '﻿';
+  const csv = bom + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -104,8 +122,14 @@ const RetreatResearchListPage: React.FC = () => {
   const [gyogu,       setGyogu]       = useState('');
   const [team,        setTeam]        = useState('');
   const [surveyStatus, setSurveyStatus] = useState('');
+  const [page,        setPage]        = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [loading,     setLoading]     = useState(true);
+
+  useEffect(() => { setPage(0); }, [gyogu, team, surveyStatus]);
 
   useEffect(() => {
+    setLoading(true);
     fetchResearchList()
       .then((data) => {
         setStats({ enrolled: data.enrolled, surveyed: data.surveyed, fee_paid: data.fee_paid });
@@ -113,7 +137,8 @@ const RetreatResearchListPage: React.FC = () => {
         setRetreatFees({ fee_with_bus: data.fee_with_bus, fee_without_bus: data.fee_without_bus });
         setNumDays(data.num_days);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const gyoguOptions = useMemo(() => {
@@ -134,13 +159,18 @@ const RetreatResearchListPage: React.FC = () => {
     ];
   }, [gyogu, members]);
 
-  const filtered = useMemo(() => members.filter((m) => {
+  const filtered = useMemo<ResearchMemberListItem[]>(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
     if (team && String(m.team) !== team) return false;
     if (surveyStatus === 'done'    && !m.has_response) return false;
     if (surveyStatus === 'pending' &&  m.has_response) return false;
     return true;
   }), [members, gyogu, team, surveyStatus]);
+
+  const paginated = useMemo(
+    () => filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+    [filtered, page, rowsPerPage],
+  );
 
   const DAY_ATT_KEYS = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
 
@@ -189,6 +219,24 @@ const RetreatResearchListPage: React.FC = () => {
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
     setGyogu(String(v));
     setTeam('');
+  };
+
+  const DAY_ATT_KEYS_ALL = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
+
+  const handleDownload = () => {
+    const dayLabels = Array.from({ length: numDays }, (_, i) => `${i + 1}일차`);
+    const header = ['교구', '팀', '그룹', '기수', '성별', '이름', ...dayLabels, '회비납부'];
+    const feeLabel = (f: string | null) => {
+      if (!f) return '';
+      if (f === 'bus') return `버스탑승(${retreatFees.fee_with_bus.toLocaleString()}원)`;
+      return `버스미탑승+숙박(${retreatFees.fee_without_bus.toLocaleString()}원)`;
+    };
+    const rows = filtered.map((m) => [
+      `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name,
+      ...DAY_ATT_KEYS_ALL.slice(0, numDays).map((k) => m[k] ?? ''),
+      m.has_response ? feeLabel(m.fee_type) : '',
+    ]);
+    downloadCsv('인원조사_명단.csv', [header, ...rows]);
   };
 
   return (
@@ -249,12 +297,24 @@ const RetreatResearchListPage: React.FC = () => {
             width={120}
           />
         </FilterGroup>
+        <CsvButton onClick={handleDownload}>
+          <Download size={14} />
+          CSV 다운로드
+        </CsvButton>
       </FilterRow>
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={paginated}
+        loading={loading}
         getRowId={(row) => String(row.member_id)}
+        pagination={{
+          page,
+          rowsPerPage,
+          totalCount: filtered.length,
+          onPageChange: setPage,
+          onRowsPerPageChange: (rpp) => { setRowsPerPage(rpp); setPage(0); },
+        }}
       />
     </PageWrapper>
   );

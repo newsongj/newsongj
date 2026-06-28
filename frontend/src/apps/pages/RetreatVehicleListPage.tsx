@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
+import { Download } from 'lucide-react';
 import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
 import type { Column } from '@components/common/DataTable/DataTable.types';
@@ -28,24 +29,23 @@ const chipBase: React.CSSProperties = {
   fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
 };
 
-// busType/departureTime 필터 기준으로 해당 일차에서 보여줄 버스만 반환
 const filterBuses = (
   buses: BusInfo[] | null,
   busType: string,
-  departureTime: string,
+  busName: string,
 ): BusInfo[] => {
   if (!buses) return [];
   return buses.filter((bus) => {
     const typeMatch = !busType || bus.bus_name.startsWith(busType);
-    const timeMatch = !departureTime || bus.departure_time === departureTime;
-    return typeMatch && timeMatch;
+    const nameMatch = !busName || bus.bus_name === busName;
+    return typeMatch && nameMatch;
   });
 };
 
-const makeRenderBus = (dayKey: typeof DAY_BUS_KEYS[number], busType: string, departureTime: string) =>
+const makeRenderBus = (dayKey: typeof DAY_BUS_KEYS[number], busType: string, busName: string) =>
   (_value: unknown, row: VehicleMemberListItem): React.ReactNode => {
     if (!row.has_response) return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
-    const displayBuses = filterBuses(row[dayKey], busType, departureTime);
+    const displayBuses = filterBuses(row[dayKey], busType, busName);
     if (displayBuses.length === 0)
       return <span style={{ ...chipBase, color: '#8c8c8c', backgroundColor: '#f5f5f5' }}>신청 안 함</span>;
     return (
@@ -116,6 +116,24 @@ const FilterLabel = styled('span')(({ theme }) => ({
   },
 }));
 
+const CsvButton = styled('button')(({ theme }) => ({
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '6px 14px', borderRadius: 6, border: `1px solid ${theme.custom.colors.neutral._90}`,
+  background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+  color: theme.custom.colors.text.medium, marginLeft: 'auto',
+  '&:hover': { background: theme.custom.colors.neutral._95 },
+}));
+
+const downloadCsv = (filename: string, rows: string[][]) => {
+  const bom = '﻿';
+  const csv = bom + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const RetreatVehicleListPage: React.FC = () => {
@@ -123,17 +141,24 @@ const RetreatVehicleListPage: React.FC = () => {
   const [numDays, setNumDays] = useState(3);
   const [gyogu,          setGyogu]          = useState('');
   const [team,           setTeam]           = useState('');
-  const [busType,        setBusType]        = useState('');
-  const [departureTime,  setDepartureTime]  = useState('');
-  const [surveyStatus,   setSurveyStatus]   = useState('');
+  const [busType,      setBusType]      = useState('');
+  const [busName,      setBusName]      = useState('');
+  const [surveyStatus, setSurveyStatus] = useState('');
+  const [page,         setPage]         = useState(0);
+  const [rowsPerPage,  setRowsPerPage]  = useState(20);
+  const [loading,      setLoading]      = useState(true);
+
+  useEffect(() => { setPage(0); }, [gyogu, team, busType, busName, surveyStatus]);
 
   useEffect(() => {
+    setLoading(true);
     fetchVehicleMemberList()
       .then((data) => {
         setMembers(data.members);
         setNumDays(data.num_days);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const gyoguOptions = useMemo(() => {
@@ -154,19 +179,22 @@ const RetreatVehicleListPage: React.FC = () => {
     ];
   }, [gyogu, members]);
 
-  const timeOptions = useMemo(() => {
-    if (!busType) return [{ value: '', label: '전체 시간' }];
-    const times = new Set<string>();
+  const busNameOptions = useMemo(() => {
+    const seen = new Map<string, string>();
     members.forEach((m) => {
       DAY_BUS_KEYS.slice(0, numDays).forEach((key) => {
         (m[key] ?? []).forEach((bus) => {
-          if (bus.bus_name.startsWith(busType)) times.add(bus.departure_time);
+          if (!busType || bus.bus_name.startsWith(busType)) {
+            if (!seen.has(bus.bus_name)) {
+              seen.set(bus.bus_name, `${bus.bus_name} ${bus.departure_time}`);
+            }
+          }
         });
       });
     });
     return [
-      { value: '', label: '전체 시간' },
-      ...[...times].sort().map((t) => ({ value: t, label: t })),
+      { value: '', label: '전체 버스' },
+      ...[...seen.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([val, label]) => ({ value: val, label })),
     ];
   }, [busType, members, numDays]);
 
@@ -176,7 +204,7 @@ const RetreatVehicleListPage: React.FC = () => {
       label: `${i + 1}일차`,
       align: 'center' as const,
       width: 180,
-      render: makeRenderBus(key, busType, departureTime),
+      render: makeRenderBus(key, busType, busName),
     }));
     return [
       { id: 'gyogu',       label: '교구', align: 'center', width: 80,  render: (v) => `${v}교구` },
@@ -187,24 +215,28 @@ const RetreatVehicleListPage: React.FC = () => {
       { id: 'member_name', label: '이름', align: 'left',   width: 90 },
       ...dayColumns,
     ];
-  }, [busType, departureTime, numDays]);
+  }, [busType, busName, numDays]);
 
   const filtered = useMemo(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
     if (team  && String(m.team)  !== team)  return false;
     if (surveyStatus === 'done'    && !m.has_response) return false;
     if (surveyStatus === 'pending' &&  m.has_response) return false;
-    // busType 또는 departureTime 필터: 해당 조건에 맞는 버스가 하나라도 있어야 포함
-    if (busType || departureTime) {
+    if (busType || busName) {
       const allBuses = (DAY_BUS_KEYS.slice(0, numDays).map((k) => m[k]).filter(Boolean) as BusInfo[][]).flat();
       if (!allBuses.some((bus) => {
         const typeMatch = !busType || bus.bus_name.startsWith(busType);
-        const timeMatch = !departureTime || bus.departure_time === departureTime;
-        return typeMatch && timeMatch;
+        const nameMatch = !busName || bus.bus_name === busName;
+        return typeMatch && nameMatch;
       })) return false;
     }
     return true;
-  }), [members, gyogu, team, surveyStatus, busType, departureTime]);
+  }), [members, gyogu, team, surveyStatus, busType, busName, numDays]);
+
+  const paginated = useMemo(
+    () => filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+    [filtered, page, rowsPerPage],
+  );
 
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
     setGyogu(String(v));
@@ -213,7 +245,21 @@ const RetreatVehicleListPage: React.FC = () => {
 
   const handleBusTypeChange = (v: string | number | (string | number)[]) => {
     setBusType(String(v));
-    setDepartureTime(''); // 유형 변경 시 시간대 리셋
+    setBusName('');
+  };
+
+  const handleDownload = () => {
+    const dayLabels = Array.from({ length: numDays }, (_, i) => `${i + 1}일차`);
+    const header = ['교구', '팀', '그룹', '기수', '성별', '이름', '전화번호', ...dayLabels];
+    const rows = filtered.map((m) => [
+      `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name, m.phone ?? '',
+      ...DAY_BUS_KEYS.slice(0, numDays).map((k) => {
+        const buses = filterBuses(m[k], busType, busName);
+        if (!m.has_response) return '';
+        return buses.length === 0 ? '신청 안 함' : buses.map((b) => `${b.bus_name} ${b.departure_time}`).join(' / ');
+      }),
+    ]);
+    downloadCsv('차량조사_명단.csv', [header, ...rows]);
   };
 
   return (
@@ -248,13 +294,12 @@ const RetreatVehicleListPage: React.FC = () => {
           />
         </FilterGroup>
         <FilterGroup>
-          <FilterLabel>시간대</FilterLabel>
+          <FilterLabel>버스명</FilterLabel>
           <Select
-            value={departureTime}
-            options={timeOptions}
-            onChange={(v) => setDepartureTime(String(v))}
-            disabled={!busType}
-            width={110}
+            value={busName}
+            options={busNameOptions}
+            onChange={(v) => setBusName(String(v))}
+            width={160}
           />
         </FilterGroup>
         <FilterGroup>
@@ -266,12 +311,24 @@ const RetreatVehicleListPage: React.FC = () => {
             width={120}
           />
         </FilterGroup>
+        <CsvButton onClick={handleDownload}>
+          <Download size={14} />
+          CSV 다운로드
+        </CsvButton>
       </FilterRow>
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={paginated}
+        loading={loading}
         getRowId={(row) => String(row.member_id)}
+        pagination={{
+          page,
+          rowsPerPage,
+          totalCount: filtered.length,
+          onPageChange: setPage,
+          onRowsPerPageChange: (rpp) => { setRowsPerPage(rpp); setPage(0); },
+        }}
       />
     </PageWrapper>
   );

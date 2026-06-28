@@ -38,6 +38,7 @@ export interface DataTableProps<T = any> {
     onPageChange: (page: number) => void;
     onRowsPerPageChange: (rowsPerPage: number) => void;
   };
+  loading?: boolean;
   getRowId?: (row: T) => string;
   // SearchToolbar 관련 props
   useSearchToolbar?: boolean;

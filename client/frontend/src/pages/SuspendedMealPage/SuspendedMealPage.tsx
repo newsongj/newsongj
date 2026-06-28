@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Alert, Checkbox, CircularProgress, Snackbar, Tooltip } from '@mui/material';
+import { Alert, Checkbox, CircularProgress, Snackbar, TablePagination, Tooltip } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
 import Button from '@components/common/Button/Button';
@@ -10,13 +10,7 @@ import type {
     SuspendedMealMember,
 } from '@models/suspendedMeal.types';
 import { fetchRetreatInfo, fetchGyoguList, fetchSuspendedMealMembers, submitSuspendedMeal } from '@api/retreat';
-
-// ─── Select 옵션 ───────────────────────────────────────────────────────────────
-
-const MEAL_OPTIONS: SelectOption[] = [0, 1, 2, 3, 4, 5].map((n) => ({
-    value: n,
-    label: `${n}끼`,
-}));
+import type { RetreatInfo } from '@models/research.types';
 
 // ─── 상태 배지 ─────────────────────────────────────────────────────────────────
 
@@ -202,18 +196,25 @@ const ReasonInput = styled('input')(({ theme }) => ({
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const SuspendedMealPage: React.FC = () => {
-    const user      = (() => { try { return JSON.parse(localStorage.getItem('client_user') ?? 'null'); } catch { return null; } })();
-    const dataScope = user?.data_scope ?? 'all';
-    const isAllScope = dataScope === 'all';
+    const user         = (() => { try { return JSON.parse(localStorage.getItem('client_user') ?? 'null'); } catch { return null; } })();
+    const dataScope    = user?.data_scope ?? 'all';
+    const isAllScope   = dataScope === 'all';
+    const isTeamLeader = dataScope === 'all' || dataScope === 'team' || user === null;
 
-    const [members,     setMembers]     = useState<SuspendedMealMember[]>([]);
+    const [retreatInfo, setRetreatInfo] = useState<RetreatInfo | null>(null);
+    const [allMembers,  setAllMembers]  = useState<SuspendedMealMember[]>([]);
     const [loading,     setLoading]     = useState(true);
     const [loadError,   setLoadError]   = useState<string | null>(null);
     const [noRetreat,   setNoRetreat]   = useState(false);
     const [gyogu,       setGyogu]       = useState<number | ''>('');
     const [teamFilter,  setTeamFilter]  = useState<number | ''>('');
     const [gyoguNos,    setGyoguNos]    = useState<number[]>([]);
+    const [groupNo,     setGroupNo]     = useState<number | ''>(() =>
+        !isTeamLeader && user?.group_no != null ? user.group_no : ''
+    );
     const [drafts,      setDrafts]      = useState<Map<number, SuspendedMealDraft>>(new Map());
+    const [page,        setPage]        = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [snackbar,    setSnackbar]    = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
         open: false, message: '', severity: 'success',
     });
@@ -222,9 +223,11 @@ const SuspendedMealPage: React.FC = () => {
         setLoading(true);
         try {
             const data = await fetchSuspendedMealMembers(g !== undefined ? { gyogu: g, team: t } : undefined);
-            setMembers(data);
+            setAllMembers(data);
         } catch (err: any) {
-            if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+            if (err?.response?.status === 403) {
+                setLoadError('접근 권한이 없습니다.');
+            } else if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
                 setNoRetreat(true);
             } else {
                 setLoadError('데이터를 불러오지 못했습니다.');
@@ -238,14 +241,18 @@ const SuspendedMealPage: React.FC = () => {
         const init = async () => {
             try {
                 // 수련회 존재 여부 + 교구 목록 병렬 조회
-                const [, gyoguList] = await Promise.all([
+                const [retreat, gyoguList] = await Promise.all([
                     fetchRetreatInfo(),
                     isAllScope ? fetchGyoguList() : Promise.resolve([]),
                 ]);
+                setRetreatInfo(retreat);
+                document.title = `${retreat.retreat_name} 서스펜디드밀`;
                 setGyoguNos(gyoguList);
                 if (!isAllScope) await loadMembers();
             } catch (err: any) {
-                if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+                if (err?.response?.status === 403) {
+                    setLoadError('접근 권한이 없습니다.');
+                } else if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
                     setNoRetreat(true);
                 } else {
                     setLoadError('데이터를 불러오지 못했습니다.');
@@ -258,9 +265,18 @@ const SuspendedMealPage: React.FC = () => {
     }, [isAllScope]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const teamNos = useMemo(() => {
-        const set = new Set(members.map((m) => m.team));
+        const set = new Set(allMembers.map((m) => m.team));
         return Array.from(set).sort((a, b) => a - b);
-    }, [members]);
+    }, [allMembers]);
+
+    const groupNos = useMemo(() => {
+        const set = new Set(allMembers.map((m) => m.group_no));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [allMembers]);
+
+    const members = useMemo(() =>
+        groupNo === '' ? allMembers : allMembers.filter((m) => m.group_no === groupNo),
+    [allMembers, groupNo]);
 
     const gyoguOptions = useMemo(() => [
         { value: '', label: '교구 선택' },
@@ -272,16 +288,23 @@ const SuspendedMealPage: React.FC = () => {
         ...teamNos.map((t) => ({ value: t, label: `${t}팀` })),
     ], [teamNos]);
 
+    const groupOptions = useMemo(() => [
+        { value: '', label: '전체' },
+        ...groupNos.map((g) => ({ value: g, label: `${g}그룹` })),
+    ], [groupNos]);
+
     const handleGyoguChange = useCallback((val: number | '') => {
         setGyogu(val);
         setTeamFilter('');
+        setGroupNo('');
         setDrafts(new Map());
         if (val !== '') loadMembers(val as number, undefined);
-        else setMembers([]);
+        else setAllMembers([]);
     }, [loadMembers]);
 
     const handleTeamFilterChange = useCallback((val: number | '') => {
         setTeamFilter(val);
+        setGroupNo('');
         setDrafts(new Map());
         if (gyogu !== '') loadMembers(gyogu as number, val === '' ? undefined : val as number);
     }, [gyogu, loadMembers]);
@@ -299,7 +322,7 @@ const SuspendedMealPage: React.FC = () => {
     const updateDraft = useCallback((memberId: number, patch: Partial<SuspendedMealDraft>) => {
         setDrafts((prev) => {
             const next = new Map(prev);
-            const member = members.find((m) => m.member_id === memberId);
+            const member = allMembers.find((m) => m.member_id === memberId);
             const cur = next.get(memberId) ?? {
                 meal_count:       member?.application?.meal_count       ?? 0,
                 fee_support:      member?.application?.fee_support       ?? false,
@@ -328,12 +351,12 @@ const SuspendedMealPage: React.FC = () => {
         member.application?.review_status === 'REJECTED';
 
     const handleSubmit = useCallback(async (memberId: number, isUpdate: boolean) => {
-        const draft = getDraft(members.find((m) => m.member_id === memberId)!);
+        const draft = getDraft(allMembers.find((m) => m.member_id === memberId)!);
         try {
             await submitSuspendedMeal(memberId, {
                 meal_count:       draft.meal_count,
                 fee_support:      draft.fee_support,
-                applicant_reason: draft.fee_support ? draft.applicant_reason || null : null,
+                applicant_reason: draft.applicant_reason || null,
             });
             setDrafts((prev) => { const next = new Map(prev); next.delete(memberId); return next; });
             await loadMembers(gyogu === '' ? undefined : gyogu as number, teamFilter === '' ? undefined : teamFilter as number);
@@ -342,6 +365,18 @@ const SuspendedMealPage: React.FC = () => {
             setSnackbar({ open: true, message: '처리 중 오류가 발생했습니다.', severity: 'error' });
         }
     }, [getDraft, loadMembers, members]);
+
+    useEffect(() => { setPage(0); }, [gyogu, teamFilter, groupNo]);
+
+    const paginated = useMemo(
+        () => members.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+        [members, page, rowsPerPage],
+    );
+
+    const mealOptions: SelectOption[] = useMemo(() => {
+        const max = retreatInfo?.suspended_meal_count ?? 5;
+        return Array.from({ length: max + 1 }, (_, n) => ({ value: n, label: `${n}끼` }));
+    }, [retreatInfo]);
 
     const totalCount   = members.length;
     const appliedCount = members.filter((m) => m.application !== null).length;
@@ -363,27 +398,44 @@ const SuspendedMealPage: React.FC = () => {
     }
 
     if (loadError) {
-        return <Alert severity="error" sx={{ mt: 2 }}>{loadError}</Alert>;
+        const isAccessDenied = loadError === '접근 권한이 없습니다.';
+        return <Alert severity={isAccessDenied ? 'warning' : 'error'} sx={{ mt: 2 }}>{loadError}</Alert>;
     }
 
     return (
         <PageWrapper>
-            {/* 필터 바 (전체 권한만) */}
-            {isAllScope && (
-                <FilterPanel>
-                    <FilterGroup>
-                        <FilterLabel>교구</FilterLabel>
-                        <Select size="small" value={gyogu} options={gyoguOptions}
-                            onChange={(v) => handleGyoguChange(v === '' ? '' : Number(v))} width={120} />
-                    </FilterGroup>
-                    <FilterGroup>
-                        <FilterLabel>팀</FilterLabel>
-                        <Select size="small" value={teamFilter} options={teamOptions}
-                            onChange={(v) => handleTeamFilterChange(v === '' ? '' : Number(v))}
-                            disabled={gyogu === '' || teamNos.length === 0} width={110} />
-                    </FilterGroup>
-                </FilterPanel>
-            )}
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 700, textAlign: 'center', color: '#021730' }}>
+                {retreatInfo!.retreat_name}
+            </p>
+            {/* 필터 바 */}
+            <FilterPanel>
+                {isAllScope && (
+                    <>
+                        <FilterGroup>
+                            <FilterLabel>교구</FilterLabel>
+                            <Select size="small" value={gyogu} options={gyoguOptions}
+                                onChange={(v) => handleGyoguChange(v === '' ? '' : Number(v))} width={120} />
+                        </FilterGroup>
+                        <FilterGroup>
+                            <FilterLabel>팀</FilterLabel>
+                            <Select size="small" value={teamFilter} options={teamOptions}
+                                onChange={(v) => handleTeamFilterChange(v === '' ? '' : Number(v))}
+                                disabled={gyogu === '' || teamNos.length === 0} width={110} />
+                        </FilterGroup>
+                    </>
+                )}
+                <FilterGroup>
+                    <FilterLabel>그룹</FilterLabel>
+                    <Select
+                        size="small"
+                        value={groupNo}
+                        options={groupOptions}
+                        onChange={(v) => setGroupNo(v === '' ? '' : Number(v))}
+                        disabled={!isTeamLeader || (isAllScope && gyogu === '')}
+                        width={120}
+                    />
+                </FilterGroup>
+            </FilterPanel>
 
             {isAllScope && gyogu === '' && !noRetreat && (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: '#8c8c8c', fontSize: 15 }}>
@@ -423,7 +475,7 @@ const SuspendedMealPage: React.FC = () => {
                                         조회된 인원이 없습니다.
                                     </Td>
                                 </tr>
-                            ) : members.map((member) => {
+                            ) : paginated.map((member) => {
                                 const draft    = getDraft(member);
                                 const reviewed = isReviewed(member);
                                 const hasApp   = member.application !== null;
@@ -449,7 +501,7 @@ const SuspendedMealPage: React.FC = () => {
                                             <Select
                                                 size="small"
                                                 value={draft.meal_count}
-                                                options={MEAL_OPTIONS}
+                                                options={mealOptions}
                                                 onChange={(v) => updateDraft(member.member_id, { meal_count: Number(v) })}
                                                 disabled={reviewed}
                                                 width={80}
@@ -463,8 +515,7 @@ const SuspendedMealPage: React.FC = () => {
                                                 checked={draft.fee_support}
                                                 disabled={reviewed}
                                                 onChange={(e) => updateDraft(member.member_id, {
-                                                    fee_support:      e.target.checked,
-                                                    applicant_reason: e.target.checked ? draft.applicant_reason : '',
+                                                    fee_support: e.target.checked,
                                                 })}
                                                 sx={{ padding: '2px', color: 'rgba(2,23,48,0.3)', '&.Mui-checked': { color: '#021730' } }}
                                             />
@@ -475,7 +526,7 @@ const SuspendedMealPage: React.FC = () => {
                                             <ReasonInput
                                                 placeholder="사유 입력"
                                                 value={draft.applicant_reason}
-                                                disabled={reviewed || !draft.fee_support}
+                                                disabled={reviewed}
                                                 onChange={(e) => updateDraft(member.member_id, { applicant_reason: e.target.value })}
                                             />
                                         </Td>
@@ -513,6 +564,18 @@ const SuspendedMealPage: React.FC = () => {
                     총 {totalCount}명&nbsp;|&nbsp;
                     <span style={{ color: '#1677ff', fontWeight: 600 }}>신청완료 {appliedCount}명</span>
                 </CountLabel>
+                <TablePagination
+                    component="div"
+                    count={totalCount}
+                    page={page}
+                    onPageChange={(_, p) => setPage(p)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
+                    rowsPerPageOptions={[20, 50, 100]}
+                    labelRowsPerPage="페이지당:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+                    sx={{ marginLeft: 'auto', '& .MuiTablePagination-toolbar': { minHeight: 36, flexWrap: 'wrap' } }}
+                />
             </Footer>
             </>}
 

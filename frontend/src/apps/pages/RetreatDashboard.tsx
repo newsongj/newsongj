@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
+import { Skeleton } from '@mui/material';
 import { Users, Car, Home, ClipboardList } from 'lucide-react';
 import {
   Bar,
@@ -203,11 +204,14 @@ const buildChartData = (day: RetreatDayHeadcount, isDay1: boolean) => {
 const HeadcountTab: React.FC = () => {
   const [data, setData] = useState<RetreatHeadcountResponse | null>(null);
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     fetchRetreatHeadcount()
       .then(setData)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const dayOptions = useMemo(
@@ -222,6 +226,16 @@ const HeadcountTab: React.FC = () => {
   const dayData = data ? (data.days[selectedDayIdx] ?? null) : null;
   const isDay1 = selectedDayIdx === 0;
   const chartData = dayData ? buildChartData(dayData, isDay1) : [];
+
+  if (loading) {
+    return (
+      <TabContent>
+        <StatsGrid>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} variant="rounded" height={110} />)}</StatsGrid>
+        <Skeleton variant="rounded" height={6} />
+        <Skeleton variant="rounded" height={320} />
+      </TabContent>
+    );
+  }
 
   return (
     <TabContent>
@@ -472,12 +486,25 @@ const VehicleTypePanel: React.FC<{
 
 const VehicleTab: React.FC = () => {
   const [data, setData] = useState<VehicleDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     fetchRetreatVehicle()
       .then(setData)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <TabContent>
+        <StatsGrid3>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rounded" height={110} />)}</StatsGrid3>
+        <Skeleton variant="rounded" height={140} />
+        <Skeleton variant="rounded" height={140} />
+      </TabContent>
+    );
+  }
 
   return (
     <TabContent>
@@ -542,6 +569,7 @@ const AccommodationTab: React.FC = () => {
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const [gyogu, setGyogu] = useState('');
   const [team, setTeam] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const isSpecialGroup = gyogu === '임원단' || gyogu === '준비위원';
@@ -549,9 +577,11 @@ const AccommodationTab: React.FC = () => {
     const is_imwondan = gyogu === '임원단' ? true : undefined;
     const team_no = team ? Number(team) : undefined;
 
+    setLoading(true);
     fetchRetreatAccommodation({ gyogu_no, team_no, is_imwondan })
       .then(setData)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [gyogu, team]);
 
   const dayOptions = useMemo(
@@ -596,6 +626,9 @@ const AccommodationTab: React.FC = () => {
         />
       </FilterRow>
 
+      {loading ? (
+        <StatsGrid3>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="rounded" height={110} />)}</StatsGrid3>
+      ) : (
       <StatsGrid3>
         <StatCard
           label="총 인원"
@@ -622,6 +655,7 @@ const AccommodationTab: React.FC = () => {
           iconBgColor="#fce7f3"
         />
       </StatsGrid3>
+      )}
     </TabContent>
   );
 };

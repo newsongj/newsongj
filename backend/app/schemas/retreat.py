@@ -218,6 +218,7 @@ class VehicleMemberListItem(BaseModel):
     gyogu:        int
     team:         int
     group_no:     int
+    phone:        Optional[str] = None
     has_response: bool
     day1_bus:     Optional[List[VehicleListBusInfo]] = None
     day2_bus:     Optional[List[VehicleListBusInfo]] = None

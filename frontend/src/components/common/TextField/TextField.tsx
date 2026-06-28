@@ -30,7 +30,7 @@ export const TextField: React.FC<TextFieldProps> = ({
   const [internalValue, setInternalValue] = useState(value || '');
 
   const currentValue = value !== undefined ? value : internalValue;
-  const hasValue = Boolean(currentValue) || inputProps.type === 'date';
+  const hasValue = Boolean(currentValue) || inputProps.type === 'date' || inputProps.type === 'time';
 
   const handleFocus = useCallback((event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFocused(true);
