@@ -84,6 +84,7 @@ export interface VehicleMemberListItem {
   gyogu: number;
   team: number;
   group_no: number;
+  phone: string | null;
   has_response: boolean;
   day1_bus: BusInfo[] | null;
   day2_bus: BusInfo[] | null;

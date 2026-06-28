@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum, Text, Time
 from app.core.database import Base
+from app.core.timezone import now_kst
 
 
 class UserAccount(Base):
@@ -93,8 +94,8 @@ class RetreatCustom(Base):
     fee_without_bus      = Column(Integer, nullable=False, default=0)
     suspended_meal_count = Column(SmallInteger, nullable=False, default=0)
     is_active            = Column(SmallInteger, nullable=False, default=1)
-    created_at           = Column(DateTime, nullable=True)
-    updated_at           = Column(DateTime, nullable=True)
+    created_at           = Column(DateTime, nullable=False, default=now_kst)
+    updated_at           = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
 
 
 class BusCustom(Base):
@@ -135,13 +136,8 @@ class RetreatResponse(Base):
     day3_bus          = Column(Text, nullable=True)
     day4_bus          = Column(Text, nullable=True)
     fee_type          = Column(Enum('bus', 'lodging_only'), nullable=True)
-    note              = Column(String(255), nullable=True)
-    meal_count        = Column(SmallInteger, nullable=False, default=0)
-    fee_support       = Column(SmallInteger, nullable=False, default=0)
     bus_created_at    = Column(DateTime, nullable=True)
     bus_updated_at    = Column(DateTime, nullable=True)
-    meal_created_at   = Column(DateTime, nullable=True)
-    meal_updated_at   = Column(DateTime, nullable=True)
 
 
 class SuspendedMealApplication(Base):
@@ -153,6 +149,6 @@ class SuspendedMealApplication(Base):
     fee_support      = Column(SmallInteger, nullable=False, default=0)
     applicant_reason = Column(String(500), nullable=True)
     applied_at       = Column(DateTime, nullable=False)
-    review_status    = Column(Enum('APPROVED', 'REJECTED'), nullable=True)
+    review_status    = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
     review_comment   = Column(String(500), nullable=True)
     reviewed_at      = Column(DateTime, nullable=True)

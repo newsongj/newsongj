@@ -125,6 +125,7 @@ def svc_delete_bus(db: Session, bus_id: int) -> None:
 def svc_get_research_members(
     db: Session,
     data_scope: str,
+    gyogu: Optional[int],
     team: Optional[int],
     group_no: Optional[int],
     query_group_no: Optional[int],
@@ -135,9 +136,22 @@ def svc_get_research_members(
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
     rows = crud_get_research_members(
-        db, retreat.retreat_custom_id, data_scope, team, group_no,
+        db, retreat.retreat_custom_id, data_scope, gyogu, team, group_no,
         query_group_no, query_gyogu, query_team,
     )
+    def _research_item(r):
+        if r is None:
+            return None
+        if not any([r.day1_attendance, r.day2_attendance, r.day3_attendance, r.day4_attendance]):
+            return None
+        return ResearchResponseItem(
+            day1_attendance=r.day1_attendance,
+            day2_attendance=r.day2_attendance,
+            day3_attendance=r.day3_attendance,
+            day4_attendance=r.day4_attendance,
+            fee_type=r.fee_type,
+        )
+
     result = []
     for member, profile, response in rows:
         result.append(ResearchMemberResponse(
@@ -148,13 +162,7 @@ def svc_get_research_members(
             gyogu=profile.gyogu,
             team=profile.team,
             group_no=profile.group_no,
-            response=ResearchResponseItem(
-                day1_attendance=response.day1_attendance,
-                day2_attendance=response.day2_attendance,
-                day3_attendance=response.day3_attendance,
-                day4_attendance=response.day4_attendance,
-                fee_type=response.fee_type,
-            ) if response else None,
+            response=_research_item(response),
         ))
     return result
 
@@ -168,17 +176,22 @@ def svc_get_research_list(
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    num_days = (retreat.end_date - retreat.start_date).days
+    num_days = (retreat.end_date - retreat.start_date).days + 1
     rows = crud_get_research_member_list(db, retreat.retreat_custom_id, gyogu, team)
 
+    def _has_research(r) -> bool:
+        return r is not None and any([
+            r.day1_attendance, r.day2_attendance, r.day3_attendance, r.day4_attendance,
+        ])
+
     enrolled = len(rows)
-    surveyed = sum(1 for _, _, r in rows if r is not None)
+    surveyed = sum(1 for _, _, r in rows if _has_research(r))
     fee_paid = sum(1 for _, _, r in rows if r is not None and r.fee_type is not None)
 
     if survey_status == 'done':
-        rows = [(m, p, r) for m, p, r in rows if r is not None]
+        rows = [(m, p, r) for m, p, r in rows if _has_research(r)]
     elif survey_status == 'pending':
-        rows = [(m, p, r) for m, p, r in rows if r is None]
+        rows = [(m, p, r) for m, p, r in rows if not _has_research(r)]
 
     members = [
         ResearchListItem(
@@ -189,7 +202,7 @@ def svc_get_research_list(
             gyogu=profile.gyogu,
             team=profile.team,
             group_no=profile.group_no,
-            has_response=response is not None,
+            has_response=_has_research(response),
             day1_attendance=response.day1_attendance if response else None,
             day2_attendance=response.day2_attendance if response else None,
             day3_attendance=response.day3_attendance if response else None,
@@ -268,13 +281,18 @@ def svc_get_headcount(db: Session) -> RetreatHeadcountResponse:
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    num_days = (retreat.end_date - retreat.start_date).days
+    num_days = (retreat.end_date - retreat.start_date).days + 1
     rows = crud_get_research_member_list(db, retreat.retreat_custom_id)
+
+    def _has_research_hc(r) -> bool:
+        return r is not None and any([
+            r.day1_attendance, r.day2_attendance, r.day3_attendance, r.day4_attendance,
+        ])
 
     # enrolled = group_no != 0 멤버 수 (진행율 분모)
     enrolled = sum(1 for _, p, _ in rows if p.group_no != 0)
     # surveyed = 응답한 멤버 수 (group_no=0 포함)
-    surveyed = sum(1 for _, _, r in rows if r is not None)
+    surveyed = sum(1 for _, _, r in rows if _has_research_hc(r))
 
     _ATTENDING = {'정상', '참석', '후발'}
     _att_map = {'미정': 'undecided', '불참': 'absent', '정상': 'normal', '참석': 'attend', '후발': 'late'}
@@ -385,10 +403,22 @@ def svc_get_vehicle_member_list(
                 infos.append(VehicleListBusInfo(bus_name=entry[0], departure_time=entry[1]))
         return infos
 
-    num_days = (retreat.end_date - retreat.start_date).days
+    def _has_any_bus(r) -> bool:
+        if r is None or r.bus_created_at is None:
+            return False
+        for key in ('day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'):
+            raw = getattr(r, key, None)
+            try:
+                if raw and json.loads(raw):
+                    return True
+            except (ValueError, TypeError):
+                pass
+        return False
+
+    num_days = (retreat.end_date - retreat.start_date).days + 1
     result = []
     for member, profile, response in rows:
-        has_response = response is not None and response.bus_created_at is not None
+        has_response = _has_any_bus(response)
         result.append(VehicleMemberListItem(
             member_id=member.member_id,
             member_name=member.name,
@@ -397,6 +427,7 @@ def svc_get_vehicle_member_list(
             gyogu=profile.gyogu,
             team=profile.team,
             group_no=profile.group_no,
+            phone=member.phone_number,
             has_response=has_response,
             day1_bus=_resolve_buses(response.day1_bus if response else None, has_response),
             day2_bus=_resolve_buses(response.day2_bus if response else None, has_response),
@@ -449,6 +480,7 @@ def svc_submit_vehicle(db: Session, member_id: int, body: VehicleSubmitBody) -> 
 def svc_get_suspended_meal_members(
     db: Session,
     data_scope: str,
+    gyogu: Optional[int],
     team: Optional[int],
     group_no: Optional[int],
     query_gyogu: Optional[int] = None,
@@ -457,19 +489,18 @@ def svc_get_suspended_meal_members(
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    rows = crud_get_suspended_meal_members(db, data_scope, team, group_no, query_gyogu, query_team)
+    rows = crud_get_suspended_meal_members(db, data_scope, gyogu, team, group_no, query_gyogu, query_team)
     result = []
     for member, profile, app in rows:
         app_item = None
         if app:
-            status = app.review_status if app.review_status else "PENDING"
             app_item = SuspendedMealApplicationItem(
                 application_id=app.application_id,
                 meal_count=app.meal_count,
                 fee_support=bool(app.fee_support),
                 applicant_reason=app.applicant_reason,
                 applied_at=app.applied_at.isoformat() if app.applied_at else "",
-                review_status=status,
+                review_status=app.review_status,
                 review_comment=app.review_comment,
                 reviewed_at=app.reviewed_at.isoformat() if app.reviewed_at else None,
             )
@@ -510,7 +541,7 @@ def svc_get_admin_suspended_meal_list(
             fee_support=bool(app.fee_support),
             applicant_reason=app.applicant_reason,
             applied_at=app.applied_at.isoformat() if app.applied_at else "",
-            review_status=app.review_status if app.review_status else "PENDING",
+            review_status=app.review_status,
             review_comment=app.review_comment,
             reviewed_at=app.reviewed_at.isoformat() if app.reviewed_at else None,
         )

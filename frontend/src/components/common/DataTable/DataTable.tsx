@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Skeleton } from '@mui/material';
 import { MoreVert as MoreVertIcon, ArrowUpward, ArrowDownward } from '@mui/icons-material';
 import { Checkbox } from '@components/common/Checkbox';
 import { Menu } from '@components/common/Menu';
@@ -19,6 +20,7 @@ const DataTable = <T extends Record<string, any>>({
   onSearch,
   onSort,
   pagination,
+  loading = false,
   getRowId = (row: T) => row.id || String(Math.random()),
   // SearchToolbar props
   useSearchToolbar = false,
@@ -227,7 +229,23 @@ const DataTable = <T extends Record<string, any>>({
           </S.StyledTableRow>
         </S.StyledTableHead>
         <S.StyledTableBody>
-          {sortedData.map((row) => {
+          {loading ? (
+            Array.from({ length: 8 }).map((_, i) => (
+              <S.StyledTableRow key={i}>
+                {selectable && (
+                  <S.StyledTableCell padding="checkbox">
+                    <Skeleton variant="rectangular" width={18} height={18} />
+                  </S.StyledTableCell>
+                )}
+                {columns.map((col) => (
+                  <S.StyledTableCell key={col.id} align={col.align}>
+                    <Skeleton variant="text" sx={{ fontSize: '1rem' }} />
+                  </S.StyledTableCell>
+                ))}
+                {rowActions && <S.StyledTableCell />}
+              </S.StyledTableRow>
+            ))
+          ) : sortedData.map((row) => {
             const rowId = getRowId(row);
             const isSelected = selectedIds.includes(rowId);
             const menuAnchor = rowMenuAnchors[rowId];
@@ -293,7 +311,7 @@ const DataTable = <T extends Record<string, any>>({
                 onRowsPerPageChange={(e) =>
                   pagination.onRowsPerPageChange(parseInt(e.target.value, 10))
                 }
-                rowsPerPageOptions={[5, 10, 25, 50]}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
                 labelRowsPerPage="Rows per page:"
                 labelDisplayedRows={({ from, to, count }) =>
                   `${from}-${to} / ${count !== -1 ? count : `${to}개 이상`}`

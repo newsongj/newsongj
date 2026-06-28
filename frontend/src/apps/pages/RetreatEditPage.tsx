@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { IconButton } from '@mui/material';
+import { IconButton, Skeleton } from '@mui/material';
 import { TextField } from '@components/common/TextField';
 import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
@@ -233,6 +233,7 @@ const RetreatEditPage: React.FC = () => {
 
   const [retreatId, setRetreatId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [noActiveRetreat, setNoActiveRetreat] = useState(false);
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [form, setForm] = useState<BasicForm>({
@@ -271,6 +272,8 @@ const RetreatEditPage: React.FC = () => {
         } else {
           showSnackbar(e?.message || '수련회 정보를 불러오지 못했습니다.', 'error');
         }
+      } finally {
+        setPageLoading(false);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -411,6 +414,25 @@ const RetreatEditPage: React.FC = () => {
     }
   };
 
+  if (pageLoading) {
+    return (
+      <PageWrapper>
+        <FormSection>
+          <Skeleton variant="text" width={160} height={28} />
+          <FormGrid>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={56} />
+            ))}
+          </FormGrid>
+        </FormSection>
+        <FormSection>
+          <Skeleton variant="text" width={120} height={28} />
+          <Skeleton variant="rounded" height={120} />
+        </FormSection>
+      </PageWrapper>
+    );
+  }
+
   if (noActiveRetreat) {
     return (
       <PageWrapper>
@@ -467,7 +489,7 @@ const RetreatEditPage: React.FC = () => {
             <thead>
               <tr>
                 <th>버스 이름</th>
-                <th>일차</th>
+                <th>일자</th>
                 <th>출발 시간</th>
                 <th>좌석 수</th>
                 <th>출발지 → 도착지</th>
@@ -569,26 +591,30 @@ const RetreatEditPage: React.FC = () => {
             fullWidth
           />
           <ModalGrid>
-            {dayOptions ? (
-              <div>
-                <div style={{ fontSize: 12, marginBottom: 4, color: '#595959' }}>출발 일차</div>
-                <Select
+            {/* 출발 일자 — 전체 너비 */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              {dayOptions ? (
+                <div>
+                  <div style={{ fontSize: 12, marginBottom: 4, color: '#595959' }}>출발 일자</div>
+                  <Select
+                    value={busModal.departure_date}
+                    options={dayOptions}
+                    onChange={(v) => setBusModal((p) => ({ ...p, departure_date: String(v) }))}
+                    width="100%"
+                  />
+                </div>
+              ) : (
+                <TextField
+                  label="출발 일자"
+                  type="date"
                   value={busModal.departure_date}
-                  options={dayOptions}
-                  onChange={(v) => setBusModal((p) => ({ ...p, departure_date: String(v) }))}
-                  width="100%"
+                  onChange={(e) => setBusModal((p) => ({ ...p, departure_date: e.target.value }))}
+                  disableAnimation
+                  fullWidth
                 />
-              </div>
-            ) : (
-              <TextField
-                label="출발 날짜"
-                type="date"
-                value={busModal.departure_date}
-                onChange={(e) => setBusModal((p) => ({ ...p, departure_date: e.target.value }))}
-                disableAnimation
-                fullWidth
-              />
-            )}
+              )}
+            </div>
+            {/* 출발 시간 | 좌석 수 */}
             <TextField
               label="출발 시간"
               type="time"
@@ -606,7 +632,7 @@ const RetreatEditPage: React.FC = () => {
               placeholder="예: 45"
               fullWidth
             />
-            <div />
+            {/* 출발지 | 도착지 */}
             <TextField
               label="출발지"
               value={busModal.departure_place}

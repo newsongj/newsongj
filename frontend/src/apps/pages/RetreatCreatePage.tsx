@@ -353,7 +353,7 @@ const RetreatCreatePage: React.FC = () => {
             <thead>
               <tr>
                 <th>버스 이름</th>
-                <th>일차</th>
+                <th>일자</th>
                 <th>출발 시간</th>
                 <th>좌석 수</th>
                 <th>출발지 → 도착지</th>
@@ -442,27 +442,30 @@ const RetreatCreatePage: React.FC = () => {
             fullWidth
           />
           <ModalGrid>
-            {/* 시작일/종료일이 설정된 경우 일차 드롭박스, 아니면 날짜 직접 입력 */}
-            {dayOptions ? (
-              <div>
-                <div style={{ fontSize: 12, marginBottom: 4, color: '#595959' }}>출발 일차</div>
-                <Select
+            {/* 출발 일자 — 전체 너비 */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              {dayOptions ? (
+                <div>
+                  <div style={{ fontSize: 12, marginBottom: 4, color: '#595959' }}>출발 일자</div>
+                  <Select
+                    value={busModal.departure_date}
+                    options={dayOptions}
+                    onChange={(v) => setBusModal((p) => ({ ...p, departure_date: String(v) }))}
+                    width="100%"
+                  />
+                </div>
+              ) : (
+                <TextField
+                  label="출발 일자"
+                  type="date"
                   value={busModal.departure_date}
-                  options={dayOptions}
-                  onChange={(v) => setBusModal((p) => ({ ...p, departure_date: String(v) }))}
-                  width="100%"
+                  onChange={(e) => setBusModal((p) => ({ ...p, departure_date: e.target.value }))}
+                  disableAnimation
+                  fullWidth
                 />
-              </div>
-            ) : (
-              <TextField
-                label="출발 날짜"
-                type="date"
-                value={busModal.departure_date}
-                onChange={(e) => setBusModal((p) => ({ ...p, departure_date: e.target.value }))}
-                disableAnimation
-                fullWidth
-              />
-            )}
+              )}
+            </div>
+            {/* 출발 시간 | 좌석 수 */}
             <TextField
               label="출발 시간"
               type="time"
@@ -480,7 +483,6 @@ const RetreatCreatePage: React.FC = () => {
               placeholder="예: 45"
               fullWidth
             />
-            <div />
             <TextField
               label="출발지"
               value={busModal.departure_place}

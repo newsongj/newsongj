@@ -16,7 +16,7 @@ import type { VehicleMyResponse } from '@api/retreat';
 
 const BUS_TYPE_ORDER: BusType[] = ['후발', '픽업', '귀경'];
 
-const MULTI_SELECT_TYPES = new Set<BusType>(['픽업', '귀경']);
+const MULTI_SELECT_TYPES = new Set<BusType>(['후발', '픽업', '귀경']);
 
 const BUS_TYPE_META: Record<BusType, { label: string; desc: string }> = {
     후발: { label: '후발',  desc: '정상 출발 이후 후발 탑승하는 차량' },
@@ -120,12 +120,7 @@ const buildSelectionsFromIds = (
             departure_time: bus.departure_time,
             departure_date: bus.departure_date,
         };
-        if (!MULTI_SELECT_TYPES.has(busType)) {
-            selections['후발'] = slot;
-        } else {
-            const key = busType as '픽업' | '귀경';
-            selections[key] = [...((selections[key] as BusMultiSelections) ?? []), slot];
-        }
+        selections[busType] = [...((selections[busType] as BusMultiSelections) ?? []), slot];
     }
     return selections;
 };
@@ -137,7 +132,7 @@ const buildSubmitBody = (
     const dayBusIds: number[][] = [[], [], [], []];
     for (const [type, sel] of Object.entries(selections)) {
         if (!MULTI_SELECT_TYPES.has(type as BusType)) {
-            const bus = sel as BusSingleSelection;
+            const bus = sel as unknown as BusSingleSelection;
             if (bus) {
                 const idx = getDayIndexFromDate(startDate, bus.departure_date);
                 if (idx >= 0 && idx < 4) dayBusIds[idx].push(bus.bus_id);
@@ -174,16 +169,21 @@ interface SubmissionRecord {
 
 // ─── Helpers (선택 내역 요약) ─────────────────────────────────────────────────
 
+const formatBusDate = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]})`;
+};
+
 const formatSelectionSummary = (type: BusType, sel: BusSingleSelection | BusMultiSelections | null | undefined): string => {
     if (!sel) return '신청 안 함';
     if (!MULTI_SELECT_TYPES.has(type)) {
         const s = sel as BusSingleSelection;
         if (!s) return '신청 안 함';
-        return `${s.bus_name}  ${formatTime12h(s.departure_time)}`;
+        return `${formatBusDate(s.departure_date)} ${s.bus_name} ${formatTime12h(s.departure_time)}`;
     }
     const arr = sel as BusMultiSelections;
     if (!arr || arr.length === 0) return '신청 안 함';
-    return arr.map((b) => `${b.bus_name} ${formatTime12h(b.departure_time)}`).join(' / ');
+    return arr.map((b) => `${formatBusDate(b.departure_date)} ${b.bus_name} ${formatTime12h(b.departure_time)}`).join('\n');
 };
 
 // ─── Styled ───────────────────────────────────────────────────────────────────
@@ -194,8 +194,8 @@ const PageWrapper = styled('div')(({ theme }) => ({
 }));
 
 const RetreatLabel = styled('p')(({ theme }) => ({
-    margin: 0, fontSize: theme.custom.typography.body2.fontSize,
-    fontWeight: 600, color: theme.custom.colors.text.medium,
+    margin: 0, fontSize: 18, fontWeight: 700,
+    textAlign: 'center', color: theme.custom.colors.primary._900,
 }));
 
 const HistorySection = styled('section')(({ theme }) => ({
@@ -227,7 +227,7 @@ const HistoryVehicleList = styled('div')(({ theme }) => ({
 }));
 
 const HistoryVehicleItem = styled('div')(({ theme }) => ({
-    display: 'flex', alignItems: 'center', gap: theme.custom.spacing.sm,
+    display: 'flex', alignItems: 'flex-start', gap: theme.custom.spacing.sm,
 }));
 
 const VehicleTypeBadge = styled('span')(({ theme }) => ({
@@ -241,6 +241,7 @@ const VehicleTypeBadge = styled('span')(({ theme }) => ({
 
 const HistoryVehicleText = styled('span')(({ theme }) => ({
     color: theme.custom.colors.text.high, fontSize: theme.custom.typography.body2.fontSize,
+    whiteSpace: 'pre-line', lineHeight: 1.8,
 }));
 
 const TypeSelectorPanel = styled('section')(({ theme }) => ({
@@ -354,7 +355,9 @@ const BusSectionBody = styled('div')(({ theme }) => ({
 
 const SlotGrid = styled('div')(({ theme }) => ({
     display: 'flex', flexWrap: 'wrap', gap: theme.custom.spacing.sm,
-    '@media (max-width: 480px)': { gap: theme.custom.spacing.xs },
+    '@media (max-width: 480px)': {
+        flexDirection: 'column', gap: theme.custom.spacing.xs,
+    },
 }));
 
 const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ theme, $selected, $none }) => ({
@@ -374,7 +377,11 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ th
     fontSize: theme.custom.typography.body1.fontSize, fontWeight: $selected ? 600 : 400,
     cursor: 'pointer', transition: theme.custom.transitions.fast, whiteSpace: 'nowrap',
     '@media (max-width: 480px)': {
-        padding: '6px 14px', fontSize: theme.custom.typography.body2.fontSize,
+        width: '100%',
+        justifyContent: 'space-between',
+        padding: '10px 16px',
+        borderRadius: theme.custom.borderRadius,
+        fontSize: theme.custom.typography.body2.fontSize,
     },
     '&:hover': {
         borderColor: $none ? theme.custom.colors.neutral._70 : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.neutral._40),
@@ -384,6 +391,7 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ th
 
 const SlotTime = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
     fontSize: 12, opacity: $selected ? 0.85 : 0.55, marginLeft: 6,
+    '@media (max-width: 480px)': { marginLeft: 0, fontSize: 13 },
 }));
 
 const EmptyNote = styled('span')(({ theme }) => ({
@@ -413,7 +421,7 @@ const VehiclePage: React.FC = () => {
     });
 
     interface ConfirmDialog {
-        variant: 'replace' | 'warn-multi';
+        variant:     string;
         pendingType: BusType;
         pendingBus:  BusSlot;
     }
@@ -429,6 +437,7 @@ const VehiclePage: React.FC = () => {
 
                 const builtInfo = buildVehicleRetreatInfo(retreat, retreat.buses);
                 setRetreatInfo(builtInfo);
+                document.title = `${retreat.retreat_name} 차량조사`;
 
                 setForm({
                     gyogu: vehicleMy.gyogu ?? '',
@@ -464,10 +473,19 @@ const VehiclePage: React.FC = () => {
         load();
     }, []);
 
-    const dayCount = useMemo(
-        () => retreatInfo ? getDayCount(retreatInfo.start_date, retreatInfo.end_date) : 0,
-        [retreatInfo],
-    );
+    const dayCount = useMemo(() => {
+        if (!retreatInfo) return 0;
+        const fromDates = getDayCount(retreatInfo.start_date, retreatInfo.end_date);
+        // 실제 버스 데이터에서 최대 일차 계산 (날짜 범위보다 더 넓을 수 있음)
+        let fromBuses = 0;
+        for (const typeVehicles of Object.values(retreatInfo.vehicles)) {
+            for (const dk of Object.keys(typeVehicles ?? {})) {
+                const dayNum = parseInt(dk.replace('day', ''), 10);
+                if (!isNaN(dayNum)) fromBuses = Math.max(fromBuses, dayNum);
+            }
+        }
+        return Math.min(Math.max(fromDates, fromBuses), 4);
+    }, [retreatInfo]);
 
     const dayKeys = useMemo(
         () => (['day1', 'day2', 'day3', 'day4'] as DayKey[]).slice(0, dayCount),
@@ -501,25 +519,14 @@ const VehiclePage: React.FC = () => {
     }, []);
 
     const handleSlotSelect = useCallback((type: BusType, bus: BusSlot | null) => {
-        if (!MULTI_SELECT_TYPES.has(type)) {
-            if (bus === null) {
-                setSelections((prev) => ({ ...prev, [type]: null }));
-                return;
-            }
-            const cur = selections[type] as BusSingleSelection | undefined;
-            if (cur && cur.bus_id !== bus.bus_id) {
-                setConfirmDialog({ variant: 'replace', pendingType: type, pendingBus: bus });
-                return;
-            }
-            const next = cur?.bus_id === bus.bus_id ? null : bus;
-            setSelections((prev) => ({ ...prev, [type]: next }));
-            return;
-        }
         if (bus === null) {
             setSelections((prev) => ({ ...prev, [type]: [] }));
             return;
         }
+
         const arr = (selections[type] as BusMultiSelections | undefined) ?? [];
+
+        // 이미 선택된 버스 → 토글 해제
         if (arr.some((b) => b.bus_id === bus.bus_id)) {
             setSelections((prev) => ({
                 ...prev,
@@ -527,23 +534,37 @@ const VehiclePage: React.FC = () => {
             }));
             return;
         }
-        const sameDaySelected = arr.some((b) => b.departure_date === bus.departure_date);
-        if (sameDaySelected) {
+
+        const sameDayIdx = arr.findIndex((b) => b.departure_date === bus.departure_date);
+
+        if (type === '후발') {
+            // 후발: 같은 날 이미 선택 → 팝업 없이 자동 교체
+            if (sameDayIdx !== -1) {
+                setSelections((prev) => ({
+                    ...prev,
+                    [type]: (prev[type] as BusMultiSelections ?? []).map((b, i) => i === sameDayIdx ? bus : b),
+                }));
+            } else {
+                setSelections((prev) => ({ ...prev, [type]: [...arr, bus] }));
+            }
+            return;
+        }
+
+        // 픽업/귀경: 같은 날 이미 선택 → 경고 팝업
+        if (sameDayIdx !== -1) {
             setConfirmDialog({ variant: 'warn-multi', pendingType: type, pendingBus: bus });
             return;
         }
-        setSelections((prev) => ({ ...prev, [type]: [...(prev[type] as BusMultiSelections ?? []), bus] }));
+        setSelections((prev) => ({ ...prev, [type]: [...arr, bus] }));
     }, [selections]);
 
     const handleConfirm = useCallback(() => {
         if (!confirmDialog) return;
-        const { variant, pendingType, pendingBus } = confirmDialog;
-        setSelections((prev) => {
-            if (variant === 'replace') {
-                return { ...prev, [pendingType]: pendingBus };
-            }
-            return { ...prev, [pendingType]: [...(prev[pendingType] as BusMultiSelections ?? []), pendingBus] };
-        });
+        const { pendingType, pendingBus } = confirmDialog;
+        setSelections((prev) => ({
+            ...prev,
+            [pendingType]: [...(prev[pendingType] as BusMultiSelections ?? []), pendingBus],
+        }));
         setConfirmDialog(null);
     }, [confirmDialog]);
 
@@ -750,20 +771,17 @@ const VehiclePage: React.FC = () => {
                 PaperProps={{ sx: { borderRadius: 2, minWidth: 300, maxWidth: 440 } }}
             >
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 700, pb: 1 }}>
-                    {confirmDialog?.variant === 'replace' ? '차량 변경 확인' : '다중 차량 선택 안내'}
+                    다중 차량 선택 안내
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.6' }}>
-                        {confirmDialog?.variant === 'replace'
-                            ? `이미 선택한 후발 차량이 있습니다.\n${confirmDialog.pendingBus.bus_name}으로 변경하면 기존 차량은 취소됩니다.`
-                            : '같은 날 여러 차량을 신청하면 다른 사람이 탑승하지 못할 수 있습니다.\n실제로 탑승하는 경우에만 다중 선택해 주세요.'}
+                        같은 날 여러 차량을 신청하면 다른 사람이 탑승하지 못할 수 있습니다.<br />
+                        실제로 탑승하는 경우에만 다중 선택해 주세요.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
                     <Button variant="outlined" onClick={() => setConfirmDialog(null)}>취소</Button>
-                    <Button variant="filled" onClick={handleConfirm}>
-                        {confirmDialog?.variant === 'replace' ? '변경' : '선택 계속'}
-                    </Button>
+                    <Button variant="filled" onClick={handleConfirm}>선택 계속</Button>
                 </DialogActions>
             </Dialog>
 

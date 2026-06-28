@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
-import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar } from '@mui/material';
+import { Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar, TablePagination } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
 import Button from '@components/common/Button/Button';
@@ -198,7 +198,7 @@ const getDayCount = (info: RetreatInfo) => {
     const diff = Math.round(
         (new Date(info.end_date).getTime() - new Date(info.start_date).getTime()) / 86400000
     );
-    return Math.min(Math.max(diff, 1), 4);
+    return Math.min(Math.max(diff + 1, 1), 4);
 };
 
 const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
@@ -223,9 +223,11 @@ const ResearchPage: React.FC = () => {
     const [groupNo, setGroupNo] = useState<number | ''>(() =>
         !isTeamLeader && user?.group_no != null ? user.group_no : ''
     );
-    const [drafts,   setDrafts]   = useState<Map<number, ResearchResponseBody>>(new Map());
-    const [isDirty,  setIsDirty]  = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [drafts,      setDrafts]      = useState<Map<number, ResearchResponseBody>>(new Map());
+    const [isDirty,     setIsDirty]     = useState(false);
+    const [isSaving,    setIsSaving]    = useState(false);
+    const [page,        setPage]        = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
         open: false, message: '', severity: 'success',
     });
@@ -236,8 +238,8 @@ const ResearchPage: React.FC = () => {
         try {
             const members = await fetchResearchMembers({ gyogu: g, team: t });
             setAllMembers(members);
-        } catch {
-            setLoadError('데이터를 불러오지 못했습니다.');
+        } catch (err: any) {
+            setLoadError(err?.response?.status === 403 ? '접근 권한이 없습니다.' : '데이터를 불러오지 못했습니다.');
         } finally {
             setLoading(false);
         }
@@ -251,6 +253,7 @@ const ResearchPage: React.FC = () => {
                     isAllScope ? fetchGyoguList() : Promise.resolve([] as number[]),
                 ]);
                 setRetreatInfo(retreat);
+                document.title = `${retreat.retreat_name} 인원조사`;
                 if (isAllScope) {
                     setGyoguNos(gyoguList);
                 } else {
@@ -258,7 +261,9 @@ const ResearchPage: React.FC = () => {
                     setAllMembers(members);
                 }
             } catch (err: any) {
-                if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
+                if (err?.response?.status === 403) {
+                    setLoadError('접근 권한이 없습니다.');
+                } else if (err?.response?.data?.detail === '활성 수련회가 없습니다.') {
                     setNoRetreat(true);
                 } else {
                     setLoadError('데이터를 불러오지 못했습니다.');
@@ -308,6 +313,13 @@ const ResearchPage: React.FC = () => {
     const members = useMemo(() =>
         groupNo === '' ? allMembers : allMembers.filter((m) => m.group_no === groupNo),
     [allMembers, groupNo]);
+
+    useEffect(() => { setPage(0); }, [gyogu, teamFilter, groupNo]);
+
+    const paginated = useMemo(
+        () => members.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+        [members, page, rowsPerPage],
+    );
 
     const getRow = useCallback((member: ResearchMember): ResearchResponseBody => ({
         ...(member.response ?? {}),
@@ -382,7 +394,7 @@ const ResearchPage: React.FC = () => {
 
     const surveyedCount = members.filter((m) => m.response !== null).length;
 
-    if (loading && !isAllScope) {
+    if (loading && (!isAllScope || !retreatInfo)) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
                 <CircularProgress size={32} />
@@ -399,8 +411,9 @@ const ResearchPage: React.FC = () => {
     }
 
     if (loadError || !retreatInfo) {
+        const isAccessDenied = loadError === '접근 권한이 없습니다.';
         return (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity={isAccessDenied ? 'warning' : 'error'} sx={{ mt: 2 }}>
                 {loadError ?? '데이터를 불러오지 못했습니다.'}
             </Alert>
         );
@@ -408,6 +421,9 @@ const ResearchPage: React.FC = () => {
 
     return (
         <PageWrapper>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 700, textAlign: 'center', color: '#021730' }}>
+                {retreatInfo.retreat_name}
+            </p>
             {/* data_scope=all 교구 미선택 안내 */}
             {isAllScope && gyogu === '' && !noRetreat && (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: '#8c8c8c', fontSize: 15 }}>
@@ -495,7 +511,7 @@ const ResearchPage: React.FC = () => {
                                         조회된 인원이 없습니다.
                                     </Td>
                                 </tr>
-                            ) : members.map((member) => {
+                            ) : paginated.map((member) => {
                                 const row = getRow(member);
                                 return (
                                     <Tr key={member.member_id}>
@@ -550,6 +566,18 @@ const ResearchPage: React.FC = () => {
                     <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
                     <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
                 </CountLabel>
+                <TablePagination
+                    component="div"
+                    count={members.length}
+                    page={page}
+                    onPageChange={(_, p) => setPage(p)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
+                    rowsPerPageOptions={[20, 50, 100]}
+                    labelRowsPerPage="페이지당:"
+                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+                    sx={{ marginLeft: 'auto', '& .MuiTablePagination-toolbar': { minHeight: 36, flexWrap: 'wrap' } }}
+                />
             </Footer>)}
 
             {/* 이탈 확인 다이얼로그 */}

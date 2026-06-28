@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.timezone import now_kst
 from app.models import (
     Leader,
     Member,
@@ -254,7 +255,7 @@ def bulk_sync_accounts(db: Session, all_leader_member_ids: List[int], active_mem
         if a.member_id is not None
     }
     alphabet = string.ascii_letters + string.digits
-    now = datetime.utcnow()
+    now = now_kst()
     created = []
     deactivated_count = 0
 
@@ -308,7 +309,7 @@ def bulk_create_leader_accounts(db: Session, member_ids: List[int], data_scope: 
 
     alphabet = string.ascii_letters + string.digits
     result = []
-    now = datetime.utcnow()
+    now = now_kst()
 
     for member, _ in rows:
         login_id = member.phone_number.replace("-", "")

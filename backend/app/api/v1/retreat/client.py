@@ -52,6 +52,7 @@ def get_research_members(
     return svc_get_research_members(
         db,
         data_scope=payload["data_scope"],
+        gyogu=payload.get("gyogu"),
         team=payload.get("team"),
         group_no=payload.get("group_no"),
         query_group_no=group_no,
@@ -127,6 +128,7 @@ def get_suspended_meal_members(
     return svc_get_suspended_meal_members(
         db,
         data_scope=payload["data_scope"],
+        gyogu=payload.get("gyogu"),
         team=payload.get("team"),
         group_no=payload.get("group_no"),
         query_gyogu=gyogu,

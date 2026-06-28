@@ -11,13 +11,14 @@ export interface BusInfo {
 }
 
 export interface RetreatInfo {
-    retreat_id:      number;
-    retreat_name:    string;
-    start_date:      string;
-    end_date:        string;
-    fee_with_bus:    number;
-    fee_without_bus: number;
-    buses:           BusInfo[];
+    retreat_id:           number;
+    retreat_name:         string;
+    start_date:           string;
+    end_date:             string;
+    fee_with_bus:         number;
+    fee_without_bus:      number;
+    suspended_meal_count: number;
+    buses:                BusInfo[];
 }
 
 export type FeeType = 'bus' | 'lodging_only' | null;

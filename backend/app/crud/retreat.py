@@ -15,6 +15,7 @@ from app.schemas.retreat import (
     ResearchResponseUpdate, VehicleSubmitBody, SuspendedMealSubmitBody,
 )
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.timezone import now_kst
 
 
 def get_active_retreat(db: Session) -> RetreatCustom | None:
@@ -140,6 +141,7 @@ def get_research_members(
     db: Session,
     retreat_id: int,
     data_scope: str,
+    gyogu: Optional[int],
     team: Optional[int],
     group_no: Optional[int],
     query_group_no: Optional[int] = None,
@@ -159,10 +161,16 @@ def get_research_members(
         .filter(Member.deleted_at.is_(None))
     )
     if data_scope == "team":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
         q = q.filter(MemberProfile.team == team)
         if query_group_no is not None:
             q = q.filter(MemberProfile.group_no == query_group_no)
     elif data_scope == "group":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
+        if team is not None:
+            q = q.filter(MemberProfile.team == team)
         q = q.filter(MemberProfile.group_no == group_no)
     elif data_scope == "all":
         if query_gyogu is not None:
@@ -325,12 +333,14 @@ def upsert_vehicle_response(
     db: Session, retreat_id: int, member_id: int, body: VehicleSubmitBody
 ) -> None:
     existing = get_vehicle_response(db, retreat_id, member_id)
-    now = datetime.datetime.utcnow()
+    now = now_kst()
     if existing:
         existing.day1_bus = json.dumps(body.day1_bus)
         existing.day2_bus = json.dumps(body.day2_bus)
         existing.day3_bus = json.dumps(body.day3_bus)
         existing.day4_bus = json.dumps(body.day4_bus)
+        if existing.bus_created_at is None:
+            existing.bus_created_at = now
         existing.bus_updated_at = now
     else:
         db.add(RetreatResponse(
@@ -351,6 +361,7 @@ def upsert_vehicle_response(
 def get_suspended_meal_members(
     db: Session,
     data_scope: str,
+    gyogu: Optional[int],
     team: Optional[int],
     group_no: Optional[int],
     query_gyogu: Optional[int] = None,
@@ -365,8 +376,14 @@ def get_suspended_meal_members(
         .filter(Member.deleted_at.is_(None))
     )
     if data_scope == "team":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
         q = q.filter(MemberProfile.team == team)
     elif data_scope == "group":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
+        if team is not None:
+            q = q.filter(MemberProfile.team == team)
         q = q.filter(MemberProfile.group_no == group_no)
     elif data_scope == "all":
         if query_gyogu is not None:
@@ -389,9 +406,7 @@ def get_admin_suspended_meal_list(
         db.query(SuspendedMealApplication, Member)
         .join(Member, Member.member_id == SuspendedMealApplication.member_id)
     )
-    if review_status == 'PENDING':
-        q = q.filter(SuspendedMealApplication.review_status.is_(None))
-    elif review_status in ('APPROVED', 'REJECTED'):
+    if review_status in ('PENDING', 'APPROVED', 'REJECTED'):
         q = q.filter(SuspendedMealApplication.review_status == review_status)
 
     total = q.count()
@@ -406,7 +421,7 @@ def get_admin_suspended_meal_list(
 
 def get_admin_suspended_meal_stats(db: Session):
     total    = db.query(SuspendedMealApplication).count()
-    pending  = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status.is_(None)).count()
+    pending  = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'PENDING').count()
     approved = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'APPROVED').count()
     rejected = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'REJECTED').count()
     return total, pending, approved, rejected
@@ -424,7 +439,7 @@ def review_suspended_meal(
         raise NotFoundError("신청을 찾을 수 없습니다.")
     app.review_status  = review_status
     app.review_comment = review_comment
-    app.reviewed_at    = datetime.datetime.utcnow()
+    app.reviewed_at    = now_kst()
     db.commit()
     return app
 
@@ -437,18 +452,22 @@ def upsert_suspended_meal(
         .filter(SuspendedMealApplication.member_id == member_id)
         .first()
     )
+    is_empty = body.meal_count == 0 and not body.fee_support
     if existing:
         if existing.review_status in ("APPROVED", "REJECTED"):
             raise ConflictError("이미 처리된 신청은 수정할 수 없습니다.")
-        existing.meal_count = body.meal_count
-        existing.fee_support = 1 if body.fee_support else 0
-        existing.applicant_reason = body.applicant_reason if body.fee_support else None
-    else:
+        if is_empty:
+            db.delete(existing)
+        else:
+            existing.meal_count = body.meal_count
+            existing.fee_support = 1 if body.fee_support else 0
+            existing.applicant_reason = body.applicant_reason
+    elif not is_empty:
         db.add(SuspendedMealApplication(
             member_id=member_id,
             meal_count=body.meal_count,
             fee_support=1 if body.fee_support else 0,
-            applicant_reason=body.applicant_reason if body.fee_support else None,
-            applied_at=datetime.datetime.utcnow(),
+            applicant_reason=body.applicant_reason,
+            applied_at=now_kst(),
         ))
     db.commit()
