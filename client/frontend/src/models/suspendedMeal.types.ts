@@ -1,14 +1,15 @@
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface SuspendedMealApplication {
-    application_id:   number;
-    meal_count:       number;
-    fee_support:      boolean;
-    applicant_reason: string | null;
-    applied_at:       string;
-    review_status: ReviewStatus;
-    review_comment:   string | null;
-    reviewed_at:      string | null;
+    application_id:    number;
+    meal_count:        number;
+    special_meal_count: number;
+    fee_support:       boolean;
+    applicant_reason:  string | null;
+    applied_at:        string;
+    review_status:     ReviewStatus;
+    review_comment:    string | null;
+    reviewed_at:       string | null;
 }
 
 export interface SuspendedMealMember {
@@ -23,13 +24,15 @@ export interface SuspendedMealMember {
 }
 
 export interface SuspendedMealDraft {
-    meal_count:       number;
-    fee_support:      boolean;
-    applicant_reason: string;
+    meal_count:         number;
+    special_meal_count: number;
+    fee_support:        boolean;
+    applicant_reason:   string;
 }
 
 export interface SuspendedMealSubmitBody {
-    meal_count:       number;
-    fee_support:      boolean;
-    applicant_reason: string | null;
+    meal_count:         number;
+    special_meal_count: number;
+    fee_support:        boolean;
+    applicant_reason:   string | null;
 }

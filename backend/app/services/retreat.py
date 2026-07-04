@@ -5,7 +5,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import BusCustom
+from app.models import BusCustom, BusWaiting, MemberProfile
+from sqlalchemy import func as sa_func
 from app.schemas.retreat import (
     BusCreate, BusIdResponse, BusResponse,
     RetreatCreate, RetreatUpdate,
@@ -16,7 +17,7 @@ from app.schemas.retreat import (
     BusDashboardItem, VehicleDashboardResponse,
     RetreatDayHeadcount, RetreatHeadcountResponse,
     RetreatAccommodationDayData, RetreatAccommodationResponse,
-    VehicleMyResponse, VehicleSubmitBody,
+    VehicleMyResponse, VehicleSubmitBody, VehicleSubmitResponse, FullBusInfo,
     SuspendedMealMemberResponse, SuspendedMealApplicationItem, SuspendedMealSubmitBody,
     AdminSuspendedMealItem, AdminSuspendedMealListResponse,
     AdminSuspendedMealStats, AdminSuspendedMealReviewRequest,
@@ -38,6 +39,11 @@ from app.crud.retreat import (
     get_vehicle_response as crud_get_vehicle_response,
     get_member_with_profile as crud_get_member_with_profile,
     upsert_vehicle_response as crud_upsert_vehicle_response,
+    get_full_buses as crud_get_full_buses,
+    upsert_bus_waiting as crud_upsert_bus_waiting,
+    get_bus_waiting_list as crud_get_bus_waiting_list,
+    register_bus_selections as crud_register_bus_selections,
+    get_bus_registration_list as crud_get_bus_registration_list,
     get_suspended_meal_members as crud_get_suspended_meal_members,
     upsert_suspended_meal as crud_upsert_suspended_meal,
     get_admin_suspended_meal_list as crud_get_admin_suspended_meal_list,
@@ -85,6 +91,8 @@ def svc_get_active_retreat(db: Session) -> RetreatActiveResponse:
         fee_without_bus=retreat.fee_without_bus,
         meal_price=retreat.meal_price,
         suspended_meal_count=retreat.suspended_meal_count,
+        special_meal_name=retreat.special_meal_name,
+        special_meal_price=retreat.special_meal_price,
         buses=[_bus_to_response(b) for b in buses],
     )
 
@@ -100,6 +108,8 @@ def svc_create_retreat(db: Session, body: RetreatCreate) -> RetreatCreateRespons
         fee_without_bus=retreat.fee_without_bus,
         meal_price=retreat.meal_price,
         suspended_meal_count=retreat.suspended_meal_count,
+        special_meal_name=retreat.special_meal_name,
+        special_meal_price=retreat.special_meal_price,
     )
 
 
@@ -376,6 +386,7 @@ def svc_get_vehicle_member_list(
     db: Session,
     gyogu: Optional[int],
     team: Optional[int],
+    bus_id: Optional[int] = None,
 ) -> List[VehicleMemberListItem]:
     retreat = crud_get_active_retreat(db)
     if not retreat:
@@ -416,6 +427,13 @@ def svc_get_vehicle_member_list(
         return False
 
     num_days = (retreat.end_date - retreat.start_date).days + 1
+
+    # 단일 버스 필터 시 registered_at 조회용 맵 생성
+    reg_map: dict[int, str] = {}
+    if bus_id:
+        for reg in crud_get_bus_registration_list(db, bus_id):
+            reg_map[reg.member_id] = reg.registered_at.strftime("%Y-%m-%dT%H:%M:%S")
+
     result = []
     for member, profile, response in rows:
         has_response = _has_any_bus(response)
@@ -429,11 +447,42 @@ def svc_get_vehicle_member_list(
             group_no=profile.group_no,
             phone=member.phone_number,
             has_response=has_response,
+            registered_at=reg_map.get(member.member_id) if bus_id else None,
             day1_bus=_resolve_buses(response.day1_bus if response else None, has_response),
             day2_bus=_resolve_buses(response.day2_bus if response else None, has_response),
             day3_bus=_resolve_buses(response.day3_bus if response else None, has_response),
             day4_bus=_resolve_buses(response.day4_bus if response else None, has_response),
         ))
+
+    if bus_id:
+        # 확정자: registered_at 오름차순 정렬 (없는 경우 맨 뒤)
+        result.sort(key=lambda x: x.registered_at or "9999")
+        waiting_rows = crud_get_bus_waiting_list(db, bus_id)
+        for rank, (waiting, member) in enumerate(waiting_rows, start=1):
+            latest_sq = (
+                db.query(MemberProfile.member_id, sa_func.max(MemberProfile.profile_id).label("max_id"))
+                .group_by(MemberProfile.member_id)
+                .subquery()
+            )
+            profile = (
+                db.query(MemberProfile)
+                .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_id)
+                .filter(MemberProfile.member_id == member.member_id)
+                .first()
+            )
+            result.append(VehicleMemberListItem(
+                member_id=member.member_id,
+                member_name=member.name,
+                generation=member.generation,
+                gender=member.gender,
+                gyogu=profile.gyogu if profile else 0,
+                team=profile.team if profile else 0,
+                group_no=profile.group_no if profile else 0,
+                phone=member.phone_number,
+                has_response=True,
+                waiting_number=rank,
+            ))
+
     return VehicleMemberListResponse(num_days=num_days, members=result)
 
 
@@ -468,11 +517,46 @@ def svc_get_vehicle_my(db: Session, member_id: int) -> VehicleMyResponse:
     )
 
 
-def svc_submit_vehicle(db: Session, member_id: int, body: VehicleSubmitBody) -> None:
+def svc_submit_vehicle(db: Session, member_id: int, body: VehicleSubmitBody) -> VehicleSubmitResponse:
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    crud_upsert_vehicle_response(db, retreat.retreat_custom_id, member_id, body)
+
+    all_bus_ids = list({id for day in (body.day1_bus, body.day2_bus, body.day3_bus, body.day4_bus) for id in day})
+    full_bus_ids = crud_get_full_buses(db, all_bus_ids)
+
+    if full_bus_ids and not body.accept_waiting:
+        full_buses = [
+            FullBusInfo(
+                bus_id=b.bus_id,
+                bus_name=b.bus_name,
+                departure_time=_time_to_hhmm(b.departure_time),
+            )
+            for b in db.query(BusCustom).filter(BusCustom.bus_id.in_(full_bus_ids)).all()
+        ]
+        return VehicleSubmitResponse(waiting_required=True, full_buses=full_buses)
+
+    normal_bus_ids = [id for id in all_bus_ids if id not in full_bus_ids]
+    waiting_bus_ids = full_bus_ids if body.accept_waiting else []
+
+    def filter_day(ids: list[int]) -> list[int]:
+        return [id for id in ids if id in normal_bus_ids]
+
+    normal_body = VehicleSubmitBody(
+        day1_bus=filter_day(body.day1_bus),
+        day2_bus=filter_day(body.day2_bus),
+        day3_bus=filter_day(body.day3_bus),
+        day4_bus=filter_day(body.day4_bus),
+    )
+    crud_upsert_vehicle_response(db, retreat.retreat_custom_id, member_id, normal_body)
+    if normal_bus_ids:
+        crud_register_bus_selections(db, normal_bus_ids, member_id)
+
+    waiting_numbers: dict[int, int] = {}
+    if waiting_bus_ids:
+        waiting_numbers = crud_upsert_bus_waiting(db, waiting_bus_ids, member_id)
+
+    return VehicleSubmitResponse(waiting_numbers=waiting_numbers)
 
 
 # ── 서스펜디드밀 ───────────────────────────────────────────────────────────────
@@ -497,6 +581,7 @@ def svc_get_suspended_meal_members(
             app_item = SuspendedMealApplicationItem(
                 application_id=app.application_id,
                 meal_count=app.meal_count,
+                special_meal_count=app.special_meal_count,
                 fee_support=bool(app.fee_support),
                 applicant_reason=app.applicant_reason,
                 applied_at=app.applied_at.isoformat() if app.applied_at else "",
@@ -537,7 +622,11 @@ def svc_get_admin_suspended_meal_list(
             application_id=app.application_id,
             member_id=app.member_id,
             member_name=member.name,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
             meal_count=app.meal_count,
+            special_meal_count=app.special_meal_count,
             fee_support=bool(app.fee_support),
             applicant_reason=app.applicant_reason,
             applied_at=app.applied_at.isoformat() if app.applied_at else "",
@@ -545,7 +634,7 @@ def svc_get_admin_suspended_meal_list(
             review_comment=app.review_comment,
             reviewed_at=app.reviewed_at.isoformat() if app.reviewed_at else None,
         )
-        for app, member in rows
+        for app, member, profile in rows
     ]
     return AdminSuspendedMealListResponse(items=items, total=total)
 

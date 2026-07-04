@@ -5,7 +5,8 @@ import { DataTable } from '@components/common/DataTable';
 import { Select } from '@components/common/Select';
 import type { Column } from '@components/common/DataTable/DataTable.types';
 import type { BusInfo, VehicleMemberListItem } from '@/models/retreat.types';
-import { fetchVehicleMemberList } from '@/api/retreat';
+import { fetchVehicleMemberList, getActiveRetreat } from '@/api/retreat';
+import type { RetreatActiveResponse } from '@/models/retreat.types';
 
 const DAY_BUS_KEYS = ['day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'] as const;
 
@@ -137,10 +138,11 @@ const downloadCsv = (filename: string, rows: string[][]) => {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const RetreatVehicleListPage: React.FC = () => {
-  const [members, setMembers] = useState<VehicleMemberListItem[]>([]);
-  const [numDays, setNumDays] = useState(3);
-  const [gyogu,          setGyogu]          = useState('');
-  const [team,           setTeam]           = useState('');
+  const [members,      setMembers]      = useState<VehicleMemberListItem[]>([]);
+  const [numDays,      setNumDays]      = useState(3);
+  const [retreat,      setRetreat]      = useState<RetreatActiveResponse | null>(null);
+  const [gyogu,        setGyogu]        = useState('');
+  const [team,         setTeam]         = useState('');
   const [busType,      setBusType]      = useState('');
   const [busName,      setBusName]      = useState('');
   const [surveyStatus, setSurveyStatus] = useState('');
@@ -150,16 +152,26 @@ const RetreatVehicleListPage: React.FC = () => {
 
   useEffect(() => { setPage(0); }, [gyogu, team, busType, busName, surveyStatus]);
 
+  // busName 단일 선택 시 해당 bus_id 파악
+  const selectedBusId = useMemo(() => {
+    if (!busName || !retreat) return undefined;
+    return retreat.buses.find((b) => b.bus_name === busName)?.bus_id;
+  }, [busName, retreat]);
+
+  useEffect(() => {
+    getActiveRetreat().then(setRetreat).catch(() => {});
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    fetchVehicleMemberList()
+    fetchVehicleMemberList({ bus_id: selectedBusId })
       .then((data) => {
         setMembers(data.members);
         setNumDays(data.num_days);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedBusId]);
 
   const gyoguOptions = useMemo(() => {
     const gyogus = [...new Set(members.map((m) => m.gyogu))].sort((a, b) => a - b);
@@ -206,7 +218,27 @@ const RetreatVehicleListPage: React.FC = () => {
       width: 180,
       render: makeRenderBus(key, busType, busName),
     }));
+    const waitingCol: Column<VehicleMemberListItem>[] = selectedBusId ? [
+      {
+        id: 'waiting_number',
+        label: '예비',
+        align: 'center' as const,
+        width: 70,
+        render: (v: number | null) => v != null
+          ? <span style={{ fontWeight: 600, color: '#fa8c16' }}>예비 {v}</span>
+          : <span style={{ color: '#d9d9d9' }}>—</span>,
+      },
+      {
+        id: 'registered_at',
+        label: '신청 시각',
+        align: 'center' as const,
+        width: 130,
+        render: (v: string | null) =>
+          v ? <span>{v.replace('T', ' ')}</span> : <span style={{ color: '#d9d9d9' }}>—</span>,
+      },
+    ] : [];
     return [
+      ...waitingCol,
       { id: 'gyogu',       label: '교구', align: 'center', width: 80,  render: (v) => `${v}교구` },
       { id: 'team',        label: '팀',   align: 'center', width: 60,  render: (v) => `${v}팀` },
       { id: 'group_no',    label: '그룹', align: 'center', width: 70,  render: (v) => `${v}그룹` },
@@ -215,7 +247,7 @@ const RetreatVehicleListPage: React.FC = () => {
       { id: 'member_name', label: '이름', align: 'left',   width: 90 },
       ...dayColumns,
     ];
-  }, [busType, busName, numDays]);
+  }, [busType, busName, numDays, selectedBusId]);
 
   const filtered = useMemo(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
@@ -233,9 +265,22 @@ const RetreatVehicleListPage: React.FC = () => {
     return true;
   }), [members, gyogu, team, surveyStatus, busType, busName, numDays]);
 
+  const sorted = useMemo(() => {
+    if (!selectedBusId) return filtered;
+    return [...filtered].sort((a, b) => {
+      // 대기자(예비)는 확정자 뒤에
+      if (a.waiting_number != null && b.waiting_number == null) return 1;
+      if (a.waiting_number == null && b.waiting_number != null) return -1;
+      // 대기자끼리는 예비 번호 순
+      if (a.waiting_number != null && b.waiting_number != null) return a.waiting_number - b.waiting_number;
+      // 확정자끼리는 신청 시각 오름차순
+      return (a.registered_at ?? '9999') < (b.registered_at ?? '9999') ? -1 : 1;
+    });
+  }, [filtered, selectedBusId]);
+
   const paginated = useMemo(
-    () => filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
-    [filtered, page, rowsPerPage],
+    () => sorted.slice(page * rowsPerPage, (page + 1) * rowsPerPage),
+    [sorted, page, rowsPerPage],
   );
 
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
@@ -250,15 +295,34 @@ const RetreatVehicleListPage: React.FC = () => {
 
   const handleDownload = () => {
     const dayLabels = Array.from({ length: numDays }, (_, i) => `${i + 1}일차`);
-    const header = ['교구', '팀', '그룹', '기수', '성별', '이름', '전화번호', ...dayLabels];
-    const rows = filtered.map((m) => [
-      `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name, m.phone ?? '',
-      ...DAY_BUS_KEYS.slice(0, numDays).map((k) => {
+    const baseHeader = ['교구', '팀', '그룹', '기수', '성별', '이름', '전화번호', ...dayLabels];
+    const header = selectedBusId ? ['예비', '신청 시각', ...baseHeader] : baseHeader;
+    const rows = sorted.map((m) => {
+      const dayCells = DAY_BUS_KEYS.slice(0, numDays).map((k) => {
         const buses = filterBuses(m[k], busType, busName);
         if (!m.has_response) return '';
         return buses.length === 0 ? '신청 안 함' : buses.map((b) => `${b.bus_name} ${b.departure_time}`).join(' / ');
-      }),
-    ]);
+      });
+      const baseRow = [
+        `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name, m.phone ?? '',
+        ...dayCells,
+      ];
+      if (selectedBusId) {
+        const waitingCell = m.waiting_number != null ? `예비 ${m.waiting_number}` : '';
+        const regCell = m.registered_at
+          ? (() => {
+              const d = new Date(m.registered_at);
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mi = String(d.getMinutes()).padStart(2, '0');
+              return `${mm}/${dd} ${hh}:${mi}`;
+            })()
+          : '';
+        return [waitingCell, regCell, ...baseRow];
+      }
+      return baseRow;
+    });
     downloadCsv('차량조사_명단.csv', [header, ...rows]);
   };
 

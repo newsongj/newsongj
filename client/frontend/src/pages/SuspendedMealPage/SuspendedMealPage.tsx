@@ -18,7 +18,7 @@ const getStatusConfig = (status: ReviewStatus | 'none') => {
     if (status === 'none')      return { label: '미신청',   color: '#8c8c8c', bg: '#f0f0f0' };
     if (status === 'PENDING')   return { label: '승인 대기', color: '#faad14', bg: '#FCF2E6' };
     if (status === 'APPROVED')  return { label: '승인',     color: '#52c41a', bg: '#E1FCEF' };
-    return                             { label: '반려',     color: '#ff4d4f', bg: '#FAF0F3' };
+    return                             { label: '미승인',     color: '#ff4d4f', bg: '#FAF0F3' };
 };
 
 const BadgeChip = styled('span')<{ $color: string; $bg: string }>(({ $color, $bg }) => ({
@@ -313,9 +313,10 @@ const SuspendedMealPage: React.FC = () => {
         const override = drafts.get(member.member_id);
         if (override) return override;
         return {
-            meal_count:       member.application?.meal_count       ?? 0,
-            fee_support:      member.application?.fee_support       ?? false,
-            applicant_reason: member.application?.applicant_reason ?? '',
+            meal_count:         member.application?.meal_count         ?? 0,
+            special_meal_count: member.application?.special_meal_count ?? 0,
+            fee_support:        member.application?.fee_support        ?? false,
+            applicant_reason:   member.application?.applicant_reason   ?? '',
         };
     }, [drafts]);
 
@@ -324,9 +325,10 @@ const SuspendedMealPage: React.FC = () => {
             const next = new Map(prev);
             const member = allMembers.find((m) => m.member_id === memberId);
             const cur = next.get(memberId) ?? {
-                meal_count:       member?.application?.meal_count       ?? 0,
-                fee_support:      member?.application?.fee_support       ?? false,
-                applicant_reason: member?.application?.applicant_reason ?? '',
+                meal_count:         member?.application?.meal_count         ?? 0,
+                special_meal_count: member?.application?.special_meal_count ?? 0,
+                fee_support:        member?.application?.fee_support        ?? false,
+                applicant_reason:   member?.application?.applicant_reason   ?? '',
             };
             next.set(memberId, { ...cur, ...patch });
             return next;
@@ -334,13 +336,14 @@ const SuspendedMealPage: React.FC = () => {
     }, [members]);
 
     const canSubmit = useCallback((member: SuspendedMealMember): boolean => {
-        const { meal_count, fee_support, applicant_reason } = getDraft(member);
+        const { meal_count, special_meal_count, fee_support, applicant_reason } = getDraft(member);
         if (!member.application) {
-            return meal_count !== 0 || fee_support;
+            return meal_count !== 0 || special_meal_count !== 0 || fee_support;
         }
         const app = member.application;
         return (
             meal_count !== app.meal_count ||
+            special_meal_count !== app.special_meal_count ||
             fee_support !== app.fee_support ||
             applicant_reason !== (app.applicant_reason ?? '')
         );
@@ -354,9 +357,10 @@ const SuspendedMealPage: React.FC = () => {
         const draft = getDraft(allMembers.find((m) => m.member_id === memberId)!);
         try {
             await submitSuspendedMeal(memberId, {
-                meal_count:       draft.meal_count,
-                fee_support:      draft.fee_support,
-                applicant_reason: draft.applicant_reason || null,
+                meal_count:         draft.meal_count,
+                special_meal_count: draft.special_meal_count,
+                fee_support:        draft.fee_support,
+                applicant_reason:   draft.applicant_reason || null,
             });
             setDrafts((prev) => { const next = new Map(prev); next.delete(memberId); return next; });
             await loadMembers(gyogu === '' ? undefined : gyogu as number, teamFilter === '' ? undefined : teamFilter as number);
@@ -377,6 +381,13 @@ const SuspendedMealPage: React.FC = () => {
         const max = retreatInfo?.suspended_meal_count ?? 5;
         return Array.from({ length: max + 1 }, (_, n) => ({ value: n, label: `${n}끼` }));
     }, [retreatInfo]);
+
+    const specialMealOptions: SelectOption[] = useMemo(() => [
+        { value: 0, label: '0끼' },
+        { value: 1, label: '1끼' },
+    ], []);
+
+    const hasSpecialMeal = !!retreatInfo?.special_meal_name;
 
     const totalCount   = members.length;
     const appliedCount = members.filter((m) => m.application !== null).length;
@@ -462,6 +473,7 @@ const SuspendedMealPage: React.FC = () => {
                                 <Th>성별</Th>
                                 <Th>이름</Th>
                                 <Th>식사수</Th>
+                                {hasSpecialMeal && <Th>{retreatInfo!.special_meal_name}</Th>}
                                 <Th>회비지원</Th>
                                 <Th>신청사유</Th>
                                 <Th>상태</Th>
@@ -471,7 +483,7 @@ const SuspendedMealPage: React.FC = () => {
                         <tbody>
                             {members.length === 0 ? (
                                 <tr>
-                                    <Td colSpan={11} style={{ padding: 40, color: '#8c8c8c' }}>
+                                    <Td colSpan={hasSpecialMeal ? 12 : 11} style={{ padding: 40, color: '#8c8c8c' }}>
                                         조회된 인원이 없습니다.
                                     </Td>
                                 </tr>
@@ -507,6 +519,20 @@ const SuspendedMealPage: React.FC = () => {
                                                 width={80}
                                             />
                                         </Td>
+
+                                        {/* 특가 끼니 */}
+                                        {hasSpecialMeal && (
+                                            <Td>
+                                                <Select
+                                                    size="small"
+                                                    value={draft.special_meal_count}
+                                                    options={specialMealOptions}
+                                                    onChange={(v) => updateDraft(member.member_id, { special_meal_count: Number(v) })}
+                                                    disabled={reviewed}
+                                                    width={80}
+                                                />
+                                            </Td>
+                                        )}
 
                                         {/* 회비지원 */}
                                         <Td>

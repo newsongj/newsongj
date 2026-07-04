@@ -306,7 +306,7 @@ export const StyledHelperText = styled('div', {
   fontWeight: 600,
   color: $error
     ? theme.custom.colors.on.error
-    : theme.custom.colors.text.high,
+    : theme.custom.colors.text.medium,
   opacity: 1,
 
   ...$disabled && {

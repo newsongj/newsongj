@@ -33,6 +33,9 @@ interface BasicForm {
   lodgingFare: string;
   mealPrice: string;
   suspendedMealCount: string;
+  hasSpecialMeal: boolean;
+  specialMealName: string;
+  specialMealPrice: string;
 }
 
 const DEFAULT_BUS: Omit<LocalBus, 'localId'> = {
@@ -239,6 +242,7 @@ const RetreatEditPage: React.FC = () => {
   const [form, setForm] = useState<BasicForm>({
     retreatName: '', startDate: '', endDate: '',
     busFare: '', lodgingFare: '', mealPrice: '', suspendedMealCount: '',
+    hasSpecialMeal: false, specialMealName: '', specialMealPrice: '',
   });
   const [buses, setBuses] = useState<LocalBus[]>([]);
   const [deletedBusIds, setDeletedBusIds] = useState<number[]>([]);
@@ -260,6 +264,9 @@ const RetreatEditPage: React.FC = () => {
           lodgingFare: r.fee_without_bus.toLocaleString('ko-KR'),
           mealPrice: r.meal_price.toLocaleString('ko-KR'),
           suspendedMealCount: String(r.suspended_meal_count),
+          hasSpecialMeal: !!r.special_meal_name,
+          specialMealName: r.special_meal_name ?? '',
+          specialMealPrice: r.special_meal_price != null ? r.special_meal_price.toLocaleString('ko-KR') : '',
         };
         const loadedBuses = sortBuses(r.buses.map(serverBusToLocal));
         setRetreatId(r.retreat_id);
@@ -281,7 +288,7 @@ const RetreatEditPage: React.FC = () => {
   const updateField = (field: keyof BasicForm, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
 
-  const updateCurrency = (field: 'busFare' | 'lodgingFare' | 'mealPrice', value: string) =>
+  const updateCurrency = (field: 'busFare' | 'lodgingFare' | 'mealPrice' | 'specialMealPrice', value: string) =>
     setForm((p) => ({ ...p, [field]: fmtCurrency(value) }));
 
   const dayOptions = useMemo(() => {
@@ -342,6 +349,9 @@ const RetreatEditPage: React.FC = () => {
       lodgingFare: form.lodgingFare ? `${form.lodgingFare}원` : '—',
       mealPrice: form.mealPrice ? `${form.mealPrice}원` : '—',
       suspendedMealCount: form.suspendedMealCount ? `${form.suspendedMealCount}끼` : '—',
+      specialMeal: form.hasSpecialMeal && form.specialMealName
+        ? `${form.specialMealName} / ${form.specialMealPrice || '—'}원`
+        : '없음',
       buses: buses.length > 0 ? `${buses.length}대 (${breakdown})` : '—',
       deletedCount: deletedBusIds.length,
     };
@@ -374,6 +384,8 @@ const RetreatEditPage: React.FC = () => {
         fee_without_bus: Number(parseCurrency(form.lodgingFare) || 0),
         meal_price: Number(parseCurrency(form.mealPrice) || 0),
         suspended_meal_count: Number(form.suspendedMealCount || 0),
+        special_meal_name: form.hasSpecialMeal && form.specialMealName.trim() ? form.specialMealName.trim() : null,
+        special_meal_price: form.hasSpecialMeal && form.specialMealPrice ? Number(parseCurrency(form.specialMealPrice)) : null,
       });
       await Promise.all(deletedBusIds.map((id) => deleteBus(id)));
       await Promise.all(
@@ -400,6 +412,9 @@ const RetreatEditPage: React.FC = () => {
         lodgingFare: r.fee_without_bus.toLocaleString('ko-KR'),
         mealPrice: r.meal_price.toLocaleString('ko-KR'),
         suspendedMealCount: String(r.suspended_meal_count),
+        hasSpecialMeal: !!r.special_meal_name,
+        specialMealName: r.special_meal_name ?? '',
+        specialMealPrice: r.special_meal_price != null ? r.special_meal_price.toLocaleString('ko-KR') : '',
       };
       const refreshedBuses = sortBuses(r.buses.map(serverBusToLocal));
       setForm(refreshedForm);
@@ -472,11 +487,53 @@ const RetreatEditPage: React.FC = () => {
               placeholder="예: 20,000" fullWidth />
             <TextField label="한 끼 가격" value={form.mealPrice}
               onChange={(e) => updateCurrency('mealPrice', e.target.value)}
-              placeholder="예: 7,000" fullWidth />
+              placeholder="예: 7,000" fullWidth
+              helperText={form.hasSpecialMeal ? '특가가 아닌 일반 끼니 단가' : undefined} />
             <TextField label="총 끼니 수" type="number" min="0"
               value={form.suspendedMealCount}
               onChange={(e) => updateField('suspendedMealCount', e.target.value.replace(/[^\d]/g, ''))}
-              placeholder="예: 5" fullWidth />
+              placeholder="예: 5" fullWidth
+              helperText={form.hasSpecialMeal ? '특가 끼니를 제외한 전체 끼니 수' : undefined} />
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 14, color: '#595959' }}>특가 끼니</span>
+                <div style={{ display: 'flex', borderRadius: 8, border: '1px solid #d9d9d9', overflow: 'hidden' }}>
+                  {(['없음', '있음'] as const).map((opt) => {
+                    const active = opt === '있음' ? form.hasSpecialMeal : !form.hasSpecialMeal;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setForm((p) => ({
+                          ...p,
+                          hasSpecialMeal: opt === '있음',
+                          ...(opt === '없음' ? { specialMealName: '', specialMealPrice: '' } : {}),
+                        }))}
+                        style={{
+                          padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                          background: active ? '#021730' : '#fff',
+                          color: active ? '#fff' : '#595959',
+                          transition: 'all 0.15s',
+                        }}
+                      >{opt}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              {form.hasSpecialMeal && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <TextField label="특가 끼니 이름" value={form.specialMealName}
+                    onChange={(e) => updateField('specialMealName', e.target.value)}
+                    placeholder="예: 목요점심" maxLength={10} fullWidth
+                    trailingIcon={<span style={{ fontSize: 11, color: form.specialMealName.length >= 10 ? '#ff4d4f' : '#8c8c8c', whiteSpace: 'nowrap' }}>{form.specialMealName.length}/10</span>}
+                    helperText={form.specialMealName.length >= 10 ? '최대 10자까지 입력 가능합니다.' : undefined}
+                    error={form.specialMealName.length >= 10} />
+                  <TextField label="특가 끼니 단가" value={form.specialMealPrice}
+                    onChange={(e) => updateCurrency('specialMealPrice', e.target.value)}
+                    placeholder="예: 3,000" fullWidth />
+                </div>
+              )}
+            </div>
           </FormGrid>
         </InputsCard>
       </FormSection>
@@ -548,6 +605,7 @@ const RetreatEditPage: React.FC = () => {
           <SummaryItem><SummaryLabel>버스 미탑승 + 숙박</SummaryLabel><SummaryValue>{summary.lodgingFare}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>한 끼 가격</SummaryLabel><SummaryValue>{summary.mealPrice}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>서스펜디드밀 총 끼니 수</SummaryLabel><SummaryValue>{summary.suspendedMealCount}</SummaryValue></SummaryItem>
+          <SummaryItem><SummaryLabel>특가 끼니</SummaryLabel><SummaryValue>{summary.specialMeal}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>등록 버스</SummaryLabel><SummaryValue>{summary.buses}</SummaryValue></SummaryItem>
           {summary.deletedCount > 0 && (
             <SummaryItem>

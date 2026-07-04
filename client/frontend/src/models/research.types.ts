@@ -18,6 +18,8 @@ export interface RetreatInfo {
     fee_with_bus:         number;
     fee_without_bus:      number;
     suspended_meal_count: number;
+    special_meal_name:    string | null;
+    special_meal_price:   number | null;
     buses:                BusInfo[];
 }
 
