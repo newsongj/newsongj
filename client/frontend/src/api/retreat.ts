@@ -16,10 +16,23 @@ export interface VehicleMyResponse {
 }
 
 export interface VehicleSubmitBody {
-    day1_bus: number[];
-    day2_bus: number[];
-    day3_bus: number[];
-    day4_bus: number[];
+    day1_bus:       number[];
+    day2_bus:       number[];
+    day3_bus:       number[];
+    day4_bus:       number[];
+    accept_waiting?: boolean;
+}
+
+export interface FullBusInfo {
+    bus_id:         number;
+    bus_name:       string;
+    departure_time: string;
+}
+
+export interface VehicleSubmitResponse {
+    waiting_required: boolean;
+    full_buses:       FullBusInfo[];
+    waiting_numbers:  Record<number, number>;
 }
 
 export const fetchRetreatInfo = () =>
@@ -40,7 +53,7 @@ export const fetchVehicleMy = () =>
     apiClient.get<VehicleMyResponse>('/vehicle/my').then((r) => r.data);
 
 export const submitVehicle = (body: VehicleSubmitBody) =>
-    apiClient.post('/vehicle', body).then((r) => r.data);
+    apiClient.post<VehicleSubmitResponse>('/vehicle', body).then((r) => r.data);
 
 export const fetchSuspendedMealMembers = (params?: { gyogu?: number; team?: number }) =>
     apiClient.get<SuspendedMealMember[]>('/retreat/suspended-meal/members', {

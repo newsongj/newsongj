@@ -72,8 +72,13 @@ export async function fetchResearchList(): Promise<ResearchListResponse> {
   return get<ResearchListResponse>('/api/retreat/research/list');
 }
 
-export async function fetchVehicleMemberList(): Promise<VehicleMemberListResponse> {
-  return get<VehicleMemberListResponse>('/api/retreat/vehicle-members');
+export async function fetchVehicleMemberList(params?: { gyogu?: number; team?: number; bus_id?: number }): Promise<VehicleMemberListResponse> {
+  const query = new URLSearchParams();
+  if (params?.gyogu)  query.set('gyogu',  String(params.gyogu));
+  if (params?.team)   query.set('team',   String(params.team));
+  if (params?.bus_id) query.set('bus_id', String(params.bus_id));
+  const qs = query.toString();
+  return get<VehicleMemberListResponse>(`/api/retreat/vehicle-members${qs ? `?${qs}` : ''}`);
 }
 
 // ── 수련회 차량조사 ───────────────────────────────────────────────────────────
@@ -87,7 +92,6 @@ export async function fetchRetreatVehicle(): Promise<VehicleDashboardData> {
 export async function fetchRetreatAccommodation(params?: {
   gyogu_no?: number;
   team_no?: number;
-  is_imwondan?: boolean;
 }): Promise<RetreatAccommodationResponse> {
   return get<RetreatAccommodationResponse>('/api/retreat/accommodation', params);
 }

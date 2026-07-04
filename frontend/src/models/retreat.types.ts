@@ -6,7 +6,11 @@ export interface SuspendedMealApplication {
   application_id: number;
   member_id: number;
   member_name: string;
+  gyogu: number;
+  team: number;
+  group_no: number;
   meal_count: number;
+  special_meal_count: number;
   fee_support: boolean;
   applicant_reason: string | null;
   applied_at: string;
@@ -86,6 +90,8 @@ export interface VehicleMemberListItem {
   group_no: number;
   phone: string | null;
   has_response: boolean;
+  waiting_number: number | null;
+  registered_at: string | null;
   day1_bus: BusInfo[] | null;
   day2_bus: BusInfo[] | null;
   day3_bus: BusInfo[] | null;
@@ -201,6 +207,8 @@ export interface RetreatActiveResponse {
   fee_without_bus: number;
   meal_price: number;
   suspended_meal_count: number;
+  special_meal_name:  string | null;
+  special_meal_price: number | null;
   buses: BusResponse[];
 }
 
@@ -212,6 +220,8 @@ export interface RetreatCreateBody {
   fee_without_bus: number;
   meal_price: number;
   suspended_meal_count: number;
+  special_meal_name:  string | null;
+  special_meal_price: number | null;
 }
 
 export type RetreatUpdateBody = RetreatCreateBody;
@@ -234,4 +244,6 @@ export interface RetreatCreateResponse {
   fee_without_bus: number;
   meal_price: number;
   suspended_meal_count: number;
+  special_meal_name:  string | null;
+  special_meal_price: number | null;
 }

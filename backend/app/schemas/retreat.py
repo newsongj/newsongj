@@ -31,6 +31,8 @@ class RetreatCreate(BaseModel):
     fee_without_bus: int
     meal_price: int
     suspended_meal_count: int = 0
+    special_meal_name:  Optional[str] = None
+    special_meal_price: Optional[int] = None
 
 
 class RetreatUpdate(BaseModel):
@@ -41,6 +43,8 @@ class RetreatUpdate(BaseModel):
     fee_without_bus: int
     meal_price: int
     suspended_meal_count: int = 0
+    special_meal_name:  Optional[str] = None
+    special_meal_price: Optional[int] = None
 
 
 class RetreatCreateResponse(BaseModel):
@@ -52,6 +56,8 @@ class RetreatCreateResponse(BaseModel):
     fee_without_bus: int
     meal_price: int
     suspended_meal_count: int
+    special_meal_name:  Optional[str] = None
+    special_meal_price: Optional[int] = None
 
 
 class RetreatActiveResponse(RetreatCreateResponse):
@@ -107,23 +113,37 @@ class VehicleMyResponse(BaseModel):
 
 
 class VehicleSubmitBody(BaseModel):
-    day1_bus: List[int] = []
-    day2_bus: List[int] = []
-    day3_bus: List[int] = []
-    day4_bus: List[int] = []
+    day1_bus:       List[int] = []
+    day2_bus:       List[int] = []
+    day3_bus:       List[int] = []
+    day4_bus:       List[int] = []
+    accept_waiting: bool = False
+
+
+class FullBusInfo(BaseModel):
+    bus_id:         int
+    bus_name:       str
+    departure_time: str
+
+
+class VehicleSubmitResponse(BaseModel):
+    waiting_required: bool = False
+    full_buses:       List[FullBusInfo] = []
+    waiting_numbers:  dict[int, int] = {}   # bus_id → 예비 번호 (대기 확정 후)
 
 
 # ── 서스펜디드밀 ───────────────────────────────────────────────────────────────
 
 class SuspendedMealApplicationItem(BaseModel):
-    application_id:   int
-    meal_count:       int
-    fee_support:      bool
-    applicant_reason: Optional[str] = None
-    applied_at:       str
-    review_status:    str
-    review_comment:   Optional[str] = None
-    reviewed_at:      Optional[str] = None
+    application_id:    int
+    meal_count:        int
+    special_meal_count: int = 0
+    fee_support:       bool
+    applicant_reason:  Optional[str] = None
+    applied_at:        str
+    review_status:     str
+    review_comment:    Optional[str] = None
+    reviewed_at:       Optional[str] = None
 
 
 class SuspendedMealMemberResponse(BaseModel):
@@ -138,24 +158,29 @@ class SuspendedMealMemberResponse(BaseModel):
 
 
 class SuspendedMealSubmitBody(BaseModel):
-    meal_count:       int
-    fee_support:      bool
-    applicant_reason: Optional[str] = None
+    meal_count:         int
+    special_meal_count: int = 0
+    fee_support:        bool
+    applicant_reason:   Optional[str] = None
 
 
 # ── 서스펜디드밀 관리자 ──────────────────────────────────────────────────────────
 
 class AdminSuspendedMealItem(BaseModel):
-    application_id:   int
-    member_id:        int
-    member_name:      str
-    meal_count:       int
-    fee_support:      bool
-    applicant_reason: Optional[str] = None
-    applied_at:       str
-    review_status:    str
-    review_comment:   Optional[str] = None
-    reviewed_at:      Optional[str] = None
+    application_id:    int
+    member_id:         int
+    member_name:       str
+    gyogu:             int
+    team:              int
+    group_no:          int
+    meal_count:        int
+    special_meal_count: int = 0
+    fee_support:       bool
+    applicant_reason:  Optional[str] = None
+    applied_at:        str
+    review_status:     str
+    review_comment:    Optional[str] = None
+    reviewed_at:       Optional[str] = None
 
 
 class AdminSuspendedMealListResponse(BaseModel):
@@ -211,19 +236,21 @@ class VehicleListBusInfo(BaseModel):
 
 
 class VehicleMemberListItem(BaseModel):
-    member_id:    int
-    member_name:  str
-    generation:   int
-    gender:       str
-    gyogu:        int
-    team:         int
-    group_no:     int
-    phone:        Optional[str] = None
-    has_response: bool
-    day1_bus:     Optional[List[VehicleListBusInfo]] = None
-    day2_bus:     Optional[List[VehicleListBusInfo]] = None
-    day3_bus:     Optional[List[VehicleListBusInfo]] = None
-    day4_bus:     Optional[List[VehicleListBusInfo]] = None
+    member_id:      int
+    member_name:    str
+    generation:     int
+    gender:         str
+    gyogu:          int
+    team:           int
+    group_no:       int
+    phone:          Optional[str] = None
+    has_response:   bool
+    waiting_number: Optional[int] = None    # 단일 버스 필터 시에만 채워짐
+    registered_at:  Optional[str] = None    # 단일 버스 필터 시에만 채워짐
+    day1_bus:       Optional[List[VehicleListBusInfo]] = None
+    day2_bus:       Optional[List[VehicleListBusInfo]] = None
+    day3_bus:       Optional[List[VehicleListBusInfo]] = None
+    day4_bus:       Optional[List[VehicleListBusInfo]] = None
 
 
 class VehicleMemberListResponse(BaseModel):

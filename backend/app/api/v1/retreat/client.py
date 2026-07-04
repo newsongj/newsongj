@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.security import require_menu, verify_token
 from app.schemas.retreat import (
     ResearchMemberResponse, ResearchResponseUpdate,
-    VehicleMyResponse, VehicleSubmitBody,
+    VehicleMyResponse, VehicleSubmitBody, VehicleSubmitResponse,
     SuspendedMealMemberResponse, SuspendedMealSubmitBody,
 )
 from app.crud.retreat import get_distinct_gyogu_list
@@ -104,13 +104,12 @@ def submit_vehicle(
     body: VehicleSubmitBody,
     payload: dict = Depends(require_menu("user.vehicle")),
     db: Session = Depends(get_db),
-):
+) -> VehicleSubmitResponse:
     member_id = payload.get("member_id")
     if not member_id:
-        from fastapi import HTTPException, status
+        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="계정이 회원과 연결되어 있지 않습니다.")
-    svc_submit_vehicle(db, member_id, body)
-    return {"ok": True}
+    return svc_submit_vehicle(db, member_id, body)
 
 
 @router.get(

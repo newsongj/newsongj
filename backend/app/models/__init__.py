@@ -90,9 +90,11 @@ class RetreatCustom(Base):
     end_date             = Column(Date, nullable=False)
     bus_types            = Column(Text, nullable=True)   # JSON, 레거시
     meal_price           = Column(Integer, nullable=False, default=0)
+    suspended_meal_count = Column(SmallInteger, nullable=False, default=0)
+    special_meal_name    = Column(String(50), nullable=True)
+    special_meal_price   = Column(Integer, nullable=True)
     fee_with_bus         = Column(Integer, nullable=False, default=0)
     fee_without_bus      = Column(Integer, nullable=False, default=0)
-    suspended_meal_count = Column(SmallInteger, nullable=False, default=0)
     is_active            = Column(SmallInteger, nullable=False, default=1)
     created_at           = Column(DateTime, nullable=False, default=now_kst)
     updated_at           = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
@@ -108,6 +110,24 @@ class BusCustom(Base):
     departure_time  = Column(Time, nullable=False)
     departure_place = Column(String(100), nullable=False)
     arrival_place   = Column(String(100), nullable=False)
+
+
+class BusWaiting(Base):
+    __tablename__ = "bus_waiting"
+
+    waiting_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    bus_id     = Column(BigInteger, nullable=False)
+    member_id  = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=now_kst)
+
+
+class MemberBusRegistration(Base):
+    __tablename__ = "member_bus_registration"
+
+    id            = Column(BigInteger, primary_key=True, autoincrement=True)
+    bus_id        = Column(BigInteger, nullable=False)
+    member_id     = Column(BigInteger, nullable=False)
+    registered_at = Column(DateTime, nullable=False, default=now_kst)
 
 
 class AttendanceRecord(Base):
@@ -143,12 +163,13 @@ class RetreatResponse(Base):
 class SuspendedMealApplication(Base):
     __tablename__ = "suspended_meal_application"
 
-    application_id   = Column(BigInteger, primary_key=True, autoincrement=True)
-    member_id        = Column(BigInteger, nullable=False)
-    meal_count       = Column(SmallInteger, nullable=False, default=0)
-    fee_support      = Column(SmallInteger, nullable=False, default=0)
-    applicant_reason = Column(String(500), nullable=True)
-    applied_at       = Column(DateTime, nullable=False)
-    review_status    = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
-    review_comment   = Column(String(500), nullable=True)
-    reviewed_at      = Column(DateTime, nullable=True)
+    application_id      = Column(BigInteger, primary_key=True, autoincrement=True)
+    member_id           = Column(BigInteger, nullable=False)
+    meal_count          = Column(SmallInteger, nullable=False, default=0)
+    special_meal_count  = Column(SmallInteger, nullable=False, default=0)
+    fee_support         = Column(SmallInteger, nullable=False, default=0)
+    applicant_reason    = Column(String(500), nullable=True)
+    applied_at          = Column(DateTime, nullable=False)
+    review_status       = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
+    review_comment      = Column(String(500), nullable=True)
+    reviewed_at         = Column(DateTime, nullable=True)

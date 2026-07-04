@@ -538,12 +538,10 @@ const VehicleTab: React.FC = () => {
 // ── 숙소/야식 인원 탭 ────────────────────────────────────────────────────────
 
 const GYOGU_OPTIONS = [
-  { value: '',        label: '전체 교구' },
-  { value: '1',       label: '1교구' },
-  { value: '2',       label: '2교구' },
-  { value: '3',       label: '3교구' },
-  { value: '임원단',  label: '임원단' },
-  { value: '준비위원', label: '준비위원' },
+  { value: '',  label: '전체 교구' },
+  { value: '1', label: '1교구' },
+  { value: '2', label: '2교구' },
+  { value: '3', label: '3교구' },
 ];
 
 const TEAM_OPTIONS = [
@@ -572,13 +570,11 @@ const AccommodationTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const isSpecialGroup = gyogu === '임원단' || gyogu === '준비위원';
-    const gyogu_no = gyogu && !isSpecialGroup ? Number(gyogu) : undefined;
-    const is_imwondan = gyogu === '임원단' ? true : undefined;
-    const team_no = team ? Number(team) : undefined;
+    const gyogu_no = gyogu ? Number(gyogu) : undefined;
+    const team_no  = team  ? Number(team)  : undefined;
 
     setLoading(true);
-    fetchRetreatAccommodation({ gyogu_no, team_no, is_imwondan })
+    fetchRetreatAccommodation({ gyogu_no, team_no })
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -621,7 +617,7 @@ const AccommodationTab: React.FC = () => {
           value={team}
           options={TEAM_OPTIONS}
           onChange={(v) => setTeam(String(v))}
-          disabled={!gyogu || gyogu === '임원단' || gyogu === '준비위원'}
+          disabled={!gyogu}
           width={100}
         />
       </FilterRow>

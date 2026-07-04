@@ -427,6 +427,12 @@ const VehiclePage: React.FC = () => {
     }
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
 
+    interface WaitingDialog {
+        fullBuses: import('@api/retreat').FullBusInfo[];
+        pendingBody: import('@api/retreat').VehicleSubmitBody;
+    }
+    const [waitingDialog, setWaitingDialog] = useState<WaitingDialog | null>(null);
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -568,24 +574,43 @@ const VehiclePage: React.FC = () => {
         setConfirmDialog(null);
     }, [confirmDialog]);
 
-    const handleSubmit = useCallback(async () => {
-        if (!retreatInfo) return;
+    const finalizeSubmit = useCallback(async (body: import('@api/retreat').VehicleSubmitBody) => {
         setSubmitting(true);
         try {
-            const body = buildSubmitBody(selections, retreatInfo.start_date);
-            await submitVehicle(body);
+            const res = await submitVehicle(body);
+            if (res.waiting_required) {
+                setWaitingDialog({ fullBuses: res.full_buses, pendingBody: body });
+                return;
+            }
             const submittedAt = new Date().toLocaleString('ko-KR', {
                 year: 'numeric', month: 'numeric', day: 'numeric',
                 hour: 'numeric', minute: '2-digit', hour12: true,
             });
             setHistory({ submittedAt, selections });
-            setSnackbar({ open: true, message: '차량 신청이 완료되었습니다.', severity: 'success' });
+            if (Object.keys(res.waiting_numbers).length > 0) {
+                const nums = Object.values(res.waiting_numbers).join(', ');
+                setSnackbar({ open: true, message: `차량 신청 완료. 일부 버스 대기 신청됨 (예비 ${nums}번)`, severity: 'success' });
+            } else {
+                setSnackbar({ open: true, message: '차량 신청이 완료되었습니다.', severity: 'success' });
+            }
         } catch {
             setSnackbar({ open: true, message: '제출에 실패했습니다. 다시 시도해 주세요.', severity: 'error' });
         } finally {
             setSubmitting(false);
         }
-    }, [retreatInfo, selections]);
+    }, [selections]);
+
+    const handleSubmit = useCallback(async () => {
+        if (!retreatInfo) return;
+        const body = buildSubmitBody(selections, retreatInfo.start_date);
+        await finalizeSubmit(body);
+    }, [retreatInfo, selections, finalizeSubmit]);
+
+    const handleAcceptWaiting = useCallback(async () => {
+        if (!waitingDialog) return;
+        setWaitingDialog(null);
+        await finalizeSubmit({ ...waitingDialog.pendingBody, accept_waiting: true });
+    }, [waitingDialog, finalizeSubmit]);
 
     const closeSnackbar = useCallback(() => setSnackbar((prev) => ({ ...prev, open: false })), []);
 
@@ -782,6 +807,34 @@ const VehiclePage: React.FC = () => {
                 <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
                     <Button variant="outlined" onClick={() => setConfirmDialog(null)}>취소</Button>
                     <Button variant="filled" onClick={handleConfirm}>선택 계속</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 대기 신청 확인 다이얼로그 */}
+            <Dialog
+                open={waitingDialog !== null}
+                onClose={() => setWaitingDialog(null)}
+                PaperProps={{ sx: { borderRadius: 2, minWidth: 300, maxWidth: 440 } }}
+            >
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 700, pb: 1 }}>
+                    만석 안내
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.8' }}>
+                        아래 차량이 만석입니다.
+                        {waitingDialog?.fullBuses.map((b) => (
+                            <span key={b.bus_id} style={{ display: 'block', fontWeight: 600, marginTop: 4 }}>
+                                · {b.bus_name} ({b.departure_time})
+                            </span>
+                        ))}
+                        <span style={{ display: 'block', marginTop: 12 }}>
+                            대기 신청하시겠습니까?
+                        </span>
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setWaitingDialog(null)}>취소</Button>
+                    <Button variant="filled" onClick={handleAcceptWaiting}>대기 신청</Button>
                 </DialogActions>
             </Dialog>
 

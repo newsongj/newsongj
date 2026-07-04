@@ -49,7 +49,6 @@ def get_headcount(db: Session = Depends(get_db)):
 def get_accommodation(
     gyogu_no: Optional[int]  = Query(None),
     team_no:  Optional[int]  = Query(None),
-    is_imwondan: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
 ):
     return svc_get_accommodation(db, gyogu_no, team_no)
@@ -72,11 +71,12 @@ def get_research_list(
 
 @router.get("/vehicle-members", response_model=VehicleMemberListResponse, summary="차량조사 명단 (관리자)", dependencies=[_vehicle_list])
 def get_vehicle_member_list(
-    gyogu: Optional[int] = Query(None),
-    team: Optional[int] = Query(None),
+    gyogu:  Optional[int] = Query(None),
+    team:   Optional[int] = Query(None),
+    bus_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    return svc_get_vehicle_member_list(db, gyogu, team)
+    return svc_get_vehicle_member_list(db, gyogu, team, bus_id)
 
 
 @router.get("/suspended-meal", response_model=AdminSuspendedMealListResponse, summary="서스펜디드밀 신청 목록 (관리자)", dependencies=[_suspended_meal])

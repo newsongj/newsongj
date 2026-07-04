@@ -114,6 +114,8 @@ const downloadCsv = (filename: string, rows: string[][]) => {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const DAY_ATT_KEYS = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
+
 const RetreatResearchListPage: React.FC = () => {
   const [stats,       setStats]       = useState<ResearchListStats | null>(null);
   const [members,     setMembers]     = useState<ResearchMemberListItem[]>([]);
@@ -172,8 +174,6 @@ const RetreatResearchListPage: React.FC = () => {
     [filtered, page, rowsPerPage],
   );
 
-  const DAY_ATT_KEYS = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
-
   const columns = useMemo((): Column<ResearchMemberListItem>[] => {
     const dayColumns: Column<ResearchMemberListItem>[] = DAY_ATT_KEYS.slice(0, numDays).map((key, i) => ({
       id: key,
@@ -221,8 +221,6 @@ const RetreatResearchListPage: React.FC = () => {
     setTeam('');
   };
 
-  const DAY_ATT_KEYS_ALL = ['day1_attendance', 'day2_attendance', 'day3_attendance', 'day4_attendance'] as const;
-
   const handleDownload = () => {
     const dayLabels = Array.from({ length: numDays }, (_, i) => `${i + 1}일차`);
     const header = ['교구', '팀', '그룹', '기수', '성별', '이름', ...dayLabels, '회비납부'];
@@ -233,7 +231,7 @@ const RetreatResearchListPage: React.FC = () => {
     };
     const rows = filtered.map((m) => [
       `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name,
-      ...DAY_ATT_KEYS_ALL.slice(0, numDays).map((k) => m[k] ?? ''),
+      ...DAY_ATT_KEYS.slice(0, numDays).map((k) => m[k] ?? ''),
       m.has_response ? feeLabel(m.fee_type) : '',
     ]);
     downloadCsv('인원조사_명단.csv', [header, ...rows]);

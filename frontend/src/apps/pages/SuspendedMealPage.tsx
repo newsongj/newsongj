@@ -188,7 +188,7 @@ const STATUS_FILTER_OPTIONS = [
   { value: '', label: '전체' },
   { value: 'PENDING', label: '승인 대기' },
   { value: 'APPROVED', label: '승인' },
-  { value: 'REJECTED', label: '반려' },
+  { value: 'REJECTED', label: '미승인' },
 ];
 
 const formatDateTime = (dateStr: string | null) => {
@@ -207,7 +207,7 @@ const formatWon = (n: number) => n.toLocaleString('ko-KR') + '원';
 const ReviewStatusBadge: React.FC<{ status: ReviewStatus }> = ({ status }) => {
   if (status === 'PENDING')  return <Badge variant="warning">승인 대기</Badge>;
   if (status === 'APPROVED') return <Badge variant="success">승인</Badge>;
-  return <Badge variant="error">반려</Badge>;
+  return <Badge variant="error">미승인</Badge>;
 };
 
 const SuspendedMealPage: React.FC = () => {
@@ -296,7 +296,7 @@ const SuspendedMealPage: React.FC = () => {
           })
         )
       );
-      const label = nextStatus === 'APPROVED' ? '승인' : '반려';
+      const label = nextStatus === 'APPROVED' ? '승인' : '미승인';
       showSnackbar(
         targetIds.length > 1
           ? `${targetIds.length}건이 ${label} 처리되었습니다.`
@@ -323,6 +323,9 @@ const SuspendedMealPage: React.FC = () => {
 
   const columns = [
     { id: 'member_name', label: '신청자', minWidth: 100 },
+    { id: 'gyogu',    label: '교구', minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}교구` },
+    { id: 'team',     label: '팀',   minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}팀` },
+    { id: 'group_no', label: '그룹', minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}그룹` },
     {
       id: 'meal_count',
       label: '식사 끼니',
@@ -410,7 +413,7 @@ const SuspendedMealPage: React.FC = () => {
           iconBgColor="#dcfce7"
         />
         <StatCard
-          label="반려"
+          label="미승인"
           value={stats ? `${stats.rejected}건` : '-'}
           change=""
           isPositive={false}
@@ -442,7 +445,7 @@ const SuspendedMealPage: React.FC = () => {
             disabled={selectedIds.length === 0}
             onClick={openBulkModal}
           >
-            반려
+            미승인
           </Button>
         </FilterActions>
       </FilterRow>
@@ -484,7 +487,7 @@ const SuspendedMealPage: React.FC = () => {
               onClick={() => handleSubmitReview('REJECTED')}
               disabled={submitting}
             >
-              반려
+              미승인
             </Button>
             <Button
               variant="filled"
@@ -502,6 +505,10 @@ const SuspendedMealPage: React.FC = () => {
               <InfoRow>
                 <InfoLabel>신청자</InfoLabel>
                 <InfoValue>{selectedItem.member_name}</InfoValue>
+              </InfoRow>
+              <InfoRow>
+                <InfoLabel>소속</InfoLabel>
+                <InfoValue>{selectedItem.gyogu}교구 {selectedItem.team}팀 {selectedItem.group_no}그룹</InfoValue>
               </InfoRow>
               <InfoRow>
                 <InfoLabel>신청 시각</InfoLabel>
@@ -531,14 +538,19 @@ const SuspendedMealPage: React.FC = () => {
 
             <InfoRow>
               <InfoLabel>코멘트</InfoLabel>
-              <TextField
-                value={reviewComment}
-                onChange={(e) => setReviewComment(e.target.value)}
-                multiline
-                rows={3}
-                placeholder="승인/반려 코멘트를 입력하세요"
-                fullWidth
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#c0392b', opacity: 0.75 }}>
+                  미승인 시 코멘트는 신청자에게 표시됩니다. 승인 시에는 표시되지 않습니다.
+                </span>
+                <TextField
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  multiline
+                  rows={3}
+                  placeholder="승인/미승인 코멘트를 입력하세요"
+                  fullWidth
+                />
+              </div>
             </InfoRow>
 
             {retreatInfo && (
@@ -549,6 +561,12 @@ const SuspendedMealPage: React.FC = () => {
                     <span>끼니 금액 ({selectedItem.meal_count}끼 × {formatWon(retreatInfo.meal_price)})</span>
                     <span>{formatWon(selectedItem.meal_count * retreatInfo.meal_price)}</span>
                   </CalcRow>
+                  {retreatInfo.special_meal_name && selectedItem.special_meal_count > 0 && (
+                    <CalcRow>
+                      <span>{retreatInfo.special_meal_name} ({selectedItem.special_meal_count}끼 × {formatWon(retreatInfo.special_meal_price ?? 0)})</span>
+                      <span>{formatWon(selectedItem.special_meal_count * (retreatInfo.special_meal_price ?? 0))}</span>
+                    </CalcRow>
+                  )}
                   {selectedItem.fee_support && (
                     <CalcRow>
                       <span>버스 회비 지원</span>
@@ -561,6 +579,7 @@ const SuspendedMealPage: React.FC = () => {
                     <span>
                       {formatWon(
                         selectedItem.meal_count * retreatInfo.meal_price +
+                        selectedItem.special_meal_count * (retreatInfo.special_meal_price ?? 0) +
                         (selectedItem.fee_support ? retreatInfo.fee_with_bus : 0)
                       )}
                     </span>

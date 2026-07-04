@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
-    BusCustom, Member, MemberProfile,
+    BusCustom, BusWaiting, Member, MemberBusRegistration, MemberProfile,
     RetreatCustom, RetreatResponse, SuspendedMealApplication,
 )
 from app.schemas.retreat import (
@@ -50,6 +50,8 @@ def create_retreat(db: Session, data: RetreatCreate) -> RetreatCustom:
         fee_without_bus=data.fee_without_bus,
         meal_price=data.meal_price,
         suspended_meal_count=data.suspended_meal_count,
+        special_meal_name=data.special_meal_name,
+        special_meal_price=data.special_meal_price,
     )
     db.add(retreat)
     db.commit()
@@ -68,6 +70,8 @@ def update_retreat(db: Session, retreat_id: int, data: RetreatUpdate) -> Retreat
     retreat.fee_without_bus = data.fee_without_bus
     retreat.meal_price = data.meal_price
     retreat.suspended_meal_count = data.suspended_meal_count
+    retreat.special_meal_name = data.special_meal_name
+    retreat.special_meal_price = data.special_meal_price
     db.commit()
     db.refresh(retreat)
     return retreat
@@ -329,6 +333,49 @@ def get_member_with_profile(
     return member, None
 
 
+def get_bus_passenger_count(db: Session, bus_id: int) -> int:
+    """해당 버스를 선택한 확정 탑승자 수."""
+    bus = db.query(BusCustom).filter(BusCustom.bus_id == bus_id).first()
+    if not bus:
+        return 0
+    count = 0
+    responses = db.query(RetreatResponse).filter(
+        RetreatResponse.retreat_custom_id == db.query(BusCustom.bus_id).filter(
+            BusCustom.bus_id == bus_id
+        ).scalar_subquery()
+    ).all()
+    for r in db.query(RetreatResponse).all():
+        for col in ('day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'):
+            ids = json.loads(getattr(r, col) or '[]')
+            if bus_id in ids:
+                count += 1
+                break
+    return count
+
+
+def get_full_buses(db: Session, bus_ids: list[int]) -> list[int]:
+    """bus_ids 중 만석인 버스 id 목록 반환."""
+    full = []
+    for bus_id in bus_ids:
+        bus = db.query(BusCustom).filter(BusCustom.bus_id == bus_id).first()
+        if not bus:
+            continue
+        confirmed = (
+            db.query(func.count())
+            .select_from(RetreatResponse)
+            .filter(
+                RetreatResponse.day1_bus.contains(str(bus_id)) |
+                RetreatResponse.day2_bus.contains(str(bus_id)) |
+                RetreatResponse.day3_bus.contains(str(bus_id)) |
+                RetreatResponse.day4_bus.contains(str(bus_id))
+            )
+            .scalar()
+        )
+        if confirmed >= bus.seat_count:
+            full.append(bus_id)
+    return full
+
+
 def upsert_vehicle_response(
     db: Session, retreat_id: int, member_id: int, body: VehicleSubmitBody
 ) -> None:
@@ -354,6 +401,68 @@ def upsert_vehicle_response(
             bus_updated_at=now,
         ))
     db.commit()
+
+
+def register_bus_selections(db: Session, bus_ids: list[int], member_id: int) -> None:
+    """신규 버스 선택만 member_bus_registration에 INSERT (이미 있으면 스킵)."""
+    for bus_id in bus_ids:
+        exists = (
+            db.query(MemberBusRegistration)
+            .filter(MemberBusRegistration.bus_id == bus_id, MemberBusRegistration.member_id == member_id)
+            .first()
+        )
+        if not exists:
+            db.add(MemberBusRegistration(bus_id=bus_id, member_id=member_id))
+    db.commit()
+
+
+def get_bus_registration_list(db: Session, bus_id: int) -> list:
+    """버스별 신청자 목록 (registered_at 오름차순)."""
+    return (
+        db.query(MemberBusRegistration)
+        .filter(MemberBusRegistration.bus_id == bus_id)
+        .order_by(MemberBusRegistration.registered_at)
+        .all()
+    )
+
+
+def upsert_bus_waiting(db: Session, bus_ids: list[int], member_id: int) -> dict[int, int]:
+    """대기 등록 후 bus_id → 예비 번호 반환."""
+    result = {}
+    for bus_id in bus_ids:
+        existing = (
+            db.query(BusWaiting)
+            .filter(BusWaiting.bus_id == bus_id, BusWaiting.member_id == member_id)
+            .first()
+        )
+        if not existing:
+            db.add(BusWaiting(bus_id=bus_id, member_id=member_id))
+            db.flush()
+        rank = (
+            db.query(func.count())
+            .filter(
+                BusWaiting.bus_id == bus_id,
+                BusWaiting.waiting_id <= db.query(BusWaiting.waiting_id)
+                    .filter(BusWaiting.bus_id == bus_id, BusWaiting.member_id == member_id)
+                    .scalar_subquery()
+            )
+            .scalar()
+        )
+        result[bus_id] = rank
+    db.commit()
+    return result
+
+
+def get_bus_waiting_list(db: Session, bus_id: int) -> list[tuple]:
+    """버스 대기자 목록 (waiting_id 오름차순 = 예비 순서)."""
+    rows = (
+        db.query(BusWaiting, Member)
+        .join(Member, Member.member_id == BusWaiting.member_id)
+        .filter(BusWaiting.bus_id == bus_id)
+        .order_by(BusWaiting.waiting_id)
+        .all()
+    )
+    return rows
 
 
 # ── 서스펜디드밀 ───────────────────────────────────────────────────────────────
@@ -402,9 +511,16 @@ def get_admin_suspended_meal_list(
     page: int,
     size: int,
 ):
+    latest_sq = (
+        db.query(MemberProfile.member_id, func.max(MemberProfile.profile_id).label("max_id"))
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
     q = (
-        db.query(SuspendedMealApplication, Member)
+        db.query(SuspendedMealApplication, Member, MemberProfile)
         .join(Member, Member.member_id == SuspendedMealApplication.member_id)
+        .join(latest_sq, latest_sq.c.member_id == SuspendedMealApplication.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
     )
     if review_status in ('PENDING', 'APPROVED', 'REJECTED'):
         q = q.filter(SuspendedMealApplication.review_status == review_status)
@@ -452,7 +568,7 @@ def upsert_suspended_meal(
         .filter(SuspendedMealApplication.member_id == member_id)
         .first()
     )
-    is_empty = body.meal_count == 0 and not body.fee_support
+    is_empty = body.meal_count == 0 and body.special_meal_count == 0 and not body.fee_support
     if existing:
         if existing.review_status in ("APPROVED", "REJECTED"):
             raise ConflictError("이미 처리된 신청은 수정할 수 없습니다.")
@@ -460,12 +576,14 @@ def upsert_suspended_meal(
             db.delete(existing)
         else:
             existing.meal_count = body.meal_count
+            existing.special_meal_count = body.special_meal_count
             existing.fee_support = 1 if body.fee_support else 0
             existing.applicant_reason = body.applicant_reason
     elif not is_empty:
         db.add(SuspendedMealApplication(
             member_id=member_id,
             meal_count=body.meal_count,
+            special_meal_count=body.special_meal_count,
             fee_support=1 if body.fee_support else 0,
             applicant_reason=body.applicant_reason,
             applied_at=now_kst(),
