@@ -252,9 +252,10 @@ const RetreatVehicleListPage: React.FC = () => {
   const filtered = useMemo(() => members.filter((m) => {
     if (gyogu && String(m.gyogu) !== gyogu) return false;
     if (team  && String(m.team)  !== team)  return false;
-    if (surveyStatus === 'done'    && !m.has_response) return false;
-    if (surveyStatus === 'pending' &&  m.has_response) return false;
+    if (surveyStatus === 'done'    && !m.has_response && m.waiting_number == null) return false;
+    if (surveyStatus === 'pending' &&  m.has_response && m.waiting_number == null) return false;
     if (busType || busName) {
+      if (m.waiting_number != null) return true; // 대기자는 이미 해당 버스 필터로 조회된 행
       const allBuses = (DAY_BUS_KEYS.slice(0, numDays).map((k) => m[k]).filter(Boolean) as BusInfo[][]).flat();
       if (!allBuses.some((bus) => {
         const typeMatch = !busType || bus.bus_name.startsWith(busType);

@@ -10,7 +10,7 @@ import type {
 } from '@models/vehicle.types';
 import type { BusInfo } from '@models/research.types';
 import { fetchRetreatInfo, fetchVehicleMy, submitVehicle } from '@api/retreat';
-import type { VehicleMyResponse } from '@api/retreat';
+import type { VehicleMyResponse, WaitingBusInfo } from '@api/retreat';
 
 // ─── 상수 ──────────────────────────────────────────────────────────────────────
 
@@ -103,13 +103,15 @@ const buildSelectionsFromIds = (
 ): VehicleSelections => {
     const busById = new Map(buses.map((b) => [b.bus_id, b]));
     const selections: VehicleSelections = {};
-    const allIds = [
+
+    // 확정 버스
+    const confirmedIds = [
         ...vehicleData.day1_bus,
         ...vehicleData.day2_bus,
         ...vehicleData.day3_bus,
         ...vehicleData.day4_bus,
     ];
-    for (const busId of allIds) {
+    for (const busId of confirmedIds) {
         const bus = busById.get(busId);
         if (!bus) continue;
         const busType = getBusType(bus.bus_name);
@@ -122,6 +124,25 @@ const buildSelectionsFromIds = (
         };
         selections[busType] = [...((selections[busType] as BusMultiSelections) ?? []), slot];
     }
+
+    // 대기(예비) 버스 — 이미 선택된 버스와 중복 제외
+    const confirmedSet = new Set(confirmedIds);
+    for (const w of (vehicleData.waiting_buses ?? [])) {
+        if (confirmedSet.has(w.bus_id)) continue;
+        const bus = busById.get(w.bus_id);
+        if (!bus) continue;
+        const busType = getBusType(bus.bus_name);
+        if (!busType) continue;
+        const slot: BusSlot = {
+            bus_id: bus.bus_id,
+            bus_name: bus.bus_name,
+            departure_time: bus.departure_time,
+            departure_date: bus.departure_date,
+            is_waiting: true,
+        };
+        selections[busType] = [...((selections[busType] as BusMultiSelections) ?? []), slot];
+    }
+
     return selections;
 };
 
@@ -165,6 +186,7 @@ interface UserForm { gyogu: string | number; team: string | number; name: string
 interface SubmissionRecord {
     submittedAt: string;
     selections: VehicleSelections;
+    waitingBuses: WaitingBusInfo[];
 }
 
 // ─── Helpers (선택 내역 요약) ─────────────────────────────────────────────────
@@ -360,20 +382,26 @@ const SlotGrid = styled('div')(({ theme }) => ({
     },
 }));
 
-const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ theme, $selected, $none }) => ({
+const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean; $waiting?: boolean }>(({ theme, $selected, $none, $waiting }) => ({
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     padding: '8px 20px', borderRadius: 100,
     border: `2px solid ${
         $none
             ? ($selected ? theme.custom.colors.neutral._70 : theme.custom.colors.neutral._80)
-            : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.primary.outline)
+            : ($waiting && $selected ? '#e65100'
+            : $selected ? theme.custom.colors.primary._500
+            : theme.custom.colors.primary.outline)
     }`,
     backgroundColor: $none
         ? ($selected ? theme.custom.colors.neutral._90 : theme.custom.colors.neutral._99)
-        : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.white),
+        : ($waiting && $selected ? '#fff3e0'
+        : $selected ? theme.custom.colors.primary._500
+        : theme.custom.colors.white),
     color: $none
         ? theme.custom.colors.text.medium
-        : ($selected ? theme.custom.colors.white : theme.custom.colors.text.high),
+        : ($waiting && $selected ? '#e65100'
+        : $selected ? theme.custom.colors.white
+        : theme.custom.colors.text.high),
     fontSize: theme.custom.typography.body1.fontSize, fontWeight: $selected ? 600 : 400,
     cursor: 'pointer', transition: theme.custom.transitions.fast, whiteSpace: 'nowrap',
     '@media (max-width: 480px)': {
@@ -384,8 +412,8 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean }>(({ th
         fontSize: theme.custom.typography.body2.fontSize,
     },
     '&:hover': {
-        borderColor: $none ? theme.custom.colors.neutral._70 : ($selected ? theme.custom.colors.primary._500 : theme.custom.colors.neutral._40),
-        backgroundColor: $none ? theme.custom.colors.neutral._90 : ($selected ? theme.custom.colors.primary._500 : theme.custom.overlay.primary.hover),
+        borderColor: $none ? theme.custom.colors.neutral._70 : ($selected ? ($waiting ? '#e65100' : theme.custom.colors.primary._500) : theme.custom.colors.neutral._40),
+        backgroundColor: $none ? theme.custom.colors.neutral._90 : ($selected ? ($waiting ? '#fff3e0' : theme.custom.colors.primary._500) : theme.custom.overlay.primary.hover),
     },
 }));
 
@@ -433,6 +461,8 @@ const VehiclePage: React.FC = () => {
     }
     const [waitingDialog, setWaitingDialog] = useState<WaitingDialog | null>(null);
 
+    const [waitingResultDialog, setWaitingResultDialog] = useState<WaitingBusInfo[] | null>(null);
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -460,10 +490,11 @@ const VehiclePage: React.FC = () => {
                     vehicleMy.day3_bus.length + vehicleMy.day4_bus.length
                 ) > 0;
 
-                if (vehicleMy.submitted_at && hasSelections) {
+                if (vehicleMy.submitted_at && (hasSelections || vehicleMy.waiting_buses.length > 0)) {
                     setHistory({
                         submittedAt: formatSubmittedAt(vehicleMy.submitted_at),
                         selections: sel,
+                        waitingBuses: vehicleMy.waiting_buses,
                     });
                 }
             } catch (err: any) {
@@ -524,9 +555,16 @@ const VehiclePage: React.FC = () => {
         setActiveDays((prev) => ({ ...prev, [type]: day }));
     }, []);
 
-    const handleSlotSelect = useCallback((type: BusType, bus: BusSlot | null) => {
+    const handleSlotSelect = useCallback((type: BusType, bus: BusSlot | null, dayDate?: string) => {
         if (bus === null) {
-            setSelections((prev) => ({ ...prev, [type]: [] }));
+            if (MULTI_SELECT_TYPES.has(type) && dayDate) {
+                setSelections((prev) => ({
+                    ...prev,
+                    [type]: (prev[type] as BusMultiSelections ?? []).filter((b) => b.departure_date !== dayDate),
+                }));
+            } else {
+                setSelections((prev) => ({ ...prev, [type]: [] }));
+            }
             return;
         }
 
@@ -586,11 +624,12 @@ const VehiclePage: React.FC = () => {
                 year: 'numeric', month: 'numeric', day: 'numeric',
                 hour: 'numeric', minute: '2-digit', hour12: true,
             });
-            setHistory({ submittedAt, selections });
             if (Object.keys(res.waiting_numbers).length > 0) {
-                const nums = Object.values(res.waiting_numbers).join(', ');
-                setSnackbar({ open: true, message: `차량 신청 완료. 일부 버스 대기 신청됨 (예비 ${nums}번)`, severity: 'success' });
+                const updated = await fetchVehicleMy();
+                setHistory({ submittedAt, selections, waitingBuses: updated.waiting_buses ?? [] });
+                setWaitingResultDialog(updated.waiting_buses ?? []);
             } else {
+                setHistory({ submittedAt, selections, waitingBuses: [] });
                 setSnackbar({ open: true, message: '차량 신청이 완료되었습니다.', severity: 'success' });
             }
         } catch {
@@ -614,12 +653,13 @@ const VehiclePage: React.FC = () => {
 
     const closeSnackbar = useCallback(() => setSnackbar((prev) => ({ ...prev, open: false })), []);
 
-    const isSlotSelected = useCallback((type: BusType, bus: BusSlot | null): boolean => {
+    const isSlotSelected = useCallback((type: BusType, bus: BusSlot | null, dayDate?: string): boolean => {
         const sel = selections[type];
         if (bus === null) {
             if (MULTI_SELECT_TYPES.has(type)) {
-                const arr = sel as BusMultiSelections | undefined;
-                return !arr || arr.length === 0;
+                const arr = (sel as BusMultiSelections | undefined) ?? [];
+                if (dayDate) return !arr.some((b) => b.departure_date === dayDate);
+                return arr.length === 0;
             }
             return sel === null || sel === undefined;
         }
@@ -678,6 +718,15 @@ const VehiclePage: React.FC = () => {
                                 </HistoryVehicleText>
                             </HistoryVehicleItem>
                         ))}
+                        {history.waitingBuses.map((w) => (
+                            <HistoryVehicleItem key={`waiting-${w.bus_id}`}>
+                                <VehicleTypeBadge style={{ background: '#fff3e0', color: '#e65100' }}>대기</VehicleTypeBadge>
+                                <HistoryVehicleText>
+                                    {formatBusDate(w.departure_date)} {w.bus_name} {formatTime12h(w.departure_time)}{' '}
+                                    <span style={{ fontWeight: 700, color: '#fa8c16' }}>예비 {w.waiting_number}번</span>
+                                </HistoryVehicleText>
+                            </HistoryVehicleItem>
+                        ))}
                     </HistoryVehicleList>
                 </HistorySection>
             )}
@@ -732,6 +781,12 @@ const VehiclePage: React.FC = () => {
                 const meta      = BUS_TYPE_META[type];
                 const activeDay = getActiveDay(type);
                 const buses     = retreatInfo.vehicles[type]?.[activeDay]?.buses ?? [];
+                const dayIdx    = parseInt(activeDay.replace('day', ''), 10) - 1;
+                const activeDayDate = (() => {
+                    const d = new Date(retreatInfo.start_date);
+                    d.setDate(d.getDate() + dayIdx);
+                    return d.toISOString().slice(0, 10);
+                })();
 
                 const typeVehicle = retreatInfo.vehicles[type] ?? {};
                 const availDayOptions = dayKeys
@@ -756,24 +811,30 @@ const VehiclePage: React.FC = () => {
                         <BusSectionBody>
                             <SlotGrid>
                                 <SlotChip
-                                    $selected={isSlotSelected(type, null)}
+                                    $selected={isSlotSelected(type, null, activeDayDate)}
                                     $none
-                                    onClick={() => handleSlotSelect(type, null)}
+                                    onClick={() => handleSlotSelect(type, null, activeDayDate)}
                                 >
                                     신청 안 함
                                 </SlotChip>
-                                {buses.length > 0 ? buses.map((bus) => (
-                                    <SlotChip
-                                        key={bus.bus_id}
-                                        $selected={isSlotSelected(type, bus)}
-                                        onClick={() => handleSlotSelect(type, bus)}
-                                    >
-                                        {bus.bus_name}
-                                        <SlotTime $selected={isSlotSelected(type, bus)}>
-                                            {formatTime12h(bus.departure_time)}
-                                        </SlotTime>
-                                    </SlotChip>
-                                )) : (
+                                {buses.length > 0 ? buses.map((bus) => {
+                                    const selected = isSlotSelected(type, bus);
+                                    const isWaiting = selected && !!(selections[type] as BusMultiSelections | undefined)?.find((s) => s.bus_id === bus.bus_id)?.is_waiting;
+                                    return (
+                                        <SlotChip
+                                            key={bus.bus_id}
+                                            $selected={selected}
+                                            $waiting={isWaiting}
+                                            onClick={() => handleSlotSelect(type, bus)}
+                                        >
+                                            {bus.bus_name}
+                                            {isWaiting && <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 700 }}>예비</span>}
+                                            <SlotTime $selected={selected}>
+                                                {formatTime12h(bus.departure_time)}
+                                            </SlotTime>
+                                        </SlotChip>
+                                    );
+                                }) : (
                                     <EmptyNote>해당 날짜에 운행하는 차량이 없습니다.</EmptyNote>
                                 )}
                             </SlotGrid>
@@ -793,18 +854,19 @@ const VehiclePage: React.FC = () => {
             <Dialog
                 open={confirmDialog !== null}
                 onClose={() => setConfirmDialog(null)}
-                PaperProps={{ sx: { borderRadius: 2, minWidth: 300, maxWidth: 440 } }}
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 2, maxWidth: 440, mx: 2 } }}
             >
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 700, pb: 1 }}>
                     다중 차량 선택 안내
                 </DialogTitle>
                 <DialogContent>
-                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.6' }}>
-                        같은 날 여러 차량을 신청하면 다른 사람이 탑승하지 못할 수 있습니다.<br />
+                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.7', wordBreak: 'keep-all' }}>
+                        같은 날 여러 차량을 신청하면 다른 사람이 탑승하지 못할 수 있습니다.
                         실제로 탑승하는 경우에만 다중 선택해 주세요.
                     </DialogContentText>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2.5, gap: 1 }}>
                     <Button variant="outlined" onClick={() => setConfirmDialog(null)}>취소</Button>
                     <Button variant="filled" onClick={handleConfirm}>선택 계속</Button>
                 </DialogActions>
@@ -814,27 +876,64 @@ const VehiclePage: React.FC = () => {
             <Dialog
                 open={waitingDialog !== null}
                 onClose={() => setWaitingDialog(null)}
-                PaperProps={{ sx: { borderRadius: 2, minWidth: 300, maxWidth: 440 } }}
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 2, maxWidth: 440, mx: 2 } }}
             >
                 <DialogTitle sx={{ fontSize: '18px', fontWeight: 700, pb: 1 }}>
                     만석 안내
                 </DialogTitle>
                 <DialogContent>
-                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.8' }}>
+                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.8', wordBreak: 'keep-all' }}>
                         아래 차량이 만석입니다.
-                        {waitingDialog?.fullBuses.map((b) => (
-                            <span key={b.bus_id} style={{ display: 'block', fontWeight: 600, marginTop: 4 }}>
-                                · {b.bus_name} ({b.departure_time})
-                            </span>
-                        ))}
-                        <span style={{ display: 'block', marginTop: 12 }}>
-                            대기 신청하시겠습니까?
-                        </span>
+                    </DialogContentText>
+                    {waitingDialog?.fullBuses.map((b) => (
+                        <div key={b.bus_id} style={{ fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+                            · {b.bus_name} ({b.departure_time})
+                        </div>
+                    ))}
+                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.8', wordBreak: 'keep-all', mt: 1.5 }}>
+                        대기 신청하시겠습니까?
                     </DialogContentText>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+                <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2.5, gap: 1 }}>
                     <Button variant="outlined" onClick={() => setWaitingDialog(null)}>취소</Button>
                     <Button variant="filled" onClick={handleAcceptWaiting}>대기 신청</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 대기 신청 완료 — 예비번호 안내 */}
+            <Dialog
+                open={waitingResultDialog !== null}
+                onClose={() => setWaitingResultDialog(null)}
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 2, maxWidth: 440, mx: 2 } }}
+            >
+                <DialogTitle sx={{ fontSize: '18px', fontWeight: 700, pb: 1 }}>
+                    대기 신청 완료
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText sx={{ fontSize: '14px', color: 'rgba(0,0,0,0.87)', lineHeight: '1.7', wordBreak: 'keep-all' }}>
+                        아래 차량에 대기 신청이 완료되었습니다.
+                        <br />
+                        자리가 나면 자동으로 확정됩니다.
+                    </DialogContentText>
+                    <div style={{ marginTop: 12 }}>
+                        {waitingResultDialog?.map((w) => (
+                            <div key={w.bus_id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                                <span style={{
+                                    background: '#fff3e0', color: '#e65100',
+                                    borderRadius: 6, padding: '2px 10px', fontWeight: 700, fontSize: 13,
+                                    whiteSpace: 'nowrap',
+                                }}>
+                                    예비 {w.waiting_number}번
+                                </span>
+                                <span style={{ fontSize: 14, wordBreak: 'keep-all' }}>{formatBusDate(w.departure_date)} {w.bus_name} {formatTime12h(w.departure_time)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+                <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2.5 }}>
+                    <Button variant="filled" onClick={() => setWaitingResultDialog(null)}>확인</Button>
                 </DialogActions>
             </Dialog>
 

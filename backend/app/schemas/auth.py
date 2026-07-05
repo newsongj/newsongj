@@ -21,6 +21,8 @@ class MeResponse(BaseModel):
     user_idx: int
     email: str
     name: str
-    dept_idx: Optional[int] = None
+    dept_idx:    Optional[int] = None
+    data_scope:  Optional[str] = None
+    policy_name: Optional[str] = None
     roles: List[str]
     menus: List[MenuInfo]

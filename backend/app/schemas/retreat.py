@@ -99,17 +99,26 @@ class ResearchResponseUpdate(BaseModel):
 
 # ── 차량조사 ──────────────────────────────────────────────────────────────────
 
+class WaitingBusInfo(BaseModel):
+    bus_id:          int
+    bus_name:        str
+    departure_date:  str
+    departure_time:  str
+    waiting_number:  int
+
+
 class VehicleMyResponse(BaseModel):
-    member_id:    int
-    name:         str
-    gyogu:        Optional[int] = None
-    team:         Optional[int] = None
-    phone:        Optional[str] = None
-    day1_bus:     List[int] = []
-    day2_bus:     List[int] = []
-    day3_bus:     List[int] = []
-    day4_bus:     List[int] = []
-    submitted_at: Optional[datetime.datetime] = None
+    member_id:     int
+    name:          str
+    gyogu:         Optional[int] = None
+    team:          Optional[int] = None
+    phone:         Optional[str] = None
+    day1_bus:      List[int] = []
+    day2_bus:      List[int] = []
+    day3_bus:      List[int] = []
+    day4_bus:      List[int] = []
+    submitted_at:  Optional[datetime.datetime] = None
+    waiting_buses: List[WaitingBusInfo] = []
 
 
 class VehicleSubmitBody(BaseModel):

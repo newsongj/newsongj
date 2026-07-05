@@ -4,7 +4,14 @@ from typing import List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Leader, Member, MemberProfile, PolicyAccessMenu, PolicyDataScope, UserAccount
+from app.models import Leader, Member, MemberProfile, PolicyAccess, PolicyAccessMenu, PolicyDataScope, UserAccount
+
+
+def get_policy_name(db: Session, policy_id: Optional[int]) -> Optional[str]:
+    if not policy_id:
+        return None
+    row = db.query(PolicyAccess).filter(PolicyAccess.policy_id == policy_id).first()
+    return row.policy_name if row else None
 
 
 def get_menus_for_policy(db: Session, policy_id: Optional[int]) -> List[str]:
@@ -62,11 +69,14 @@ def get_leader_names_for_member(db: Session, profile: Optional[MemberProfile]) -
         return []
     if not raw_ids:
         return []
+    numeric_ids = [int(i) for i in raw_ids if i and str(i).lstrip('-').isdigit()]
+    if not numeric_ids:
+        return []
     leaders = {
         row.leader_id: row.leader_name
-        for row in db.query(Leader).filter(Leader.leader_id.in_([int(i) for i in raw_ids if i])).all()
+        for row in db.query(Leader).filter(Leader.leader_id.in_(numeric_ids)).all()
     }
-    return [leaders[int(i)] for i in raw_ids if i and int(i) in leaders]
+    return [leaders[int(i)] for i in raw_ids if str(i).lstrip('-').isdigit() and int(i) in leaders]
 
 
 def get_menus_for_scope(db: Session, data_scope: str) -> List[str]:

@@ -84,15 +84,8 @@ export const useAuth = () => {
     setAccessToken(response.token);
     setPermissions(response.menus);
 
-    const meResponse: MeResponse = {
-      user_idx: 0,
-      email: loginRequest.login_id,
-      name: '관리자',
-      roles: [],
-      menus: response.menus.map((code, i) => ({ menu_idx: i, name: code, code, is_activated: true })),
-      requires_password_change: response.requires_password_change,
-    };
-    setAuth({ isAuthenticated: true, user: meResponse, isLoading: false });
+    const userInfo = await getMe();
+    setAuth({ isAuthenticated: true, user: userInfo, isLoading: false });
 
     return {
       access_token: response.token,

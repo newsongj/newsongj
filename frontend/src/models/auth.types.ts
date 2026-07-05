@@ -24,12 +24,14 @@ export interface MenuInfo {
 }
 
 export interface MeResponse {
-  user_idx: number;
-  email: string;
-  name: string;
-  dept_idx?: number;
-  roles: string[];
-  menus: MenuInfo[];
+  user_idx:    number;
+  email:       string;
+  name:        string;
+  dept_idx?:   number;
+  data_scope?: string;
+  policy_name?: string;
+  roles:       string[];
+  menus:       MenuInfo[];
   requires_password_change: boolean;
 }
 

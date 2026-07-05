@@ -426,17 +426,17 @@ def get_bus_registration_list(db: Session, bus_id: int) -> list:
     )
 
 
-def upsert_bus_waiting(db: Session, bus_ids: list[int], member_id: int) -> dict[int, int]:
-    """대기 등록 후 bus_id → 예비 번호 반환."""
+def upsert_bus_waiting(db: Session, bus_day_pairs: list[tuple[int, int]], member_id: int) -> dict[int, int]:
+    """대기 등록 후 bus_id → 예비 번호 반환. bus_day_pairs = [(bus_id, day_no), ...]"""
     result = {}
-    for bus_id in bus_ids:
+    for bus_id, day_no in bus_day_pairs:
         existing = (
             db.query(BusWaiting)
             .filter(BusWaiting.bus_id == bus_id, BusWaiting.member_id == member_id)
             .first()
         )
         if not existing:
-            db.add(BusWaiting(bus_id=bus_id, member_id=member_id))
+            db.add(BusWaiting(bus_id=bus_id, day_no=day_no, member_id=member_id))
             db.flush()
         rank = (
             db.query(func.count())
@@ -451,6 +451,82 @@ def upsert_bus_waiting(db: Session, bus_ids: list[int], member_id: int) -> dict[
         result[bus_id] = rank
     db.commit()
     return result
+
+
+def cancel_waiting_not_in(db: Session, member_id: int, keep_bus_ids: list[int]) -> None:
+    """keep_bus_ids에 없는 버스의 대기 신청을 취소."""
+    q = db.query(BusWaiting).filter(BusWaiting.member_id == member_id)
+    if keep_bus_ids:
+        q = q.filter(BusWaiting.bus_id.notin_(keep_bus_ids))
+    q.delete(synchronize_session=False)
+    db.commit()
+
+
+def count_bus_confirmed(db: Session, bus_id: int) -> int:
+    """해당 버스의 현재 확정 탑승자 수."""
+    count = 0
+    for r in db.query(RetreatResponse).all():
+        for col in ('day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'):
+            try:
+                if bus_id in json.loads(getattr(r, col) or '[]'):
+                    count += 1
+                    break
+            except (ValueError, TypeError):
+                pass
+    return count
+
+
+def promote_from_waiting(db: Session, bus_id: int, retreat_id: int) -> None:
+    """자리가 생긴 버스에 대해 대기자를 순서대로 확정 처리."""
+    bus = db.query(BusCustom).filter(BusCustom.bus_id == bus_id).first()
+    if not bus:
+        return
+    while True:
+        confirmed = count_bus_confirmed(db, bus_id)
+        if confirmed >= bus.seat_count:
+            break
+        first = (
+            db.query(BusWaiting)
+            .filter(BusWaiting.bus_id == bus_id)
+            .order_by(BusWaiting.waiting_id)
+            .first()
+        )
+        if not first:
+            break
+        day_col = f'day{first.day_no}_bus'
+        response = (
+            db.query(RetreatResponse)
+            .filter(RetreatResponse.retreat_custom_id == retreat_id, RetreatResponse.member_id == first.member_id)
+            .first()
+        )
+        if response:
+            try:
+                ids = json.loads(getattr(response, day_col) or '[]')
+            except (ValueError, TypeError):
+                ids = []
+            if bus_id not in ids:
+                ids.append(bus_id)
+                setattr(response, day_col, json.dumps(ids))
+                response.bus_updated_at = now_kst()
+        else:
+            kwargs = {
+                'retreat_custom_id': retreat_id,
+                'member_id': first.member_id,
+                day_col: json.dumps([bus_id]),
+                'bus_created_at': now_kst(),
+                'bus_updated_at': now_kst(),
+            }
+            db.add(RetreatResponse(**kwargs))
+        exists_reg = (
+            db.query(MemberBusRegistration)
+            .filter(MemberBusRegistration.bus_id == bus_id, MemberBusRegistration.member_id == first.member_id)
+            .first()
+        )
+        if not exists_reg:
+            db.add(MemberBusRegistration(bus_id=bus_id, member_id=first.member_id))
+        db.delete(first)
+        db.flush()
+    db.commit()
 
 
 def get_bus_waiting_list(db: Session, bus_id: int) -> list[tuple]:
