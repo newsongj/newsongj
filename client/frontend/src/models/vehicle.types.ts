@@ -6,6 +6,7 @@ export interface BusSlot {
     bus_name:       string;
     departure_time: string;
     departure_date: string;
+    is_waiting?:    boolean;
 }
 
 export interface DayBuses {

@@ -9,8 +9,10 @@ from app.crud.auth_client import (
     get_menus_for_policy,
     get_member_by_phone_and_name,
     get_member_profile,
+    get_policy_name,
     get_user_account_by_login_id,
 )
+from app.models import Member
 from app.schemas.auth_client import ClientLoginRequest, ClientLoginResponse, MemberLoginRequest
 
 
@@ -26,8 +28,12 @@ def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
         )
 
     gyogu = team = group_no = None
+    member_name = None
     profile = None
     if account.member_id:
+        member = db.query(Member).filter(Member.member_id == account.member_id).first()
+        if member:
+            member_name = member.name
         profile = get_member_profile(db, account.member_id)
         if profile:
             gyogu = profile.gyogu
@@ -35,6 +41,7 @@ def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
             group_no = profile.group_no
 
     menus = get_menus_for_policy(db, account.policy_id)
+    policy_name = get_policy_name(db, account.policy_id)
     leader_names = get_leader_names_for_member(db, profile)
 
     token = create_token(
@@ -42,6 +49,8 @@ def login_client(db: Session, body: ClientLoginRequest) -> ClientLoginResponse:
         menus=menus,
         data_scope=account.data_scope,
         member_id=account.member_id,
+        name=member_name,
+        policy_name=policy_name,
         gyogu=gyogu,
         team=team,
         group_no=group_no,
@@ -76,6 +85,7 @@ def login_member(db: Session, body: MemberLoginRequest) -> ClientLoginResponse:
         menus=menus,
         data_scope="member",
         member_id=member.member_id,
+        name=member.name,
         gyogu=profile.gyogu if profile else None,
         team=profile.team if profile else None,
         group_no=profile.group_no if profile else None,

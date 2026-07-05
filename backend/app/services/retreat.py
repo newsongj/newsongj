@@ -17,7 +17,7 @@ from app.schemas.retreat import (
     BusDashboardItem, VehicleDashboardResponse,
     RetreatDayHeadcount, RetreatHeadcountResponse,
     RetreatAccommodationDayData, RetreatAccommodationResponse,
-    VehicleMyResponse, VehicleSubmitBody, VehicleSubmitResponse, FullBusInfo,
+    VehicleMyResponse, VehicleSubmitBody, VehicleSubmitResponse, FullBusInfo, WaitingBusInfo,
     SuspendedMealMemberResponse, SuspendedMealApplicationItem, SuspendedMealSubmitBody,
     AdminSuspendedMealItem, AdminSuspendedMealListResponse,
     AdminSuspendedMealStats, AdminSuspendedMealReviewRequest,
@@ -44,6 +44,8 @@ from app.crud.retreat import (
     get_bus_waiting_list as crud_get_bus_waiting_list,
     register_bus_selections as crud_register_bus_selections,
     get_bus_registration_list as crud_get_bus_registration_list,
+    promote_from_waiting as crud_promote_from_waiting,
+    cancel_waiting_not_in as crud_cancel_waiting_not_in,
     get_suspended_meal_members as crud_get_suspended_meal_members,
     upsert_suspended_meal as crud_upsert_suspended_meal,
     get_admin_suspended_meal_list as crud_get_admin_suspended_meal_list,
@@ -435,8 +437,26 @@ def svc_get_vehicle_member_list(
             reg_map[reg.member_id] = reg.registered_at.strftime("%Y-%m-%dT%H:%M:%S")
 
     result = []
+    confirmed_ids: set[int] = set()
+
     for member, profile, response in rows:
         has_response = _has_any_bus(response)
+
+        if bus_id:
+            # 해당 버스 확정 탑승자만 포함
+            is_confirmed = False
+            if response:
+                for col in ('day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'):
+                    try:
+                        if bus_id in json.loads(getattr(response, col) or '[]'):
+                            is_confirmed = True
+                            break
+                    except (ValueError, TypeError):
+                        pass
+            if not is_confirmed:
+                continue
+            confirmed_ids.add(member.member_id)
+
         result.append(VehicleMemberListItem(
             member_id=member.member_id,
             member_name=member.name,
@@ -455,15 +475,19 @@ def svc_get_vehicle_member_list(
         ))
 
     if bus_id:
-        # 확정자: registered_at 오름차순 정렬 (없는 경우 맨 뒤)
+        # 확정자: 신청 시각 오름차순 (없으면 맨 뒤)
         result.sort(key=lambda x: x.registered_at or "9999")
+
+        # 대기자 append — 확정자와 중복 방지
+        latest_sq = (
+            db.query(MemberProfile.member_id, sa_func.max(MemberProfile.profile_id).label("max_id"))
+            .group_by(MemberProfile.member_id)
+            .subquery()
+        )
         waiting_rows = crud_get_bus_waiting_list(db, bus_id)
         for rank, (waiting, member) in enumerate(waiting_rows, start=1):
-            latest_sq = (
-                db.query(MemberProfile.member_id, sa_func.max(MemberProfile.profile_id).label("max_id"))
-                .group_by(MemberProfile.member_id)
-                .subquery()
-            )
+            if member.member_id in confirmed_ids:
+                continue
             profile = (
                 db.query(MemberProfile)
                 .join(latest_sq, MemberProfile.profile_id == latest_sq.c.max_id)
@@ -503,6 +527,32 @@ def svc_get_vehicle_my(db: Session, member_id: int) -> VehicleMyResponse:
         except (ValueError, TypeError):
             return []
 
+    # 대기 중인 버스 목록 + 예비 번호 계산
+    waiting_rows = (
+        db.query(BusWaiting, BusCustom)
+        .join(BusCustom, BusCustom.bus_id == BusWaiting.bus_id)
+        .filter(BusWaiting.member_id == member_id)
+        .order_by(BusWaiting.waiting_id)
+        .all()
+    )
+    waiting_buses = []
+    for waiting, bus in waiting_rows:
+        rank = (
+            db.query(sa_func.count())
+            .filter(
+                BusWaiting.bus_id == waiting.bus_id,
+                BusWaiting.waiting_id <= waiting.waiting_id,
+            )
+            .scalar()
+        )
+        waiting_buses.append(WaitingBusInfo(
+            bus_id=bus.bus_id,
+            bus_name=bus.bus_name,
+            departure_date=str(bus.departure_date) if bus.departure_date else '',
+            departure_time=_time_to_hhmm(bus.departure_time),
+            waiting_number=rank,
+        ))
+
     return VehicleMyResponse(
         member_id=member.member_id,
         name=member.name,
@@ -514,6 +564,7 @@ def svc_get_vehicle_my(db: Session, member_id: int) -> VehicleMyResponse:
         day3_bus=_parse_bus(response.day3_bus) if response else [],
         day4_bus=_parse_bus(response.day4_bus) if response else [],
         submitted_at=response.bus_updated_at or response.bus_created_at if response else None,
+        waiting_buses=waiting_buses,
     )
 
 
@@ -522,22 +573,41 @@ def svc_submit_vehicle(db: Session, member_id: int, body: VehicleSubmitBody) -> 
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
 
-    all_bus_ids = list({id for day in (body.day1_bus, body.day2_bus, body.day3_bus, body.day4_bus) for id in day})
-    full_bus_ids = crud_get_full_buses(db, all_bus_ids)
+    # 기존 선택 버스 목록 저장 (승격 트리거용)
+    old_response = crud_get_vehicle_response(db, retreat.retreat_custom_id, member_id)
+    old_bus_ids: set[int] = set()
+    if old_response:
+        for col in ('day1_bus', 'day2_bus', 'day3_bus', 'day4_bus'):
+            try:
+                old_bus_ids.update(json.loads(getattr(old_response, col) or '[]'))
+            except (ValueError, TypeError):
+                pass
 
-    if full_bus_ids and not body.accept_waiting:
+    all_bus_ids = list({id for day in (body.day1_bus, body.day2_bus, body.day3_bus, body.day4_bus) for id in day})
+    full_bus_ids = set(crud_get_full_buses(db, all_bus_ids))
+
+    # 이미 확정 탑승 중이거나 대기 중인 버스는 만석 팝업 재표시 제외
+    already_waiting_ids = {
+        row.bus_id
+        for row in db.query(BusWaiting).filter(BusWaiting.member_id == member_id).all()
+    }
+    existing_bus_ids = old_bus_ids | already_waiting_ids
+    new_full_bus_ids = full_bus_ids - existing_bus_ids
+
+    if new_full_bus_ids and not body.accept_waiting:
         full_buses = [
             FullBusInfo(
                 bus_id=b.bus_id,
                 bus_name=b.bus_name,
                 departure_time=_time_to_hhmm(b.departure_time),
             )
-            for b in db.query(BusCustom).filter(BusCustom.bus_id.in_(full_bus_ids)).all()
+            for b in db.query(BusCustom).filter(BusCustom.bus_id.in_(new_full_bus_ids)).all()
         ]
         return VehicleSubmitResponse(waiting_required=True, full_buses=full_buses)
 
     normal_bus_ids = [id for id in all_bus_ids if id not in full_bus_ids]
-    waiting_bus_ids = full_bus_ids if body.accept_waiting else []
+    # 새로 추가되는 대기 버스만 upsert (기존 대기는 cancel_waiting_not_in이 보존)
+    waiting_bus_ids = list(new_full_bus_ids) if body.accept_waiting else []
 
     def filter_day(ids: list[int]) -> list[int]:
         return [id for id in ids if id in normal_bus_ids]
@@ -552,9 +622,25 @@ def svc_submit_vehicle(db: Session, member_id: int, body: VehicleSubmitBody) -> 
     if normal_bus_ids:
         crud_register_bus_selections(db, normal_bus_ids, member_id)
 
+    # 새 제출에 없는 버스의 대기 취소
+    crud_cancel_waiting_not_in(db, member_id, all_bus_ids)
+
     waiting_numbers: dict[int, int] = {}
     if waiting_bus_ids:
-        waiting_numbers = crud_upsert_bus_waiting(db, waiting_bus_ids, member_id)
+        # bus_id → day_no 매핑
+        bus_day_map: dict[int, int] = {}
+        for day_n, day_ids in enumerate([body.day1_bus, body.day2_bus, body.day3_bus, body.day4_bus], start=1):
+            for bid in day_ids:
+                if bid not in bus_day_map:
+                    bus_day_map[bid] = day_n
+        pairs = [(bid, bus_day_map.get(bid, 1)) for bid in waiting_bus_ids]
+        waiting_numbers = crud_upsert_bus_waiting(db, pairs, member_id)
+
+    # 이번 제출에서 제거된 버스에 대해 대기자 자동 승격
+    new_bus_ids = set(normal_bus_ids)
+    removed_bus_ids = old_bus_ids - new_bus_ids
+    for bus_id in removed_bus_ids:
+        crud_promote_from_waiting(db, bus_id, retreat.retreat_custom_id)
 
     return VehicleSubmitResponse(waiting_numbers=waiting_numbers)
 

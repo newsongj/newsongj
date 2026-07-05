@@ -17,4 +17,5 @@ export interface MenuItemData {
 export interface MenuProps extends Omit<MuiMenuProps, 'children'> {
   density?: MenuDensity;
   items: MenuItemData[];
+  header?: React.ReactNode;
 }

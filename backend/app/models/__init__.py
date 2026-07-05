@@ -117,6 +117,7 @@ class BusWaiting(Base):
 
     waiting_id = Column(BigInteger, primary_key=True, autoincrement=True)
     bus_id     = Column(BigInteger, nullable=False)
+    day_no     = Column(SmallInteger, nullable=False)
     member_id  = Column(BigInteger, nullable=False)
     created_at = Column(DateTime, nullable=False, default=now_kst)
 

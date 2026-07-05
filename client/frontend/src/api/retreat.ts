@@ -2,17 +2,26 @@ import apiClient from './client';
 import type { RetreatInfo, ResearchMember, ResearchResponseBody } from '@models/research.types';
 import type { SuspendedMealMember, SuspendedMealSubmitBody } from '@models/suspendedMeal.types';
 
+export interface WaitingBusInfo {
+    bus_id:          number;
+    bus_name:        string;
+    departure_date:  string;
+    departure_time:  string;
+    waiting_number:  number;
+}
+
 export interface VehicleMyResponse {
-    member_id:    number;
-    name:         string;
-    gyogu:        number | null;
-    team:         number | null;
-    phone:        string | null;
-    day1_bus:     number[];
-    day2_bus:     number[];
-    day3_bus:     number[];
-    day4_bus:     number[];
-    submitted_at: string | null;
+    member_id:     number;
+    name:          string;
+    gyogu:         number | null;
+    team:          number | null;
+    phone:         string | null;
+    day1_bus:      number[];
+    day2_bus:      number[];
+    day3_bus:      number[];
+    day4_bus:      number[];
+    submitted_at:  string | null;
+    waiting_buses: WaitingBusInfo[];
 }
 
 export interface VehicleSubmitBody {

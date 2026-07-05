@@ -9,7 +9,9 @@ def build_me_response(payload: Dict[str, Any]) -> MeResponse:
     return MeResponse(
         user_idx=int(payload["sub"]) if str(payload.get("sub", "")).isdigit() else 0,
         email=str(payload.get("sub", "")),
-        name="사용자",
+        name=payload.get("name") or "사용자",
+        data_scope=payload.get("data_scope"),
+        policy_name=payload.get("policy_name"),
         roles=[],
         menus=[
             MenuInfo(menu_idx=i, name=key, code=key, is_activated=True)
