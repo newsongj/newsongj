@@ -46,6 +46,7 @@ const getPageInfo = (path: string) => {
     '/retreat/create': { title: '수련회 생성', breadcrumb: '수련회 > 수련회 생성' },
     '/retreat/edit': { title: '수련회 설정 수정', breadcrumb: '수련회 > 수련회 설정 수정' },
     '/retreat/suspended-meal': { title: '서스펜디드밀 명단', breadcrumb: '수련회 > 서스펜디드밀 명단' },
+    '/retreat/patient-room':   { title: '환자방 명단',       breadcrumb: '수련회 > 환자방 명단' },
   };
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
 };
@@ -104,6 +105,7 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
         ...(hasMenu('admin.retreat.research_list') ? [{ id: 'retreat-research', label: '인원조사 명단', path: '/retreat/research' }] : []),
         ...(hasMenu('admin.retreat.vehicle_list') ? [{ id: 'retreat-vehicle', label: '차량조사 명단', path: '/retreat/vehicle' }] : []),
         ...(hasMenu('admin.retreat.suspended_meal') ? [{ id: 'retreat-suspended-meal', label: '서스펜디드밀 명단', path: '/retreat/suspended-meal' }] : []),
+        ...(hasMenu('admin.retreat.patient_room')   ? [{ id: 'retreat-patient-room',   label: '환자방 명단',       path: '/retreat/patient-room' }]   : []),
       ],
     },
   ];

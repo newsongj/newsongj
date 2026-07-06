@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # JWT
     JWT_SECRET_KEY: str = Field("dev-secret-newsongj-2026", env="JWT_SECRET_KEY")
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_HOURS: int = 24
+    JWT_EXPIRE_HOURS: int = 1
 
     @property
     def cors_origins(self) -> List[str]:

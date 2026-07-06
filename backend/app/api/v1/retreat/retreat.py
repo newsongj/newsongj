@@ -11,12 +11,16 @@ from app.schemas.retreat import (
     ResearchListResponse, VehicleMemberListResponse, VehicleDashboardResponse,
     RetreatHeadcountResponse, RetreatAccommodationResponse,
     AdminSuspendedMealListResponse, AdminSuspendedMealStats, AdminSuspendedMealReviewRequest,
+    FeePaidUpdate,
+    AdminPatientRoomListResponse, AdminPatientRoomStats, AdminPatientRoomReviewRequest,
 )
 from app.services.retreat import (
     svc_create_retreat, svc_get_active_retreat, svc_update_retreat, svc_complete_retreat,
     svc_get_research_list, svc_get_vehicle_member_list, svc_get_vehicle_dashboard,
     svc_get_headcount, svc_get_accommodation,
     svc_get_admin_suspended_meal_list, svc_get_admin_suspended_meal_stats, svc_review_suspended_meal,
+    svc_update_fee_paid,
+    svc_get_admin_patient_room_list, svc_get_admin_patient_room_stats, svc_review_patient_room,
 )
 
 router = APIRouter()
@@ -28,6 +32,7 @@ _dashboard      = Depends(require_menu("admin.retreat.dashboard"))
 _research_list  = Depends(require_menu("admin.retreat.research_list"))
 _vehicle_list   = Depends(require_menu("admin.retreat.vehicle_list"))
 _suspended_meal = Depends(require_menu("admin.retreat.suspended_meal"))
+_patient_room   = Depends(require_menu("admin.retreat.patient_room"))
 
 
 @router.post("", response_model=RetreatCreateResponse, status_code=201, summary="수련회 생성", dependencies=[_create])
@@ -69,6 +74,16 @@ def get_research_list(
     return svc_get_research_list(db, gyogu, team, survey_status)
 
 
+@router.patch("/research/{member_id}/fee-paid", status_code=200, summary="회비 납부 확인 토글", dependencies=[_research_list])
+def update_fee_paid(
+    member_id: int = Path(...),
+    body: FeePaidUpdate = ...,
+    db: Session = Depends(get_db),
+):
+    svc_update_fee_paid(db, member_id, body)
+    return {"ok": True}
+
+
 @router.get("/vehicle-members", response_model=VehicleMemberListResponse, summary="차량조사 명단 (관리자)", dependencies=[_vehicle_list])
 def get_vehicle_member_list(
     gyogu:  Optional[int] = Query(None),
@@ -101,6 +116,31 @@ def review_suspended_meal(
     db: Session = Depends(get_db),
 ):
     svc_review_suspended_meal(db, application_id, body)
+    return {"ok": True}
+
+
+@router.get("/patient-room", response_model=AdminPatientRoomListResponse, summary="환자방 신청 목록 (관리자)", dependencies=[_patient_room])
+def get_admin_patient_room_list(
+    page:          int           = Query(1, ge=1),
+    size:          int           = Query(20, ge=1, le=100),
+    review_status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    return svc_get_admin_patient_room_list(db, review_status, page, size)
+
+
+@router.get("/patient-room/stats", response_model=AdminPatientRoomStats, summary="환자방 통계 (관리자)", dependencies=[_patient_room])
+def get_admin_patient_room_stats(db: Session = Depends(get_db)):
+    return svc_get_admin_patient_room_stats(db)
+
+
+@router.put("/patient-room/{application_id}/review", status_code=200, summary="환자방 승인/반려", dependencies=[_patient_room])
+def review_patient_room(
+    application_id: int = Path(...),
+    body: AdminPatientRoomReviewRequest = ...,
+    db: Session = Depends(get_db),
+):
+    svc_review_patient_room(db, application_id, body)
     return {"ok": True}
 
 

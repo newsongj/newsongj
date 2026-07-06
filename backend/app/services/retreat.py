@@ -21,6 +21,9 @@ from app.schemas.retreat import (
     SuspendedMealMemberResponse, SuspendedMealApplicationItem, SuspendedMealSubmitBody,
     AdminSuspendedMealItem, AdminSuspendedMealListResponse,
     AdminSuspendedMealStats, AdminSuspendedMealReviewRequest,
+    FeePaidUpdate,
+    PatientRoomSubmitBody, PatientRoomMemberResponse, PatientRoomApplicationItem,
+    AdminPatientRoomItem, AdminPatientRoomListResponse, AdminPatientRoomStats, AdminPatientRoomReviewRequest,
 )
 from app.crud.retreat import (
     get_active_retreat as crud_get_active_retreat,
@@ -51,6 +54,12 @@ from app.crud.retreat import (
     get_admin_suspended_meal_list as crud_get_admin_suspended_meal_list,
     get_admin_suspended_meal_stats as crud_get_admin_suspended_meal_stats,
     review_suspended_meal as crud_review_suspended_meal,
+    update_fee_paid as crud_update_fee_paid,
+    get_patient_room_members as crud_get_patient_room_members,
+    upsert_patient_room as crud_upsert_patient_room,
+    get_admin_patient_room_list as crud_get_admin_patient_room_list,
+    get_admin_patient_room_stats as crud_get_admin_patient_room_stats,
+    review_patient_room as crud_review_patient_room,
 )
 from app.core.exceptions import NotFoundError
 
@@ -95,6 +104,7 @@ def svc_get_active_retreat(db: Session) -> RetreatActiveResponse:
         suspended_meal_count=retreat.suspended_meal_count,
         special_meal_name=retreat.special_meal_name,
         special_meal_price=retreat.special_meal_price,
+        personal_vehicle_url=retreat.personal_vehicle_url,
         buses=[_bus_to_response(b) for b in buses],
     )
 
@@ -112,6 +122,7 @@ def svc_create_retreat(db: Session, body: RetreatCreate) -> RetreatCreateRespons
         suspended_meal_count=retreat.suspended_meal_count,
         special_meal_name=retreat.special_meal_name,
         special_meal_price=retreat.special_meal_price,
+        personal_vehicle_url=retreat.personal_vehicle_url,
     )
 
 
@@ -220,6 +231,7 @@ def svc_get_research_list(
             day3_attendance=response.day3_attendance if response else None,
             day4_attendance=response.day4_attendance if response else None,
             fee_type=response.fee_type if response else None,
+            is_fee_paid=bool(response.is_fee_paid) if response else False,
         )
         for member, profile, response in rows
     ]
@@ -734,3 +746,88 @@ def svc_review_suspended_meal(
     db: Session, application_id: int, body: AdminSuspendedMealReviewRequest
 ) -> None:
     crud_review_suspended_meal(db, application_id, body.review_status, body.review_comment)
+
+
+def svc_update_fee_paid(db: Session, member_id: int, body: FeePaidUpdate) -> None:
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    crud_update_fee_paid(db, retreat.retreat_custom_id, member_id, body.is_fee_paid)
+
+
+# ── 환자방 ────────────────────────────────────────────────────────────────────
+
+def svc_get_patient_room_members(
+    db: Session,
+    data_scope: str,
+    gyogu: Optional[int],
+    team: Optional[int],
+    group_no: Optional[int],
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
+) -> List[PatientRoomMemberResponse]:
+    rows = crud_get_patient_room_members(db, data_scope, gyogu, team, group_no, query_gyogu, query_team)
+    result = []
+    for member, profile, app in rows:
+        app_item = None
+        if app:
+            app_item = PatientRoomApplicationItem(
+                application_id=app.application_id,
+                applicant_reason=app.applicant_reason,
+                applied_at=app.applied_at.isoformat() if app.applied_at else "",
+                review_status=app.review_status,
+                review_comment=app.review_comment,
+                reviewed_at=app.reviewed_at.isoformat() if app.reviewed_at else None,
+            )
+        result.append(PatientRoomMemberResponse(
+            member_id=member.member_id,
+            name=member.name,
+            generation=member.generation,
+            gender=member.gender,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
+            application=app_item,
+        ))
+    return result
+
+
+def svc_upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody) -> None:
+    crud_upsert_patient_room(db, member_id, body)
+
+
+def svc_get_admin_patient_room_list(
+    db: Session,
+    review_status: Optional[str],
+    page: int,
+    size: int,
+) -> AdminPatientRoomListResponse:
+    total, rows = crud_get_admin_patient_room_list(db, review_status, page, size)
+    items = [
+        AdminPatientRoomItem(
+            application_id=app.application_id,
+            member_id=app.member_id,
+            member_name=member.name,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
+            applicant_reason=app.applicant_reason,
+            applied_at=app.applied_at.isoformat() if app.applied_at else "",
+            review_status=app.review_status,
+            review_comment=app.review_comment,
+            reviewed_at=app.reviewed_at.isoformat() if app.reviewed_at else None,
+        )
+        for app, member, profile in rows
+    ]
+    return AdminPatientRoomListResponse(items=items, total=total)
+
+
+def svc_get_admin_patient_room_stats(db: Session) -> AdminPatientRoomStats:
+    total, pending, approved, rejected = crud_get_admin_patient_room_stats(db)
+    return AdminPatientRoomStats(total=total, pending=pending, approved=approved, rejected=rejected)
+
+
+def svc_review_patient_room(
+    db: Session, application_id: int, body: AdminPatientRoomReviewRequest
+) -> None:
+    crud_review_patient_room(db, application_id, body.review_status, body.review_comment)

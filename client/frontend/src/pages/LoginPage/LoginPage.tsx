@@ -16,6 +16,7 @@ const LoginPage: React.FC = () => {
     const PAGE_TITLES: Record<string, string> = {
         '/research':     'NEWSONGJ 인원조사',
         '/suspendedmeal': 'NEWSONGJ 서스펜디드밀',
+        '/patient':      'NEWSONGJ 환자방',
     };
     const pageTitle = PAGE_TITLES[redirectTo] ?? 'NEWSONGJ 대학부';
 

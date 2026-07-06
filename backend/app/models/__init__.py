@@ -88,14 +88,14 @@ class RetreatCustom(Base):
     retreat_name         = Column(String(100), nullable=False)
     start_date           = Column(Date, nullable=False)
     end_date             = Column(Date, nullable=False)
-    bus_types            = Column(Text, nullable=True)   # JSON, 레거시
     meal_price           = Column(Integer, nullable=False, default=0)
     suspended_meal_count = Column(SmallInteger, nullable=False, default=0)
-    special_meal_name    = Column(String(50), nullable=True)
-    special_meal_price   = Column(Integer, nullable=True)
-    fee_with_bus         = Column(Integer, nullable=False, default=0)
-    fee_without_bus      = Column(Integer, nullable=False, default=0)
-    is_active            = Column(SmallInteger, nullable=False, default=1)
+    special_meal_name          = Column(String(50), nullable=True)
+    special_meal_price         = Column(Integer, nullable=True)
+    personal_vehicle_url  = Column(String(500), nullable=True)
+    fee_with_bus               = Column(Integer, nullable=False, default=0)
+    fee_without_bus            = Column(Integer, nullable=False, default=0)
+    is_active                  = Column(SmallInteger, nullable=False, default=1)
     created_at           = Column(DateTime, nullable=False, default=now_kst)
     updated_at           = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
 
@@ -157,6 +157,7 @@ class RetreatResponse(Base):
     day3_bus          = Column(Text, nullable=True)
     day4_bus          = Column(Text, nullable=True)
     fee_type          = Column(Enum('bus', 'lodging_only'), nullable=True)
+    is_fee_paid       = Column(SmallInteger, nullable=False, default=0)
     bus_created_at    = Column(DateTime, nullable=True)
     bus_updated_at    = Column(DateTime, nullable=True)
 
@@ -174,3 +175,15 @@ class SuspendedMealApplication(Base):
     review_status       = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
     review_comment      = Column(String(500), nullable=True)
     reviewed_at         = Column(DateTime, nullable=True)
+
+
+class PatientRoomApplication(Base):
+    __tablename__ = "patient_room_application"
+
+    application_id   = Column(BigInteger, primary_key=True, autoincrement=True)
+    member_id        = Column(BigInteger, nullable=False)
+    applicant_reason = Column(String(500), nullable=True)
+    applied_at       = Column(DateTime, nullable=False)
+    review_status    = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
+    review_comment   = Column(String(500), nullable=True)
+    reviewed_at      = Column(DateTime, nullable=True)

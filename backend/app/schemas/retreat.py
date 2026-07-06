@@ -33,6 +33,7 @@ class RetreatCreate(BaseModel):
     suspended_meal_count: int = 0
     special_meal_name:  Optional[str] = None
     special_meal_price: Optional[int] = None
+    personal_vehicle_url: Optional[str] = None
 
 
 class RetreatUpdate(BaseModel):
@@ -45,6 +46,7 @@ class RetreatUpdate(BaseModel):
     suspended_meal_count: int = 0
     special_meal_name:  Optional[str] = None
     special_meal_price: Optional[int] = None
+    personal_vehicle_url: Optional[str] = None
 
 
 class RetreatCreateResponse(BaseModel):
@@ -58,6 +60,7 @@ class RetreatCreateResponse(BaseModel):
     suspended_meal_count: int
     special_meal_name:  Optional[str] = None
     special_meal_price: Optional[int] = None
+    personal_vehicle_url: Optional[str] = None
 
 
 class RetreatActiveResponse(RetreatCreateResponse):
@@ -225,6 +228,11 @@ class ResearchListItem(BaseModel):
     day3_attendance: Optional[str] = None
     day4_attendance: Optional[str] = None
     fee_type:        Optional[str] = None
+    is_fee_paid:     bool = False
+
+
+class FeePaidUpdate(BaseModel):
+    is_fee_paid: bool
 
 
 class ResearchListResponse(BaseModel):
@@ -283,6 +291,65 @@ class VehicleDashboardResponse(BaseModel):
     normal_depart:      int
     num_days:           int
     buses:              List[BusDashboardItem]
+
+
+# ── 환자방 ────────────────────────────────────────────────────────────────────
+
+class PatientRoomApplicationItem(BaseModel):
+    application_id:   int
+    applicant_reason: Optional[str] = None
+    applied_at:       str
+    review_status:    str
+    review_comment:   Optional[str] = None
+    reviewed_at:      Optional[str] = None
+
+
+class PatientRoomMemberResponse(BaseModel):
+    member_id:   int
+    name:        str
+    generation:  int
+    gender:      str
+    gyogu:       int
+    team:        int
+    group_no:    int
+    application: Optional[PatientRoomApplicationItem] = None
+
+
+class PatientRoomSubmitBody(BaseModel):
+    applicant_reason: Optional[str] = None
+
+
+# ── 환자방 관리자 ──────────────────────────────────────────────────────────────
+
+class AdminPatientRoomItem(BaseModel):
+    application_id:   int
+    member_id:        int
+    member_name:      str
+    gyogu:            int
+    team:             int
+    group_no:         int
+    applicant_reason: Optional[str] = None
+    applied_at:       str
+    review_status:    str
+    review_comment:   Optional[str] = None
+    reviewed_at:      Optional[str] = None
+
+
+class AdminPatientRoomListResponse(BaseModel):
+    items: List[AdminPatientRoomItem]
+    total: int
+
+
+class AdminPatientRoomStats(BaseModel):
+    total:    int
+    pending:  int
+    approved: int
+    rejected: int
+
+
+class AdminPatientRoomReviewRequest(BaseModel):
+    review_status:  str
+    review_comment: str
 
 
 # ── 인원조사 집계 (대시보드) ──────────────────────────────────────────────────────

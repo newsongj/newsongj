@@ -33,12 +33,14 @@ interface BasicForm {
   hasSpecialMeal: boolean;
   specialMealName: string;
   specialMealPrice: string;
+  personalVehicleUrl: string;
 }
 
 const DEFAULT_FORM: BasicForm = {
   retreatName: '', startDate: '', endDate: '',
   busFare: '', lodgingFare: '', mealPrice: '', suspendedMealCount: '',
   hasSpecialMeal: false, specialMealName: '', specialMealPrice: '',
+  personalVehicleUrl: '',
 };
 
 const DEFAULT_BUS: Omit<LocalBus, 'localId'> = {
@@ -273,6 +275,7 @@ const RetreatCreatePage: React.FC = () => {
         ? `${form.specialMealName} / ${form.specialMealPrice || '—'}원`
         : '없음',
       buses: buses.length > 0 ? `${buses.length}대 (${breakdown})` : '—',
+      personalVehicleUrl: form.personalVehicleUrl.trim() || '없음',
     };
   }, [form, buses]);
 
@@ -284,6 +287,10 @@ const RetreatCreatePage: React.FC = () => {
   const handleSave = async () => {
     if (!form.retreatName || !form.startDate || !form.endDate) {
       showSnackbar('수련회 이름, 시작일, 종료일을 입력해주세요.', 'error');
+      return;
+    }
+    if (form.personalVehicleUrl.trim() && !form.personalVehicleUrl.trim().startsWith('http')) {
+      showSnackbar('개인차량 링크는 http:// 또는 https://로 시작해야 합니다.', 'error');
       return;
     }
     setIsSaving(true);
@@ -298,6 +305,7 @@ const RetreatCreatePage: React.FC = () => {
         suspended_meal_count: Number(form.suspendedMealCount || 0),
         special_meal_name: form.hasSpecialMeal && form.specialMealName.trim() ? form.specialMealName.trim() : null,
         special_meal_price: form.hasSpecialMeal && form.specialMealPrice ? Number(parseCurrency(form.specialMealPrice)) : null,
+        personal_vehicle_url: form.personalVehicleUrl.trim() || null,
       });
       await Promise.all(
         buses.map((b) =>
@@ -449,6 +457,19 @@ const RetreatCreatePage: React.FC = () => {
         </BusAddRow>
       </FormSection>
 
+      {/* 버스 설정 (개인차량) */}
+      <FormSection>
+        <SectionTitle>버스 설정 (개인차량)</SectionTitle>
+        <TextField
+          label="개인차량 신청 링크"
+          value={form.personalVehicleUrl}
+          onChange={(e) => updateField('personalVehicleUrl', e.target.value)}
+          placeholder="https://forms.gle/..."
+          helperText="입력 시 사용자 차량조사 페이지에 개인차량 신청 옵션이 표시됩니다."
+          fullWidth
+        />
+      </FormSection>
+
       {/* 요약 */}
       <FormSection>
         <SectionTitle>설정 미리보기</SectionTitle>
@@ -461,6 +482,7 @@ const RetreatCreatePage: React.FC = () => {
           <SummaryItem><SummaryLabel>서스펜디드밀 총 끼니 수</SummaryLabel><SummaryValue>{summary.suspendedMealCount}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>특가 끼니</SummaryLabel><SummaryValue>{summary.specialMeal}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>등록 버스</SummaryLabel><SummaryValue>{summary.buses}</SummaryValue></SummaryItem>
+          <SummaryItem><SummaryLabel>개인차량 폼 링크</SummaryLabel><SummaryValue>{summary.personalVehicleUrl}</SummaryValue></SummaryItem>
         </SummaryCard>
       </FormSection>
 

@@ -36,6 +36,7 @@ interface BasicForm {
   hasSpecialMeal: boolean;
   specialMealName: string;
   specialMealPrice: string;
+  personalVehicleUrl: string;
 }
 
 const DEFAULT_BUS: Omit<LocalBus, 'localId'> = {
@@ -243,6 +244,7 @@ const RetreatEditPage: React.FC = () => {
     retreatName: '', startDate: '', endDate: '',
     busFare: '', lodgingFare: '', mealPrice: '', suspendedMealCount: '',
     hasSpecialMeal: false, specialMealName: '', specialMealPrice: '',
+    personalVehicleUrl: '',
   });
   const [buses, setBuses] = useState<LocalBus[]>([]);
   const [deletedBusIds, setDeletedBusIds] = useState<number[]>([]);
@@ -267,6 +269,7 @@ const RetreatEditPage: React.FC = () => {
           hasSpecialMeal: !!r.special_meal_name,
           specialMealName: r.special_meal_name ?? '',
           specialMealPrice: r.special_meal_price != null ? r.special_meal_price.toLocaleString('ko-KR') : '',
+          personalVehicleUrl: r.personal_vehicle_url ?? '',
         };
         const loadedBuses = sortBuses(r.buses.map(serverBusToLocal));
         setRetreatId(r.retreat_id);
@@ -353,6 +356,7 @@ const RetreatEditPage: React.FC = () => {
         ? `${form.specialMealName} / ${form.specialMealPrice || '—'}원`
         : '없음',
       buses: buses.length > 0 ? `${buses.length}대 (${breakdown})` : '—',
+      personalVehicleUrl: form.personalVehicleUrl.trim() || '없음',
       deletedCount: deletedBusIds.length,
     };
   }, [form, buses, deletedBusIds]);
@@ -374,6 +378,10 @@ const RetreatEditPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!retreatId) return;
+    if (form.personalVehicleUrl.trim() && !form.personalVehicleUrl.trim().startsWith('http')) {
+      showSnackbar('개인차량 링크는 http:// 또는 https://로 시작해야 합니다.', 'error');
+      return;
+    }
     setIsSaving(true);
     try {
       await updateRetreat(retreatId, {
@@ -386,6 +394,7 @@ const RetreatEditPage: React.FC = () => {
         suspended_meal_count: Number(form.suspendedMealCount || 0),
         special_meal_name: form.hasSpecialMeal && form.specialMealName.trim() ? form.specialMealName.trim() : null,
         special_meal_price: form.hasSpecialMeal && form.specialMealPrice ? Number(parseCurrency(form.specialMealPrice)) : null,
+        personal_vehicle_url: form.personalVehicleUrl.trim() || null,
       });
       await Promise.all(deletedBusIds.map((id) => deleteBus(id)));
       await Promise.all(
@@ -415,6 +424,7 @@ const RetreatEditPage: React.FC = () => {
         hasSpecialMeal: !!r.special_meal_name,
         specialMealName: r.special_meal_name ?? '',
         specialMealPrice: r.special_meal_price != null ? r.special_meal_price.toLocaleString('ko-KR') : '',
+        personalVehicleUrl: r.personal_vehicle_url ?? '',
       };
       const refreshedBuses = sortBuses(r.buses.map(serverBusToLocal));
       setForm(refreshedForm);
@@ -595,6 +605,19 @@ const RetreatEditPage: React.FC = () => {
         </BusAddRow>
       </FormSection>
 
+      {/* 버스 설정 (개인차량) */}
+      <FormSection>
+        <SectionTitle>버스 설정 (개인차량)</SectionTitle>
+        <TextField
+          label="개인차량 신청 링크"
+          value={form.personalVehicleUrl}
+          onChange={(e) => updateField('personalVehicleUrl', e.target.value)}
+          placeholder="https://forms.gle/..."
+          helperText="입력 시 사용자 차량조사 페이지에 개인차량 신청 옵션이 표시됩니다."
+          fullWidth
+        />
+      </FormSection>
+
       {/* 요약 */}
       <FormSection>
         <SectionTitle>변경 내용 미리보기</SectionTitle>
@@ -607,6 +630,7 @@ const RetreatEditPage: React.FC = () => {
           <SummaryItem><SummaryLabel>서스펜디드밀 총 끼니 수</SummaryLabel><SummaryValue>{summary.suspendedMealCount}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>특가 끼니</SummaryLabel><SummaryValue>{summary.specialMeal}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>등록 버스</SummaryLabel><SummaryValue>{summary.buses}</SummaryValue></SummaryItem>
+          <SummaryItem><SummaryLabel>개인차량 폼 링크</SummaryLabel><SummaryValue>{summary.personalVehicleUrl}</SummaryValue></SummaryItem>
           {summary.deletedCount > 0 && (
             <SummaryItem>
               <SummaryLabel>삭제 예정 버스</SummaryLabel>
