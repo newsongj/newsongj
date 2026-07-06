@@ -7,9 +7,8 @@ const TOKEN_KEY = 'access_token';
  */
 export const setAccessToken = (token: string): void => {
   Cookies.set(TOKEN_KEY, token, {
-    expires: 1, // 24시간 후 만료 (JWT와 동일)
-    secure: false, // TODO: HTTP 임시 허용 (운영 HTTPS 전환 시 아래 라인으로 복구)
-    // secure: process.env.NODE_ENV === 'production',
+    expires: 1 / 24, // 1시간 후 만료 (JWT와 동일)
+    secure: window.location.protocol === 'https:',
     sameSite: 'strict'
   });
 };
