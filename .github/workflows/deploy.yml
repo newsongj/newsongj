@@ -110,6 +110,7 @@ jobs:
             DB_NAME=newsongj
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             BACKEND_URL=${{ secrets.BACKEND_URL }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
             EOF
 
             cat > ~/newsongj/docker-compose.yml << 'COMPOSEOF'
