@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     BusCustom, BusWaiting, Member, MemberBusRegistration, MemberProfile,
-    RetreatCustom, RetreatResponse, SuspendedMealApplication,
+    RetreatCustom, RetreatResponse, SuspendedMealApplication, PatientRoomApplication,
 )
 from app.schemas.retreat import (
     BusCreate, RetreatCreate, RetreatUpdate,
-    ResearchResponseUpdate, VehicleSubmitBody, SuspendedMealSubmitBody,
+    ResearchResponseUpdate, VehicleSubmitBody, SuspendedMealSubmitBody, PatientRoomSubmitBody,
 )
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.timezone import now_kst
@@ -52,6 +52,7 @@ def create_retreat(db: Session, data: RetreatCreate) -> RetreatCustom:
         suspended_meal_count=data.suspended_meal_count,
         special_meal_name=data.special_meal_name,
         special_meal_price=data.special_meal_price,
+        personal_vehicle_url=data.personal_vehicle_url,
     )
     db.add(retreat)
     db.commit()
@@ -72,6 +73,7 @@ def update_retreat(db: Session, retreat_id: int, data: RetreatUpdate) -> Retreat
     retreat.suspended_meal_count = data.suspended_meal_count
     retreat.special_meal_name = data.special_meal_name
     retreat.special_meal_price = data.special_meal_price
+    retreat.personal_vehicle_url = data.personal_vehicle_url
     db.commit()
     db.refresh(retreat)
     return retreat
@@ -245,6 +247,22 @@ def upsert_research_response(
             day4_attendance=body.day4_attendance,
             fee_type=body.fee_type,
         ))
+    db.commit()
+
+
+def update_fee_paid(db: Session, retreat_id: int, member_id: int, is_fee_paid: bool) -> None:
+    row = (
+        db.query(RetreatResponse)
+        .filter(
+            RetreatResponse.retreat_custom_id == retreat_id,
+            RetreatResponse.member_id == member_id,
+        )
+        .first()
+    )
+    if not row:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("인원조사 응답이 없습니다.")
+    row.is_fee_paid = 1 if is_fee_paid else 0
     db.commit()
 
 
@@ -665,3 +683,116 @@ def upsert_suspended_meal(
             applied_at=now_kst(),
         ))
     db.commit()
+
+
+# ── 환자방 ────────────────────────────────────────────────────────────────────
+
+def get_patient_room_members(
+    db: Session,
+    data_scope: str,
+    gyogu: Optional[int],
+    team: Optional[int],
+    group_no: Optional[int],
+    query_gyogu: Optional[int] = None,
+    query_team: Optional[int] = None,
+) -> List[Tuple]:
+    latest_sq = _latest_profile_subquery(db)
+    q = (
+        db.query(Member, MemberProfile, PatientRoomApplication)
+        .join(latest_sq, Member.member_id == latest_sq.c.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
+        .outerjoin(PatientRoomApplication, PatientRoomApplication.member_id == Member.member_id)
+        .filter(Member.deleted_at.is_(None))
+    )
+    if data_scope == "team":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
+        q = q.filter(MemberProfile.team == team)
+    elif data_scope == "group":
+        if gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == gyogu)
+        if team is not None:
+            q = q.filter(MemberProfile.team == team)
+        q = q.filter(MemberProfile.group_no == group_no)
+    elif data_scope == "all":
+        if query_gyogu is not None:
+            q = q.filter(MemberProfile.gyogu == query_gyogu)
+        if query_team is not None:
+            q = q.filter(MemberProfile.team == query_team)
+    return (
+        q.order_by(MemberProfile.gyogu, MemberProfile.team, MemberProfile.group_no, Member.name)
+        .all()
+    )
+
+
+def upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody) -> None:
+    existing = (
+        db.query(PatientRoomApplication)
+        .filter(PatientRoomApplication.member_id == member_id)
+        .first()
+    )
+    if existing:
+        if existing.review_status in ("APPROVED", "REJECTED"):
+            raise ConflictError("이미 처리된 신청은 수정할 수 없습니다.")
+        existing.applicant_reason = body.applicant_reason
+    else:
+        db.add(PatientRoomApplication(
+            member_id=member_id,
+            applicant_reason=body.applicant_reason,
+            applied_at=now_kst(),
+        ))
+    db.commit()
+
+
+def get_admin_patient_room_list(
+    db: Session,
+    review_status: Optional[str],
+    page: int,
+    size: int,
+):
+    latest_sq = (
+        db.query(MemberProfile.member_id, func.max(MemberProfile.profile_id).label("max_id"))
+        .group_by(MemberProfile.member_id)
+        .subquery()
+    )
+    q = (
+        db.query(PatientRoomApplication, Member, MemberProfile)
+        .join(Member, Member.member_id == PatientRoomApplication.member_id)
+        .join(latest_sq, latest_sq.c.member_id == PatientRoomApplication.member_id)
+        .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
+    )
+    if review_status in ('PENDING', 'APPROVED', 'REJECTED'):
+        q = q.filter(PatientRoomApplication.review_status == review_status)
+    total = q.count()
+    items = (
+        q.order_by(PatientRoomApplication.applied_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+    return total, items
+
+
+def get_admin_patient_room_stats(db: Session):
+    total    = db.query(PatientRoomApplication).count()
+    pending  = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'PENDING').count()
+    approved = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'APPROVED').count()
+    rejected = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'REJECTED').count()
+    return total, pending, approved, rejected
+
+
+def review_patient_room(
+    db: Session, application_id: int, review_status: str, review_comment: str
+) -> PatientRoomApplication:
+    app = (
+        db.query(PatientRoomApplication)
+        .filter(PatientRoomApplication.application_id == application_id)
+        .first()
+    )
+    if not app:
+        raise NotFoundError("신청을 찾을 수 없습니다.")
+    app.review_status  = review_status
+    app.review_comment = review_comment
+    app.reviewed_at    = now_kst()
+    db.commit()
+    return app

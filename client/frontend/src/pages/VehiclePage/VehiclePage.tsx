@@ -443,7 +443,8 @@ const VehiclePage: React.FC = () => {
     const [activeDays,  setActiveDays]  = useState<Record<BusType, DayKey>>({} as Record<BusType, DayKey>);
     const [submitting,  setSubmitting]  = useState(false);
     const [history,     setHistory]     = useState<SubmissionRecord | null>(null);
-    const [typeFilter,  setTypeFilter]  = useState<BusType | 'all'>('all');
+    const [typeFilter,  setTypeFilter]  = useState<BusType | 'all' | '개인차량'>('all');
+    const [personalVehicleUrl, setPersonalVehicleUrl] = useState<string | null>(null);
     const [snackbar,    setSnackbar]    = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
         open: false, message: '', severity: 'success',
     });
@@ -473,6 +474,7 @@ const VehiclePage: React.FC = () => {
 
                 const builtInfo = buildVehicleRetreatInfo(retreat, retreat.buses);
                 setRetreatInfo(builtInfo);
+                setPersonalVehicleUrl(retreat.personal_vehicle_url ?? null);
                 document.title = `${retreat.retreat_name} 차량조사`;
 
                 setForm({
@@ -545,7 +547,8 @@ const VehiclePage: React.FC = () => {
     const typeFilterOptions: SelectOption[] = useMemo(() => [
         { value: 'all', label: '전체 보기' },
         ...availableBusTypes.map((t) => ({ value: t, label: BUS_TYPE_META[t].label })),
-    ], [availableBusTypes]);
+        ...(personalVehicleUrl ? [{ value: '개인차량', label: '개인차량' }] : []),
+    ], [availableBusTypes, personalVehicleUrl]);
 
     const getActiveDay = useCallback((type: BusType): DayKey =>
         activeDays[type] ?? (dayKeys[0] ?? 'day1'),
@@ -842,6 +845,24 @@ const VehiclePage: React.FC = () => {
                     </BusSectionWrapper>
                 );
             })}
+
+            {/* 개인차량 섹션 */}
+            {personalVehicleUrl && (typeFilter === 'all' || typeFilter === '개인차량') && (
+                <BusSectionWrapper>
+                    <BusSectionHeader>
+                        <BusSectionTitle>개인차량</BusSectionTitle>
+                        <BusSectionDesc style={{ wordBreak: 'keep-all' }}>개인차량으로 수련회에 참석하는 경우 아래 링크에서 신청해주세요.</BusSectionDesc>
+                    </BusSectionHeader>
+                    <BusSectionBody>
+                        <Button
+                            variant="outlined"
+                            onClick={() => window.open(personalVehicleUrl!, '_blank', 'noopener,noreferrer')}
+                        >
+                            개인차량 신청하기
+                        </Button>
+                    </BusSectionBody>
+                </BusSectionWrapper>
+            )}
 
             {/* 제출 버튼 */}
             <SubmitRow>

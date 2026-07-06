@@ -11,16 +11,17 @@ export interface BusInfo {
 }
 
 export interface RetreatInfo {
-    retreat_id:           number;
-    retreat_name:         string;
-    start_date:           string;
-    end_date:             string;
-    fee_with_bus:         number;
-    fee_without_bus:      number;
-    suspended_meal_count: number;
-    special_meal_name:    string | null;
-    special_meal_price:   number | null;
-    buses:                BusInfo[];
+    retreat_id:                number;
+    retreat_name:              string;
+    start_date:                string;
+    end_date:                  string;
+    fee_with_bus:              number;
+    fee_without_bus:           number;
+    suspended_meal_count:      number;
+    special_meal_name:         string | null;
+    special_meal_price:        number | null;
+    personal_vehicle_url: string | null;
+    buses:                     BusInfo[];
 }
 
 export type FeeType = 'bus' | 'lodging_only' | null;

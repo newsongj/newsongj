@@ -10,7 +10,7 @@ import type {
   ResearchListStats,
   ResearchMemberListItem,
 } from '@/models/retreat.types';
-import { fetchResearchList } from '@/api/retreat';
+import { fetchResearchList, patchResearchFeePaid } from '@/api/retreat';
 
 // ── 렌더 헬퍼 ─────────────────────────────────────────────────────────────────
 
@@ -208,6 +208,23 @@ const RetreatResearchListPage: React.FC = () => {
           return <span style={{ ...chipBase, color: '#0f766e', backgroundColor: '#f0fdfa', fontWeight: 600 }}>버스 미탑승+숙박 ({formatWon(retreatFees.fee_without_bus)})</span>;
         },
       },
+      {
+        id: 'is_fee_paid',
+        label: '납부확인',
+        align: 'center' as const,
+        width: 90,
+        render: (_value: unknown, row: ResearchMemberListItem) => {
+          if (!row.fee_type) return <span style={{ color: '#d9d9d9', fontSize: 13 }}>—</span>;
+          return (
+            <input
+              type="checkbox"
+              checked={row.is_fee_paid}
+              onChange={(e) => handleFeePaidChange(row.member_id, e.target.checked)}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2563eb' }}
+            />
+          );
+        },
+      },
     ];
   }, [retreatFees, numDays]);
 
@@ -216,6 +233,17 @@ const RetreatResearchListPage: React.FC = () => {
     ? Math.round((stats.surveyed / stats.enrolled) * 100)
     : 0;
 
+  const handleFeePaidChange = (memberId: number, checked: boolean) => {
+    setMembers((prev) =>
+      prev.map((m) => m.member_id === memberId ? { ...m, is_fee_paid: checked } : m),
+    );
+    patchResearchFeePaid(memberId, checked).catch(() => {
+      setMembers((prev) =>
+        prev.map((m) => m.member_id === memberId ? { ...m, is_fee_paid: !checked } : m),
+      );
+    });
+  };
+
   const handleGyoguChange = (v: string | number | (string | number)[]) => {
     setGyogu(String(v));
     setTeam('');
@@ -223,7 +251,7 @@ const RetreatResearchListPage: React.FC = () => {
 
   const handleDownload = () => {
     const dayLabels = Array.from({ length: numDays }, (_, i) => `${i + 1}일차`);
-    const header = ['교구', '팀', '그룹', '기수', '성별', '이름', ...dayLabels, '회비납부'];
+    const header = ['교구', '팀', '그룹', '기수', '성별', '이름', ...dayLabels, '회비납부', '납부확인'];
     const feeLabel = (f: string | null) => {
       if (!f) return '';
       if (f === 'bus') return `버스탑승(${retreatFees.fee_with_bus.toLocaleString()}원)`;
@@ -233,6 +261,7 @@ const RetreatResearchListPage: React.FC = () => {
       `${m.gyogu}교구`, `${m.team}팀`, `${m.group_no}그룹`, `${m.generation}기`, m.gender, m.member_name,
       ...DAY_ATT_KEYS.slice(0, numDays).map((k) => m[k] ?? ''),
       m.has_response ? feeLabel(m.fee_type) : '',
+      m.fee_type ? (m.is_fee_paid ? 'Y' : 'N') : '',
     ]);
     downloadCsv('인원조사_명단.csv', [header, ...rows]);
   };

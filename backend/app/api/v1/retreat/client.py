@@ -10,6 +10,7 @@ from app.schemas.retreat import (
     ResearchMemberResponse, ResearchResponseUpdate,
     VehicleMyResponse, VehicleSubmitBody, VehicleSubmitResponse,
     SuspendedMealMemberResponse, SuspendedMealSubmitBody,
+    PatientRoomMemberResponse, PatientRoomSubmitBody,
 )
 from app.crud.retreat import get_distinct_gyogu_list
 from app.services.retreat import (
@@ -19,6 +20,8 @@ from app.services.retreat import (
     svc_submit_vehicle,
     svc_get_suspended_meal_members,
     svc_upsert_suspended_meal,
+    svc_get_patient_room_members,
+    svc_upsert_patient_room,
 )
 
 router = APIRouter()
@@ -148,4 +151,43 @@ def submit_suspended_meal(
     db: Session = Depends(get_db),
 ):
     svc_upsert_suspended_meal(db, member_id, body)
+    return {"ok": True}
+
+
+@router.get(
+    "/api/retreat/patient-room/members",
+    response_model=List[PatientRoomMemberResponse],
+    tags=["사용자 환자방"],
+    summary="환자방 멤버 목록",
+)
+def get_patient_room_members(
+    gyogu: Optional[int] = Query(None),
+    team:  Optional[int] = Query(None),
+    payload: dict = Depends(require_menu("user.patient_room")),
+    db: Session = Depends(get_db),
+):
+    return svc_get_patient_room_members(
+        db,
+        data_scope=payload["data_scope"],
+        gyogu=payload.get("gyogu"),
+        team=payload.get("team"),
+        group_no=payload.get("group_no"),
+        query_gyogu=gyogu,
+        query_team=team,
+    )
+
+
+@router.put(
+    "/api/retreat/patient-room/response/{member_id}",
+    status_code=200,
+    tags=["사용자 환자방"],
+    summary="환자방 신청/수정",
+    dependencies=[Depends(require_menu("user.patient_room"))],
+)
+def submit_patient_room(
+    member_id: int = Path(...),
+    body: PatientRoomSubmitBody = ...,
+    db: Session = Depends(get_db),
+):
+    svc_upsert_patient_room(db, member_id, body)
     return {"ok": True}

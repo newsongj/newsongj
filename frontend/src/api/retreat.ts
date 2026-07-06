@@ -1,4 +1,4 @@
-import { get, post, put, del } from '@/api/client';
+import { get, post, put, del, patch } from '@/api/client';
 import {
   RetreatAccommodationResponse,
   RetreatHeadcountResponse,
@@ -13,6 +13,9 @@ import {
   ResearchListResponse,
   VehicleMemberListResponse,
   VehicleDashboardData,
+  PatientRoomListResponse,
+  PatientRoomReviewRequest,
+  PatientRoomStats,
 } from '@/models/retreat.types';
 
 // ── 서스펜디드밀 ──────────────────────────────────────────────────────────────
@@ -72,6 +75,10 @@ export async function fetchResearchList(): Promise<ResearchListResponse> {
   return get<ResearchListResponse>('/api/retreat/research/list');
 }
 
+export async function patchResearchFeePaid(memberId: number, isFeePaid: boolean): Promise<void> {
+  return patch<void>(`/api/retreat/research/${memberId}/fee-paid`, { is_fee_paid: isFeePaid });
+}
+
 export async function fetchVehicleMemberList(params?: { gyogu?: number; team?: number; bus_id?: number }): Promise<VehicleMemberListResponse> {
   const query = new URLSearchParams();
   if (params?.gyogu)  query.set('gyogu',  String(params.gyogu));
@@ -79,6 +86,24 @@ export async function fetchVehicleMemberList(params?: { gyogu?: number; team?: n
   if (params?.bus_id) query.set('bus_id', String(params.bus_id));
   const qs = query.toString();
   return get<VehicleMemberListResponse>(`/api/retreat/vehicle-members${qs ? `?${qs}` : ''}`);
+}
+
+// ── 환자방 ────────────────────────────────────────────────────────────────────
+
+export async function fetchPatientRoomList(params?: {
+  page?: number;
+  size?: number;
+  review_status?: string;
+}): Promise<PatientRoomListResponse> {
+  return get<PatientRoomListResponse>('/api/retreat/patient-room', params);
+}
+
+export async function fetchPatientRoomStats(): Promise<PatientRoomStats> {
+  return get<PatientRoomStats>('/api/retreat/patient-room/stats');
+}
+
+export async function reviewPatientRoom(applicationId: number, body: PatientRoomReviewRequest): Promise<void> {
+  return put<void>(`/api/retreat/patient-room/${applicationId}/review`, body);
 }
 
 // ── 수련회 차량조사 ───────────────────────────────────────────────────────────

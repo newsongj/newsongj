@@ -788,7 +788,7 @@ const PermissionManagementPage: React.FC = () => {
                         {policies.map(p => (
                             <PolicyCard key={p.policy_id}>
                                 <PolicyCardHeader>
-                                    <span style={{ fontWeight: 600, fontSize: 14 }}>{p.policy_name}</span>
+                                    <span style={{ fontWeight: 600, fontSize: 14, wordBreak: 'keep-all' }}>{p.policy_name}</span>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <Button variant="outlined" size="small" onClick={() => openEditPolicy(p)}>수정</Button>
                                         <Button variant="outlined" size="small" onClick={() => handleDeletePolicy(p.policy_id)}

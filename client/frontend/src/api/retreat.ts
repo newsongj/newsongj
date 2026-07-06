@@ -1,6 +1,7 @@
 import apiClient from './client';
 import type { RetreatInfo, ResearchMember, ResearchResponseBody } from '@models/research.types';
 import type { SuspendedMealMember, SuspendedMealSubmitBody } from '@models/suspendedMeal.types';
+import type { PatientRoomMember, PatientRoomSubmitBody } from '@models/patientRoom.types';
 
 export interface WaitingBusInfo {
     bus_id:          number;
@@ -71,3 +72,11 @@ export const fetchSuspendedMealMembers = (params?: { gyogu?: number; team?: numb
 
 export const submitSuspendedMeal = (memberId: number, body: SuspendedMealSubmitBody) =>
     apiClient.put(`/retreat/suspended-meal/response/${memberId}`, body).then((r) => r.data);
+
+export const fetchPatientRoomMembers = (params?: { gyogu?: number; team?: number }) =>
+    apiClient.get<PatientRoomMember[]>('/retreat/patient-room/members', {
+        params: { gyogu: params?.gyogu, team: params?.team },
+    }).then((r) => r.data);
+
+export const submitPatientRoom = (memberId: number, body: PatientRoomSubmitBody) =>
+    apiClient.put(`/retreat/patient-room/response/${memberId}`, body).then((r) => r.data);

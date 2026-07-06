@@ -36,6 +36,39 @@ export interface SuspendedMealStats {
   rejected: number;
 }
 
+// ── 환자방 ────────────────────────────────────────────────────────────────────
+
+export interface PatientRoomApplication {
+  application_id:   number;
+  member_id:        number;
+  member_name:      string;
+  gyogu:            number;
+  team:             number;
+  group_no:         number;
+  applicant_reason: string | null;
+  applied_at:       string;
+  review_status:    ReviewStatus;
+  review_comment:   string | null;
+  reviewed_at:      string | null;
+}
+
+export interface PatientRoomListResponse {
+  items: PatientRoomApplication[];
+  total: number;
+}
+
+export interface PatientRoomReviewRequest {
+  review_status:  ReviewStatus;
+  review_comment: string;
+}
+
+export interface PatientRoomStats {
+  total:    number;
+  pending:  number;
+  approved: number;
+  rejected: number;
+}
+
 // ── 수련회 인원조사 명단 ──────────────────────────────────────────────────────
 
 export type AttendanceStatus = '미정' | '정상' | '참석' | '후발' | '불참';
@@ -55,6 +88,7 @@ export interface ResearchMemberListItem {
   day3_attendance: AttendanceStatus | null;
   day4_attendance: AttendanceStatus | null;
   fee_type: FeeType | null;
+  is_fee_paid: boolean;
 }
 
 export interface ResearchListStats {
@@ -209,6 +243,7 @@ export interface RetreatActiveResponse {
   suspended_meal_count: number;
   special_meal_name:  string | null;
   special_meal_price: number | null;
+  personal_vehicle_url: string | null;
   buses: BusResponse[];
 }
 
@@ -222,6 +257,7 @@ export interface RetreatCreateBody {
   suspended_meal_count: number;
   special_meal_name:  string | null;
   special_meal_price: number | null;
+  personal_vehicle_url: string | null;
 }
 
 export type RetreatUpdateBody = RetreatCreateBody;
