@@ -178,6 +178,13 @@ const ModalGrid = styled('div')(({ theme }) => ({
   '@media (max-width: 560px)': { gridTemplateColumns: '1fr' },
 }));
 
+const TwoColGrid = styled('div')({
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 12,
+  '@media (max-width: 560px)': { gridTemplateColumns: '1fr' },
+});
+
 const ModalActions = styled('div')({
   display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap',
   '@media (max-width: 480px)': { '& > *': { width: '100%' } },
@@ -207,7 +214,14 @@ const SummaryValue = styled('span')(({ theme }) => ({
 }));
 
 const FooterActions = styled('div')(({ theme }) => ({
-  display: 'flex', justifyContent: 'flex-end', gap: theme.custom.spacing.sm,
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: theme.custom.spacing.sm,
+  flexWrap: 'wrap',
+  '@media (max-width: 480px)': {
+    flexDirection: 'column',
+    '& > *': { width: '100%' },
+  },
 }));
 
 const EmptyStateWrapper = styled('div')(({ theme }) => ({
@@ -531,7 +545,7 @@ const RetreatEditPage: React.FC = () => {
                 </div>
               </div>
               {form.hasSpecialMeal && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <TwoColGrid>
                   <TextField label="특가 끼니 이름" value={form.specialMealName}
                     onChange={(e) => updateField('specialMealName', e.target.value)}
                     placeholder="예: 목요점심" maxLength={10} fullWidth
@@ -541,7 +555,7 @@ const RetreatEditPage: React.FC = () => {
                   <TextField label="특가 끼니 단가" value={form.specialMealPrice}
                     onChange={(e) => updateCurrency('specialMealPrice', e.target.value)}
                     placeholder="예: 3,000" fullWidth />
-                </div>
+                </TwoColGrid>
               )}
             </div>
           </FormGrid>
@@ -613,7 +627,7 @@ const RetreatEditPage: React.FC = () => {
           value={form.personalVehicleUrl}
           onChange={(e) => updateField('personalVehicleUrl', e.target.value)}
           placeholder="https://forms.gle/..."
-          helperText="입력 시 사용자 차량조사 페이지에 개인차량 신청 옵션이 표시됩니다."
+          helperText={<span style={{ wordBreak: 'keep-all' }}>입력 시 사용자 차량조사 페이지에 개인차량 신청 옵션이 표시됩니다.</span>}
           fullWidth
         />
       </FormSection>
