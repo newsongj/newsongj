@@ -151,9 +151,18 @@ const CalcBox = styled('div')(({ theme }) => ({
 const CalcRow = styled('div')(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
-  alignItems: 'center',
+  alignItems: 'flex-start',
+  gap: 8,
   fontSize: theme.custom.typography.body2.fontSize,
   color: theme.custom.colors.text.high,
+  '& > span:first-of-type': {
+    wordBreak: 'keep-all',
+    flex: 1,
+  },
+  '& > span:last-of-type': {
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
 }));
 
 const CalcDivider = styled('hr')(({ theme }) => ({
@@ -165,10 +174,13 @@ const CalcDivider = styled('hr')(({ theme }) => ({
 const CalcTotal = styled('div')(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
-  alignItems: 'center',
+  alignItems: 'flex-start',
+  gap: 8,
   fontWeight: 700,
   fontSize: theme.custom.typography.body1.fontSize,
   color: theme.custom.colors.text.high,
+  '& > span:first-of-type': { wordBreak: 'keep-all', flex: 1 },
+  '& > span:last-of-type': { whiteSpace: 'nowrap', flexShrink: 0 },
 }));
 
 const ModalActions = styled('div')({
@@ -558,12 +570,12 @@ const SuspendedMealPage: React.FC = () => {
                 <InfoLabel>금액 계산</InfoLabel>
                 <CalcBox>
                   <CalcRow>
-                    <span>끼니 금액 ({selectedItem.meal_count}끼 × {formatWon(retreatInfo.meal_price)})</span>
+                    <span>끼니 금액 <span style={{ whiteSpace: 'nowrap' }}>({selectedItem.meal_count}끼 × {formatWon(retreatInfo.meal_price)})</span></span>
                     <span>{formatWon(selectedItem.meal_count * retreatInfo.meal_price)}</span>
                   </CalcRow>
                   {retreatInfo.special_meal_name && selectedItem.special_meal_count > 0 && (
                     <CalcRow>
-                      <span>{retreatInfo.special_meal_name} ({selectedItem.special_meal_count}끼 × {formatWon(retreatInfo.special_meal_price ?? 0)})</span>
+                      <span>{retreatInfo.special_meal_name} <span style={{ whiteSpace: 'nowrap' }}>({selectedItem.special_meal_count}끼 × {formatWon(retreatInfo.special_meal_price ?? 0)})</span></span>
                       <span>{formatWon(selectedItem.special_meal_count * (retreatInfo.special_meal_price ?? 0))}</span>
                     </CalcRow>
                   )}

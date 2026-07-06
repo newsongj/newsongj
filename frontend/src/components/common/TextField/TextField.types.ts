@@ -22,7 +22,7 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   size?: TextFieldSize;
   label?: string;
   placeholder?: string;
-  helperText?: string;
+  helperText?: ReactNode;
   error?: boolean;
   disabled?: boolean;
   leadingIcon?: ReactNode;
