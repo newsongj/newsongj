@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
 
     # JWT
-    JWT_SECRET_KEY: str = Field("dev-secret-newsongj-2026", env="JWT_SECRET_KEY")
+    JWT_SECRET_KEY: str = Field(..., env="JWT_SECRET_KEY")
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_HOURS: int = 1
 
