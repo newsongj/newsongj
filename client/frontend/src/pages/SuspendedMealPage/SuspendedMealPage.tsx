@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Alert, Checkbox, CircularProgress, Snackbar, TablePagination, Tooltip } from '@mui/material';
+import { Alert, Checkbox, CircularProgress, Snackbar, TablePagination } from '@mui/material';
 import { Select } from '@components/common/Select';
 import type { SelectOption } from '@components/common/Select';
 import Button from '@components/common/Button/Button';
@@ -33,20 +33,9 @@ const BadgeChip = styled('span')<{ $color: string; $bg: string }>(({ $color, $bg
     cursor: 'default',
 }));
 
-const StatusBadge: React.FC<{ status: ReviewStatus | 'none'; reviewComment: string | null }> = ({
-    status, reviewComment,
-}) => {
+const StatusBadge: React.FC<{ status: ReviewStatus | 'none' }> = ({ status }) => {
     const { label, color, bg } = getStatusConfig(status);
-    const chip = <BadgeChip $color={color} $bg={bg}>{label}</BadgeChip>;
-
-    if (status === 'REJECTED' && reviewComment) {
-        return (
-            <Tooltip title={reviewComment} arrow placement="top">
-                <span>{chip}</span>
-            </Tooltip>
-        );
-    }
-    return chip;
+    return <BadgeChip $color={color} $bg={bg}>{label}</BadgeChip>;
 };
 
 // ─── Styled ───────────────────────────────────────────────────────────────────
@@ -387,7 +376,10 @@ const SuspendedMealPage: React.FC = () => {
         { value: 1, label: '1끼' },
     ], []);
 
-    const hasSpecialMeal = !!retreatInfo?.special_meal_name;
+    const hasSpecialMeal  = !!retreatInfo?.special_meal_name;
+    const hasAnyComment   = members.some(
+        (m) => m.application?.review_status === 'REJECTED' && m.application?.review_comment,
+    );
 
     const totalCount   = members.length;
     const appliedCount = members.filter((m) => m.application !== null).length;
@@ -477,13 +469,14 @@ const SuspendedMealPage: React.FC = () => {
                                 <Th>회비지원</Th>
                                 <Th>신청사유</Th>
                                 <Th>상태</Th>
+                                {hasAnyComment && <Th>미승인 사유</Th>}
                                 <Th>작업</Th>
                             </tr>
                         </thead>
                         <tbody>
                             {members.length === 0 ? (
                                 <tr>
-                                    <Td colSpan={hasSpecialMeal ? 12 : 11} style={{ padding: 40, color: '#8c8c8c' }}>
+                                    <Td colSpan={hasSpecialMeal ? (hasAnyComment ? 13 : 12) : (hasAnyComment ? 12 : 11)} style={{ padding: 40, color: '#8c8c8c' }}>
                                         조회된 인원이 없습니다.
                                     </Td>
                                 </tr>
@@ -559,11 +552,15 @@ const SuspendedMealPage: React.FC = () => {
 
                                         {/* 상태 */}
                                         <Td>
-                                            <StatusBadge
-                                                status={hasApp ? status! : 'none'}
-                                                reviewComment={member.application?.review_comment ?? null}
-                                            />
+                                            <StatusBadge status={hasApp ? status! : 'none'} />
                                         </Td>
+
+                                        {/* 미승인 사유 */}
+                                        {hasAnyComment && (
+                                            <Td style={{ color: '#ff4d4f', maxWidth: 160, whiteSpace: 'normal', wordBreak: 'keep-all', textAlign: 'left' }}>
+                                                {member.application?.review_comment ?? ''}
+                                            </Td>
+                                        )}
 
                                         {/* 작업 */}
                                         <Td>
