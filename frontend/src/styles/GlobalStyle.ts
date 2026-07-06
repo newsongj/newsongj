@@ -14,6 +14,7 @@ export const GlobalStyle = createGlobalStyle`
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background: #FFFFFF !important;
+    word-break: keep-all;
   }
 
   h1, h2, h3, h4, h5, h6 {

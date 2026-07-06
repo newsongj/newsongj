@@ -359,17 +359,20 @@ const PatientRoomPage: React.FC = () => {
             <InfoRow>
               <InfoLabel>코멘트</InfoLabel>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#c0392b', opacity: 0.75 }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#c0392b', opacity: 0.75, wordBreak: 'keep-all' }}>
                   미승인 시 코멘트는 신청자에게 표시됩니다. 승인 시에는 표시되지 않습니다.
                 </span>
                 <TextField
                   value={reviewComment}
-                  onChange={(e) => setReviewComment(e.target.value)}
+                  onChange={(e) => setReviewComment(e.target.value.slice(0, 30))}
                   multiline
                   rows={3}
                   placeholder="승인/미승인 코멘트를 입력하세요"
                   fullWidth
                 />
+                <span style={{ fontSize: 11, color: reviewComment.length >= 30 ? '#ff4d4f' : '#8c8c8c', textAlign: 'right' }}>
+                  {reviewComment.length}/30
+                </span>
               </div>
             </InfoRow>
           </ModalBody>
