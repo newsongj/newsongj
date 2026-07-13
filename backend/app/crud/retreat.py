@@ -74,6 +74,10 @@ def update_retreat(db: Session, retreat_id: int, data: RetreatUpdate) -> Retreat
     retreat.special_meal_name = data.special_meal_name
     retreat.special_meal_price = data.special_meal_price
     retreat.personal_vehicle_url = data.personal_vehicle_url
+    retreat.is_research_open = int(data.is_research_open)
+    retreat.is_vehicle_open = int(data.is_vehicle_open)
+    retreat.is_suspended_meal_open = int(data.is_suspended_meal_open)
+    retreat.is_patient_room_open = int(data.is_patient_room_open)
     db.commit()
     db.refresh(retreat)
     return retreat

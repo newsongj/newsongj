@@ -195,6 +195,7 @@ const SuspendedMealPage: React.FC = () => {
     const [loading,     setLoading]     = useState(true);
     const [loadError,   setLoadError]   = useState<string | null>(null);
     const [noRetreat,   setNoRetreat]   = useState(false);
+    const [isClosed,    setIsClosed]    = useState(false);
     const [gyogu,       setGyogu]       = useState<number | ''>('');
     const [teamFilter,  setTeamFilter]  = useState<number | ''>('');
     const [gyoguNos,    setGyoguNos]    = useState<number[]>([]);
@@ -235,6 +236,7 @@ const SuspendedMealPage: React.FC = () => {
                     isAllScope ? fetchGyoguList() : Promise.resolve([]),
                 ]);
                 setRetreatInfo(retreat);
+                if (!retreat.is_suspended_meal_open) { setIsClosed(true); return; }
                 document.title = `${retreat.retreat_name} 서스펜디드밀`;
                 setGyoguNos(gyoguList);
                 if (!isAllScope) await loadMembers();
@@ -263,9 +265,12 @@ const SuspendedMealPage: React.FC = () => {
         return Array.from(set).sort((a, b) => a - b);
     }, [allMembers]);
 
-    const members = useMemo(() =>
-        groupNo === '' ? allMembers : allMembers.filter((m) => m.group_no === groupNo),
-    [allMembers, groupNo]);
+    const members = useMemo(() => {
+        let result = allMembers;
+        if (teamFilter !== '') result = result.filter((m) => m.team === teamFilter);
+        if (groupNo !== '') result = result.filter((m) => m.group_no === groupNo);
+        return result;
+    }, [allMembers, teamFilter, groupNo]);
 
     const gyoguOptions = useMemo(() => [
         { value: '', label: '교구 선택' },
@@ -295,8 +300,7 @@ const SuspendedMealPage: React.FC = () => {
         setTeamFilter(val);
         setGroupNo('');
         setDrafts(new Map());
-        if (gyogu !== '') loadMembers(gyogu as number, val === '' ? undefined : val as number);
-    }, [gyogu, loadMembers]);
+    }, []);
 
     const getDraft = useCallback((member: SuspendedMealMember): SuspendedMealDraft => {
         const override = drafts.get(member.member_id);
@@ -326,16 +330,19 @@ const SuspendedMealPage: React.FC = () => {
 
     const canSubmit = useCallback((member: SuspendedMealMember): boolean => {
         const { meal_count, special_meal_count, fee_support, applicant_reason } = getDraft(member);
+        const hasSelection = meal_count !== 0 || special_meal_count !== 0 || fee_support;
+        const hasReason = applicant_reason.trim() !== '';
         if (!member.application) {
-            return meal_count !== 0 || special_meal_count !== 0 || fee_support;
+            return hasSelection && hasReason;
         }
         const app = member.application;
-        return (
+        const hasChanged = (
             meal_count !== app.meal_count ||
             special_meal_count !== app.special_meal_count ||
             fee_support !== app.fee_support ||
             applicant_reason !== (app.applicant_reason ?? '')
         );
+        return hasChanged && hasReason;
     }, [getDraft]);
 
     const isReviewed = (member: SuspendedMealMember) =>
@@ -352,7 +359,7 @@ const SuspendedMealPage: React.FC = () => {
                 applicant_reason:   draft.applicant_reason || null,
             });
             setDrafts((prev) => { const next = new Map(prev); next.delete(memberId); return next; });
-            await loadMembers(gyogu === '' ? undefined : gyogu as number, teamFilter === '' ? undefined : teamFilter as number);
+            await loadMembers(gyogu === '' ? undefined : gyogu as number);
             setSnackbar({ open: true, message: isUpdate ? '수정이 완료되었습니다.' : '신청이 완료되었습니다.', severity: 'success' });
         } catch {
             setSnackbar({ open: true, message: '처리 중 오류가 발생했습니다.', severity: 'error' });
@@ -396,6 +403,14 @@ const SuspendedMealPage: React.FC = () => {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
                 <span style={{ fontSize: 16, color: '#8c8c8c' }}>수련회 기간이 아닙니다.</span>
+            </div>
+        );
+    }
+
+    if (isClosed) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <span style={{ fontSize: 16, color: '#8c8c8c' }}>현재 서스펜디드밀 신청이 마감되었습니다.</span>
             </div>
         );
     }

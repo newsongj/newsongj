@@ -51,10 +51,50 @@ const getPageInfo = (path: string) => {
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
 };
 
+export const buildMenuItems = (permissions: string[]): MenuItem[] => {
+  const has = (key: string) => permissions.includes(key);
+  return [
+    {
+      id: 'permission',
+      label: '권한관리',
+      icon: <PeopleOutlined />,
+      subItems: [
+        ...(has('admin.authority.accounts') ? [{ id: 'permission-accounts', label: '계정 관리', path: '/permission/accounts' }] : []),
+        ...(has('admin.authority.policies') ? [{ id: 'permission-policies', label: '정책 관리', path: '/permission/policies' }] : []),
+      ],
+    },
+    {
+      id: 'student-management',
+      label: '교적관리',
+      icon: <ContactsOutlined />,
+      subItems: [
+        ...(has('admin.gyojeok.attendance_dashboard') ? [{ id: 'student-attendance-dashboard', label: '출석 대시보드', path: '/attendance-dashboard' }] : []),
+        ...(has('admin.gyojeok.attendance') ? [{ id: 'student-attendance', label: '출석 관리', path: '/attendance' }] : []),
+        ...(has('admin.gyojeok.members') ? [{ id: 'student-members', label: '교적 명단', path: '/members' }] : []),
+        ...(has('admin.gyojeok.newcomers') ? [{ id: 'student-new-family-members', label: '미등반 새가족 명단', path: '/members/newcomer' }] : []),
+        ...(has('admin.gyojeok.deleted_members') ? [{ id: 'student-deleted-members', label: '삭제 명단', path: '/deleted-members' }] : []),
+      ],
+    },
+    {
+      id: 'retreat',
+      label: '수련회',
+      icon: <DirectionsRunOutlined />,
+      subItems: [
+        ...(has('admin.retreat.create') ? [{ id: 'retreat-create', label: '수련회 생성', path: '/retreat/create' }] : []),
+        ...(has('admin.retreat.edit') ? [{ id: 'retreat-edit', label: '수련회 설정 수정', path: '/retreat/edit' }] : []),
+        ...(has('admin.retreat.dashboard') ? [{ id: 'retreat-dashboard', label: '수련회 대시보드', path: '/retreat/dashboard' }] : []),
+        ...(has('admin.retreat.research_list') ? [{ id: 'retreat-research', label: '인원조사 명단', path: '/retreat/research' }] : []),
+        ...(has('admin.retreat.vehicle_list') ? [{ id: 'retreat-vehicle', label: '차량조사 명단', path: '/retreat/vehicle' }] : []),
+        ...(has('admin.retreat.suspended_meal') ? [{ id: 'retreat-suspended-meal', label: '서스펜디드밀 명단', path: '/retreat/suspended-meal' }] : []),
+        ...(has('admin.retreat.patient_room')   ? [{ id: 'retreat-patient-room',   label: '환자방 명단',       path: '/retreat/patient-room' }]   : []),
+      ],
+    },
+  ];
+};
+
 export const Container: React.FC<ContainerProps> = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useRecoilState(orchestratorSidebarCollapsedState);
   const permissions = useRecoilValue(userPermissionsState);
-  const hasMenu = (key: string) => permissions.includes(key);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -71,45 +111,7 @@ export const Container: React.FC<ContainerProps> = ({ children }) => {
     return () => mediaQuery.removeEventListener('change', syncSidebarMode);
   }, [setIsCollapsed]);
 
-  const allMenuItems: MenuItem[] = [
-    {
-      id: 'permission',
-      label: '권한관리',
-      icon: <PeopleOutlined />,
-      subItems: [
-        ...(hasMenu('admin.authority.accounts') ? [{ id: 'permission-accounts', label: '계정 관리', path: '/permission/accounts' }] : []),
-        ...(hasMenu('admin.authority.policies') ? [{ id: 'permission-policies', label: '정책 관리', path: '/permission/policies' }] : []),
-      ],
-    },
-    {
-      id: 'student-management',
-      label: '교적관리',
-      icon: <ContactsOutlined />,
-      path: '/attendance-dashboard',
-      subItems: [
-        ...(hasMenu('admin.gyojeok.attendance_dashboard') ? [{ id: 'student-attendance-dashboard', label: '출석 대시보드', path: '/attendance-dashboard' }] : []),
-        ...(hasMenu('admin.gyojeok.attendance') ? [{ id: 'student-attendance', label: '출석 관리', path: '/attendance' }] : []),
-        ...(hasMenu('admin.gyojeok.members') ? [{ id: 'student-members', label: '교적 명단', path: '/members' }] : []),
-        ...(hasMenu('admin.gyojeok.newcomers') ? [{ id: 'student-new-family-members', label: '미등반 새가족 명단', path: '/members/newcomer' }] : []),
-        ...(hasMenu('admin.gyojeok.deleted_members') ? [{ id: 'student-deleted-members', label: '삭제 명단', path: '/deleted-members' }] : []),
-      ],
-    },
-    {
-      id: 'retreat',
-      label: '수련회',
-      icon: <DirectionsRunOutlined />,
-      subItems: [
-        ...(hasMenu('admin.retreat.create') ? [{ id: 'retreat-create', label: '수련회 생성', path: '/retreat/create' }] : []),
-        ...(hasMenu('admin.retreat.edit') ? [{ id: 'retreat-edit', label: '수련회 설정 수정', path: '/retreat/edit' }] : []),
-        ...(hasMenu('admin.retreat.dashboard') ? [{ id: 'retreat-dashboard', label: '수련회 대시보드', path: '/retreat/dashboard' }] : []),
-        ...(hasMenu('admin.retreat.research_list') ? [{ id: 'retreat-research', label: '인원조사 명단', path: '/retreat/research' }] : []),
-        ...(hasMenu('admin.retreat.vehicle_list') ? [{ id: 'retreat-vehicle', label: '차량조사 명단', path: '/retreat/vehicle' }] : []),
-        ...(hasMenu('admin.retreat.suspended_meal') ? [{ id: 'retreat-suspended-meal', label: '서스펜디드밀 명단', path: '/retreat/suspended-meal' }] : []),
-        ...(hasMenu('admin.retreat.patient_room')   ? [{ id: 'retreat-patient-room',   label: '환자방 명단',       path: '/retreat/patient-room' }]   : []),
-      ],
-    },
-  ];
-
+  const allMenuItems = buildMenuItems(permissions);
   const menuItems = allMenuItems.filter(item => !item.subItems || item.subItems.length > 0);
 
   const handleMenuClick = (path: string) => {

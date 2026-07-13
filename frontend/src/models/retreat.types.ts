@@ -244,6 +244,10 @@ export interface RetreatActiveResponse {
   special_meal_name:  string | null;
   special_meal_price: number | null;
   personal_vehicle_url: string | null;
+  is_research_open:       boolean;
+  is_vehicle_open:        boolean;
+  is_suspended_meal_open: boolean;
+  is_patient_room_open:   boolean;
   buses: BusResponse[];
 }
 
@@ -258,6 +262,10 @@ export interface RetreatCreateBody {
   special_meal_name:  string | null;
   special_meal_price: number | null;
   personal_vehicle_url: string | null;
+  is_research_open?:       boolean;
+  is_vehicle_open?:        boolean;
+  is_suspended_meal_open?: boolean;
+  is_patient_room_open?:   boolean;
 }
 
 export type RetreatUpdateBody = RetreatCreateBody;

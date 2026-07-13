@@ -105,6 +105,10 @@ def svc_get_active_retreat(db: Session) -> RetreatActiveResponse:
         special_meal_name=retreat.special_meal_name,
         special_meal_price=retreat.special_meal_price,
         personal_vehicle_url=retreat.personal_vehicle_url,
+        is_research_open=bool(retreat.is_research_open),
+        is_vehicle_open=bool(retreat.is_vehicle_open),
+        is_suspended_meal_open=bool(retreat.is_suspended_meal_open),
+        is_patient_room_open=bool(retreat.is_patient_room_open),
         buses=[_bus_to_response(b) for b in buses],
     )
 
@@ -185,6 +189,7 @@ def svc_get_research_members(
             gyogu=profile.gyogu,
             team=profile.team,
             group_no=profile.group_no,
+            is_fee_paid=bool(response.is_fee_paid) if response else False,
             response=_research_item(response),
         ))
     return result

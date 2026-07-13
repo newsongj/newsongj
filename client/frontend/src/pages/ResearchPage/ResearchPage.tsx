@@ -10,10 +10,17 @@ import { fetchRetreatInfo, fetchGyoguList, fetchResearchMembers, saveResearchRes
 
 // ─── 드롭박스 옵션 ─────────────────────────────────────────────────────────────
 
-const ATTENDANCE_OPTIONS: SelectOption[] = [
+const ATTENDANCE_OPTIONS_DAY1: SelectOption[] = [
     { value: '',    label: '선택' },
     { value: '미정', label: <span style={{ color: '#8c8c8c', fontWeight: 600 }}>미정</span> },
     { value: '정상', label: <span style={{ color: '#52c41a', fontWeight: 600 }}>정상</span> },
+    { value: '후발', label: <span style={{ color: '#fa8c16', fontWeight: 600 }}>후발</span> },
+    { value: '불참', label: <span style={{ color: '#ff4d4f', fontWeight: 600 }}>불참</span> },
+];
+
+const ATTENDANCE_OPTIONS_DAY2PLUS: SelectOption[] = [
+    { value: '',    label: '선택' },
+    { value: '미정', label: <span style={{ color: '#8c8c8c', fontWeight: 600 }}>미정</span> },
     { value: '참석', label: <span style={{ color: '#1677ff', fontWeight: 600 }}>참석</span> },
     { value: '후발', label: <span style={{ color: '#fa8c16', fontWeight: 600 }}>후발</span> },
     { value: '불참', label: <span style={{ color: '#ff4d4f', fontWeight: 600 }}>불참</span> },
@@ -216,6 +223,7 @@ const ResearchPage: React.FC = () => {
     const [loading,     setLoading]     = useState(true);
     const [loadError,   setLoadError]   = useState<string | null>(null);
     const [noRetreat,   setNoRetreat]   = useState(false);
+    const [isClosed,    setIsClosed]    = useState(false);
 
     const [gyogu,      setGyogu]      = useState<number | ''>('');
     const [teamFilter, setTeamFilter] = useState<number | ''>('');
@@ -253,6 +261,7 @@ const ResearchPage: React.FC = () => {
                     isAllScope ? fetchGyoguList() : Promise.resolve([] as number[]),
                 ]);
                 setRetreatInfo(retreat);
+                if (!retreat.is_research_open) { setIsClosed(true); return; }
                 document.title = `${retreat.retreat_name} 인원조사`;
                 if (isAllScope) {
                     setGyoguNos(gyoguList);
@@ -290,8 +299,7 @@ const ResearchPage: React.FC = () => {
         setGroupNo('');
         setDrafts(new Map());
         setIsDirty(false);
-        if (gyogu !== '') loadMembers(gyogu as number, val === '' ? undefined : val as number);
-    }, [gyogu, loadMembers]);
+    }, []);
 
     const days: DayKey[] = useMemo(() => {
         if (!retreatInfo) return [];
@@ -310,9 +318,14 @@ const ResearchPage: React.FC = () => {
         return Array.from(set).sort((a, b) => a - b);
     }, [allMembers]);
 
-    const members = useMemo(() =>
-        groupNo === '' ? allMembers : allMembers.filter((m) => m.group_no === groupNo),
-    [allMembers, groupNo]);
+    const members = useMemo(() => {
+        let result = allMembers;
+        if (teamFilter !== '') result = result.filter((m) => m.team === teamFilter);
+        if (groupNo !== '') result = result.filter((m) => m.group_no === groupNo);
+        return result;
+    }, [allMembers, teamFilter, groupNo]);
+
+    const hasAnyFeePaid = useMemo(() => members.some((m) => m.is_fee_paid), [members]);
 
     useEffect(() => { setPage(0); }, [gyogu, teamFilter, groupNo]);
 
@@ -345,7 +358,7 @@ const ResearchPage: React.FC = () => {
                 })
             );
             const updated = await fetchResearchMembers(
-                isAllScope ? { gyogu: gyogu as number, team: teamFilter === '' ? undefined : teamFilter as number } : {}
+                isAllScope ? { gyogu: gyogu as number } : {}
             );
             setAllMembers(updated);
             setDrafts(new Map());
@@ -406,6 +419,14 @@ const ResearchPage: React.FC = () => {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
                 <span style={{ fontSize: 16, color: '#8c8c8c' }}>수련회 기간이 아닙니다.</span>
+            </div>
+        );
+    }
+
+    if (isClosed) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <span style={{ fontSize: 16, color: '#8c8c8c' }}>현재 인원조사 신청이 마감되었습니다.</span>
             </div>
         );
     }
@@ -502,12 +523,13 @@ const ResearchPage: React.FC = () => {
                                     <Th key={d}>{i + 1}일차</Th>
                                 ))}
                                 <Th>회비납부</Th>
+                                {hasAnyFeePaid && <Th>납부확인</Th>}
                             </tr>
                         </thead>
                         <tbody>
                             {members.length === 0 ? (
                                 <tr>
-                                    <Td colSpan={6 + days.length + 1} style={{ padding: 40, color: '#8c8c8c' }}>
+                                    <Td colSpan={6 + days.length + 1 + (hasAnyFeePaid ? 1 : 0)} style={{ padding: 40, color: '#8c8c8c' }}>
                                         조회된 인원이 없습니다.
                                     </Td>
                                 </tr>
@@ -521,16 +543,17 @@ const ResearchPage: React.FC = () => {
                                         <Td>{member.generation}기</Td>
                                         <Td>{member.gender}</Td>
                                         <Td style={{ fontWeight: 600 }}>{member.name}</Td>
-                                        {days.map((day) => {
+                                        {days.map((day, dayIndex) => {
                                             const attKey = `${day}_attendance` as keyof ResearchResponseBody;
                                             const val = (row[attKey] as AttendanceStatus | null | undefined) ?? null;
                                             const bg = val ? (ATTENDANCE_BG[val] ?? 'transparent') : 'transparent';
+                                            const attendanceOptions = dayIndex === 0 ? ATTENDANCE_OPTIONS_DAY1 : ATTENDANCE_OPTIONS_DAY2PLUS;
                                             return (
                                                 <Td key={day}>
                                                     <Select
                                                         size="small"
                                                         value={val ?? ''}
-                                                        options={ATTENDANCE_OPTIONS}
+                                                        options={attendanceOptions}
                                                         onChange={(v) => updateDraft(member.member_id, {
                                                             [attKey]: (v === '' ? null : v) as AttendanceStatus | null,
                                                         })}
@@ -551,6 +574,23 @@ const ResearchPage: React.FC = () => {
                                                 width={220}
                                             />
                                         </Td>
+                                        {hasAnyFeePaid && (
+                                            <Td>
+                                                {member.is_fee_paid && (
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        padding: '2px 8px',
+                                                        borderRadius: 4,
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        color: '#389e0d',
+                                                        background: '#f6ffed',
+                                                        border: '1px solid #b7eb8f',
+                                                        whiteSpace: 'nowrap',
+                                                    }}>납부완료</span>
+                                                )}
+                                            </Td>
+                                        )}
                                     </Tr>
                                 );
                             })}

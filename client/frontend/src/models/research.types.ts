@@ -20,8 +20,12 @@ export interface RetreatInfo {
     suspended_meal_count:      number;
     special_meal_name:         string | null;
     special_meal_price:        number | null;
-    personal_vehicle_url: string | null;
-    buses:                     BusInfo[];
+    personal_vehicle_url:  string | null;
+    is_research_open:       boolean;
+    is_vehicle_open:        boolean;
+    is_suspended_meal_open: boolean;
+    is_patient_room_open:   boolean;
+    buses:                  BusInfo[];
 }
 
 export type FeeType = 'bus' | 'lodging_only' | null;
@@ -35,14 +39,15 @@ export interface ResearchResponse {
 }
 
 export interface ResearchMember {
-    member_id:  number;
-    name:       string;
-    generation: number;
-    gender:     '남' | '여';
-    gyogu:      number;
-    team:       number;
-    group_no:   number;
-    response:   ResearchResponse | null;
+    member_id:   number;
+    name:        string;
+    generation:  number;
+    gender:      '남' | '여';
+    gyogu:       number;
+    team:        number;
+    group_no:    number;
+    is_fee_paid: boolean;
+    response:    ResearchResponse | null;
 }
 
 export type ResearchResponseBody = Partial<ResearchResponse>;
