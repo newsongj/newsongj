@@ -47,6 +47,10 @@ class RetreatUpdate(BaseModel):
     special_meal_name:  Optional[str] = None
     special_meal_price: Optional[int] = None
     personal_vehicle_url: Optional[str] = None
+    is_research_open:       bool = True
+    is_vehicle_open:        bool = True
+    is_suspended_meal_open: bool = True
+    is_patient_room_open:   bool = True
 
 
 class RetreatCreateResponse(BaseModel):
@@ -61,6 +65,10 @@ class RetreatCreateResponse(BaseModel):
     special_meal_name:  Optional[str] = None
     special_meal_price: Optional[int] = None
     personal_vehicle_url: Optional[str] = None
+    is_research_open:       bool = True
+    is_vehicle_open:        bool = True
+    is_suspended_meal_open: bool = True
+    is_patient_room_open:   bool = True
 
 
 class RetreatActiveResponse(RetreatCreateResponse):
@@ -82,14 +90,15 @@ class ResearchResponseItem(BaseModel):
 
 
 class ResearchMemberResponse(BaseModel):
-    member_id:  int
-    name:       str
-    generation: int
-    gender:     str
-    gyogu:      int
-    team:       int
-    group_no:   int
-    response:   Optional[ResearchResponseItem] = None
+    member_id:   int
+    name:        str
+    generation:  int
+    gender:      str
+    gyogu:       int
+    team:        int
+    group_no:    int
+    is_fee_paid: bool = False
+    response:    Optional[ResearchResponseItem] = None
 
 
 class ResearchResponseUpdate(BaseModel):

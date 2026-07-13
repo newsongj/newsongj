@@ -244,7 +244,8 @@ const RetreatVehicleListPage: React.FC = () => {
       { id: 'group_no',    label: '그룹', align: 'center', width: 70,  render: (v) => `${v}그룹` },
       { id: 'generation',  label: '기수', align: 'center', width: 60,  render: (v) => `${v}기` },
       { id: 'gender',      label: '성별', align: 'center', width: 60 },
-      { id: 'member_name', label: '이름', align: 'left',   width: 90 },
+      { id: 'member_name', label: '이름',     align: 'left',   width: 90 },
+      { id: 'phone',       label: '전화번호', align: 'left',   width: 120, render: (v) => v ?? '' },
       ...dayColumns,
     ];
   }, [busType, busName, numDays, selectedBusId]);

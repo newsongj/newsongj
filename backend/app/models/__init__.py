@@ -98,6 +98,10 @@ class RetreatCustom(Base):
     is_active                  = Column(SmallInteger, nullable=False, default=1)
     created_at           = Column(DateTime, nullable=False, default=now_kst)
     updated_at           = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
+    is_research_open       = Column(SmallInteger, nullable=False, default=1)
+    is_vehicle_open        = Column(SmallInteger, nullable=False, default=1)
+    is_suspended_meal_open = Column(SmallInteger, nullable=False, default=1)
+    is_patient_room_open   = Column(SmallInteger, nullable=False, default=1)
 
 
 class BusCustom(Base):

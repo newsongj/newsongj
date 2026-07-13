@@ -439,6 +439,7 @@ const VehiclePage: React.FC = () => {
     const [loading,     setLoading]     = useState(true);
     const [loadError,   setLoadError]   = useState<string | null>(null);
     const [noRetreat,   setNoRetreat]   = useState(false);
+    const [isClosed,    setIsClosed]    = useState(false);
     const [selections,  setSelections]  = useState<VehicleSelections>({});
     const [activeDays,  setActiveDays]  = useState<Record<BusType, DayKey>>({} as Record<BusType, DayKey>);
     const [submitting,  setSubmitting]  = useState(false);
@@ -474,6 +475,7 @@ const VehiclePage: React.FC = () => {
 
                 const builtInfo = buildVehicleRetreatInfo(retreat, retreat.buses);
                 setRetreatInfo(builtInfo);
+                if (!retreat.is_vehicle_open) { setIsClosed(true); return; }
                 setPersonalVehicleUrl(retreat.personal_vehicle_url ?? null);
                 document.title = `${retreat.retreat_name} 차량조사`;
 
@@ -689,6 +691,14 @@ const VehiclePage: React.FC = () => {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
                 <span style={{ fontSize: 16, color: '#8c8c8c' }}>수련회 기간이 아닙니다.</span>
+            </div>
+        );
+    }
+
+    if (isClosed) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+                <span style={{ fontSize: 16, color: '#8c8c8c' }}>현재 차량조사 신청이 마감되었습니다.</span>
             </div>
         );
     }

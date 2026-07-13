@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { IconButton, Skeleton } from '@mui/material';
+import { IconButton, Skeleton, Switch, FormControlLabel } from '@mui/material';
 import { TextField } from '@components/common/TextField';
 import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
@@ -262,6 +262,12 @@ const RetreatEditPage: React.FC = () => {
   });
   const [buses, setBuses] = useState<LocalBus[]>([]);
   const [deletedBusIds, setDeletedBusIds] = useState<number[]>([]);
+  const [pageOpen, setPageOpen] = useState({
+    isResearchOpen: true,
+    isVehicleOpen: true,
+    isSuspendedMealOpen: true,
+    isPatientRoomOpen: true,
+  });
   const [original, setOriginal] = useState<{ form: BasicForm; buses: LocalBus[] } | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -290,6 +296,12 @@ const RetreatEditPage: React.FC = () => {
         setForm(loadedForm);
         setBuses(loadedBuses);
         setOriginal({ form: loadedForm, buses: loadedBuses });
+        setPageOpen({
+          isResearchOpen: r.is_research_open ?? true,
+          isVehicleOpen: r.is_vehicle_open ?? true,
+          isSuspendedMealOpen: r.is_suspended_meal_open ?? true,
+          isPatientRoomOpen: r.is_patient_room_open ?? true,
+        });
       } catch (e: any) {
         if (e?.status === 404) {
           setNoActiveRetreat(true);
@@ -409,6 +421,10 @@ const RetreatEditPage: React.FC = () => {
         special_meal_name: form.hasSpecialMeal && form.specialMealName.trim() ? form.specialMealName.trim() : null,
         special_meal_price: form.hasSpecialMeal && form.specialMealPrice ? Number(parseCurrency(form.specialMealPrice)) : null,
         personal_vehicle_url: form.personalVehicleUrl.trim() || null,
+        is_research_open: pageOpen.isResearchOpen,
+        is_vehicle_open: pageOpen.isVehicleOpen,
+        is_suspended_meal_open: pageOpen.isSuspendedMealOpen,
+        is_patient_room_open: pageOpen.isPatientRoomOpen,
       });
       await Promise.all(deletedBusIds.map((id) => deleteBus(id)));
       await Promise.all(
@@ -445,6 +461,12 @@ const RetreatEditPage: React.FC = () => {
       setBuses(refreshedBuses);
       setDeletedBusIds([]);
       setOriginal({ form: refreshedForm, buses: refreshedBuses });
+      setPageOpen({
+        isResearchOpen: r.is_research_open ?? true,
+        isVehicleOpen: r.is_vehicle_open ?? true,
+        isSuspendedMealOpen: r.is_suspended_meal_open ?? true,
+        isPatientRoomOpen: r.is_patient_room_open ?? true,
+      });
       showSnackbar('수련회 설정이 수정되었습니다.', 'success');
     } catch (e: any) {
       showSnackbar(e?.message || '저장 중 오류가 발생했습니다.', 'error');
@@ -630,6 +652,40 @@ const RetreatEditPage: React.FC = () => {
           helperText={<span style={{ wordBreak: 'keep-all' }}>입력 시 사용자 차량조사 페이지에 개인차량 신청 옵션이 표시됩니다.</span>}
           fullWidth
         />
+      </FormSection>
+
+      {/* 사용자 페이지 공개 설정 */}
+      <FormSection>
+        <SectionTitle>사용자 페이지 공개 설정</SectionTitle>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {(
+            [
+              { key: 'isResearchOpen',      label: '인원조사' },
+              { key: 'isVehicleOpen',       label: '차량조사' },
+              { key: 'isSuspendedMealOpen', label: '서스펜디드밀' },
+              { key: 'isPatientRoomOpen',   label: '환자방' },
+            ] as const
+          ).map(({ key, label }) => (
+            <FormControlLabel
+              key={key}
+              control={
+                <Switch
+                  checked={pageOpen[key]}
+                  onChange={(e) => setPageOpen((p) => ({ ...p, [key]: e.target.checked }))}
+                  color="primary"
+                />
+              }
+              label={
+                <span style={{ fontSize: 14 }}>
+                  {label}&nbsp;
+                  <span style={{ color: pageOpen[key] ? '#1677ff' : '#8c8c8c', fontWeight: 600 }}>
+                    {pageOpen[key] ? '열림' : '닫힘'}
+                  </span>
+                </span>
+              }
+            />
+          ))}
+        </div>
       </FormSection>
 
       {/* 요약 */}

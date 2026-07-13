@@ -1,7 +1,28 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Container } from './layout/Container';
+import { useRecoilValue } from 'recoil';
+import { authState, userPermissionsState } from '@/recoil/auth/atoms';
+import { Container, buildMenuItems } from './layout/Container';
 import { LoadingFallback } from '@components/common/LoadingFallback';
+
+const SmartRedirect: React.FC = () => {
+  const { isLoading } = useRecoilValue(authState);
+  const permissions = useRecoilValue(userPermissionsState);
+
+  if (isLoading) return <LoadingFallback />;
+
+  const firstPath = buildMenuItems(permissions)
+    .flatMap((item) => item.subItems ?? [])
+    .find((sub) => sub.path)?.path;
+
+  if (firstPath) return <Navigate to={firstPath} replace />;
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+      <span style={{ fontSize: 16, color: '#8c8c8c' }}>접근 가능한 메뉴가 없습니다.</span>
+    </div>
+  );
+};
 const MemberListPage = React.lazy(() => import('./pages/MemberListPage'));
 const DeletedMemberPage = React.lazy(() => import('./pages/DeletedMemberPage'));
 const PermissionManagementPage = React.lazy(() => import('./pages/PermissionManagementPage'));
@@ -21,7 +42,7 @@ const Orchestrator: React.FC = () => {
     <Container>
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/attendance-dashboard" replace />} />
+          <Route path="/" element={<SmartRedirect />} />
 
           <Route path="/members" element={<MemberListPage />} />
           <Route path="/members/newcomer" element={<NewcomerMemberPage />} />
