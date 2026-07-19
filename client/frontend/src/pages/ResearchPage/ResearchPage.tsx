@@ -159,6 +159,11 @@ const CountLabel = styled('span')(({ theme }) => ({
     },
 }));
 
+const CountRow = styled('div')({
+    marginTop: 12,
+    marginBottom: 4,
+});
+
 const ConfirmDialog = styled(Dialog)(({ theme }) => ({
     '& .MuiDialog-paper': {
         borderRadius: theme.custom.borderRadius,
@@ -507,6 +512,16 @@ const ResearchPage: React.FC = () => {
                 </div>
             )}
 
+            {/* 조사 현황 */}
+            {(!isAllScope || gyogu !== '') && !loading && (
+            <CountRow>
+                <CountLabel>
+                    총 {members.length}명&nbsp;|&nbsp;
+                    <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
+                </CountLabel>
+            </CountRow>)}
+
             {/* 테이블 */}
             {(!isAllScope || gyogu !== '') && !loading && <TableWrapper>
                 <TableScroll>
@@ -601,11 +616,6 @@ const ResearchPage: React.FC = () => {
 
             {(!isAllScope || gyogu !== '') && !loading && (
             <Footer>
-                <CountLabel>
-                    총 {members.length}명&nbsp;|&nbsp;
-                    <span style={{ color: '#1677ff', fontWeight: 600 }}>조사완료 {surveyedCount}명</span>&nbsp;|&nbsp;
-                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>미조사 {members.length - surveyedCount}명</span>
-                </CountLabel>
                 <TablePagination
                     component="div"
                     count={members.length}

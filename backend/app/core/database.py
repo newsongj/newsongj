@@ -9,7 +9,14 @@ DB_URL = (
     f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
 )
 
-engine = create_engine(DB_URL, pool_pre_ping=True, pool_recycle=3600)
+engine = create_engine(
+    DB_URL,
+    pool_pre_ping=True,
+    pool_recycle=1800,   # 30분마다 커넥션 갱신 (MySQL wait_timeout 대비)
+    pool_size=10,        # 기본 커넥션 수 (기본값 5 → 10)
+    max_overflow=20,     # 추가 허용 커넥션 수 (기본값 10 → 20)
+    pool_timeout=60,     # 커넥션 대기 시간 (기본값 30초 → 60초)
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

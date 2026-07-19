@@ -139,6 +139,11 @@ const CountLabel = styled('span')(({ theme }) => ({
     '@media (max-width: 480px)': { fontSize: theme.custom.typography.caption.fontSize },
 }));
 
+const CountRow = styled('div')({
+    marginTop: 12,
+    marginBottom: 4,
+});
+
 const ReasonInput = styled('input')(({ theme }) => ({
     width: 200,
     height: 32,
@@ -413,6 +418,14 @@ const PatientRoomPage: React.FC = () => {
                 </div>
             )}
 
+            {(!isAllScope || gyogu !== '') && !loading && (
+            <CountRow>
+                <CountLabel>
+                    총 {totalCount}명&nbsp;|&nbsp;
+                    <span style={{ color: '#1677ff', fontWeight: 600 }}>신청완료 {appliedCount}명</span>
+                </CountLabel>
+            </CountRow>)}
+
             {(!isAllScope || gyogu !== '') && !loading && <>
             <TableWrapper>
                 <TableScroll>
@@ -474,7 +487,7 @@ const PatientRoomPage: React.FC = () => {
 
                                         {hasAnyComment && (
                                             <Td style={{ color: '#ff4d4f', maxWidth: 160, whiteSpace: 'normal', wordBreak: 'keep-all', textAlign: 'left' }}>
-                                                {member.application?.review_comment ?? ''}
+                                                {member.application?.review_status === 'REJECTED' ? (member.application?.review_comment ?? '') : ''}
                                             </Td>
                                         )}
 
@@ -498,10 +511,6 @@ const PatientRoomPage: React.FC = () => {
                 </TableScroll>
             </TableWrapper>
             <Footer>
-                <CountLabel>
-                    총 {totalCount}명&nbsp;|&nbsp;
-                    <span style={{ color: '#1677ff', fontWeight: 600 }}>신청완료 {appliedCount}명</span>
-                </CountLabel>
                 <TablePagination
                     component="div"
                     count={totalCount}

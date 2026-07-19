@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
+import { CircularProgress } from '@mui/material';
 import { ChevronDown, ChevronRight, Info, Shield } from 'lucide-react';
 import {
     AccountResponse,
@@ -341,12 +342,14 @@ const PermissionManagementPage: React.FC = () => {
     const [createSearch, setCreateSearch] = useState('');
     const [createLeaderFilter, setCreateLeaderFilter] = useState<Set<string>>(new Set());
     const [createResult, setCreateResult] = useState<BulkLeaderCreateResultItem[] | null>(null);
+    const [createPreviewMap, setCreatePreviewMap] = useState<Map<string, LeaderPreviewItem>>(new Map());
     // ── 일괄 계정 삭제 modal ──────────────────────────────────────────────────
     const [deleteModal, setDeleteModal] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deletePreview, setDeletePreview] = useState<LeaderWithAccountItem[]>([]);
     const [deleteSelected, setDeleteSelected] = useState<Set<number>>(new Set());
     const [deleteSearch, setDeleteSearch] = useState('');
+    const [deleteLeaderFilter, setDeleteLeaderFilter] = useState<Set<string>>(new Set());
     // ── 일괄 활성/비활성 modal ────────────────────────────────────────────────
     const [syncModal, setSyncModal] = useState(false);
     const [syncLoading, setSyncLoading] = useState(false);
@@ -415,6 +418,11 @@ const PermissionManagementPage: React.FC = () => {
     const handleCreateSave = async () => {
         const ids = Array.from(createSelected);
         if (ids.length === 0) { showSnackbar('선택된 인원이 없습니다.', 'success'); return; }
+        const previewMap = new Map(
+            createPreview.filter(p => createSelected.has(p.member_id)).map(p => [p.login_id, p])
+        );
+        setCreatePreviewMap(previewMap);
+        setCreateLoading(true);
         try {
             const result = await bulkCreateAccounts({
                 member_ids: ids,
@@ -425,10 +433,12 @@ const PermissionManagementPage: React.FC = () => {
             await loadAccounts();
             const preview = await fetchAccountPreview();
             setCreatePreview(preview);
-            setCreateSelected(new Set(preview.map(p => p.member_id)));
+            setCreateSelected(new Set());
             showSnackbar(`${result.length}개 계정이 생성되었습니다.`, 'success');
         } catch (e: any) {
             showSnackbar(e.message || '계정 생성에 실패했습니다.', 'error');
+        } finally {
+            setCreateLoading(false);
         }
     };
 
@@ -436,6 +446,7 @@ const PermissionManagementPage: React.FC = () => {
         setDeleteLoading(true);
         setDeleteModal(true);
         setDeleteSearch('');
+        setDeleteLeaderFilter(new Set());
         setDeleteSelected(new Set());
         try {
             const leaders = await fetchAllLeaders();
@@ -506,8 +517,19 @@ const PermissionManagementPage: React.FC = () => {
     };
 
     const downloadCsv = (rows: BulkLeaderCreateResultItem[]) => {
-        const header = '이름,전화번호(로그인ID),초기비밀번호';
-        const body = rows.map(r => `${r.name},"=""${r.login_id}""",${r.password}`).join('\n');
+        const header = '교구,팀,그룹,직분,이름,전화번호(로그인ID),초기비밀번호';
+        const body = rows.map(r => {
+            const p = createPreviewMap.get(r.login_id);
+            return [
+                p?.gyogu ?? '',
+                p?.team ?? '',
+                p?.group_no ?? '',
+                (p?.leader_names ?? []).join('/'),
+                r.name,
+                `"=""${r.login_id}"""`,
+                r.password,
+            ].join(',');
+        }).join('\n');
         const blob = new Blob(['﻿' + header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -909,24 +931,33 @@ const PermissionManagementPage: React.FC = () => {
                     <BaseModal
                         open={createModal}
                         title="일괄 계정 생성"
-                        onClose={() => setCreateModal(false)}
+                        onClose={() => { if (!createLoading) setCreateModal(false); }}
                         size="large"
-                        loading={createLoading}
+                        loading={createLoading && createResult === null}
                         actions={
                             <ModalActions>
-                                <Button variant="outlined" onClick={() => setCreateModal(false)}>닫기</Button>
+                                <Button variant="outlined" onClick={() => setCreateModal(false)} disabled={createLoading}>닫기</Button>
                                 <Button variant="outlined"
                                     onClick={() => createResult && createResult.length > 0 && downloadCsv(createResult)}
-                                    disabled={!createResult || createResult.length === 0}>
+                                    disabled={createLoading || !createResult || createResult.length === 0}>
                                     CSV 다운로드
                                 </Button>
                                 <Button variant="filled" onClick={handleCreateSave}
-                                    disabled={createSelected.size === 0}>
+                                    disabled={createLoading || createSelected.size === 0}>
                                     생성 ({createSelected.size}명)
                                 </Button>
                             </ModalActions>
                         }
                     >
+                        {createLoading && createResult === null ? null : createLoading ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '48px 16px' }}>
+                                <CircularProgress size={40} />
+                                <div style={{ textAlign: 'center', wordBreak: 'keep-all', maxWidth: 260 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#1d1d1d' }}>계정을 생성 중입니다.</div>
+                                    <div style={{ fontSize: 13, color: '#888', marginTop: 6, lineHeight: 1.6 }}>완료될 때까지 화면을 벗어나지 마세요.</div>
+                                </div>
+                            </div>
+                        ) : (
                         <ModalGrid>
                             <div style={{ fontSize: 12, color: '#555' }}>
                                 계정이 없는 리더 {createPreview.length}명 · {createSelected.size}명 선택됨
@@ -1004,16 +1035,22 @@ const PermissionManagementPage: React.FC = () => {
                                 </ModalTableWrapper>
                             )}
                         </ModalGrid>
+                        )}
                     </BaseModal>
                 );
             })()}
 
             {/* ── 일괄 계정 삭제 모달 ── */}
             {(() => {
-                const filtered = deletePreview.filter(p =>
-                    deleteSearch === '' || p.name.includes(deleteSearch)
-                );
+                const deleteLeaderNames = Array.from(new Set(deletePreview.flatMap(p => p.leader_names))).sort();
+                const filtered = deletePreview.filter(p => {
+                    const matchName = deleteSearch === '' || p.name.includes(deleteSearch);
+                    const matchLeader = deleteLeaderFilter.size === 0 || p.leader_names.some(n => deleteLeaderFilter.has(n));
+                    return matchName && matchLeader;
+                });
                 const allFiltered = filtered.length > 0 && filtered.every(p => deleteSelected.has(p.member_id));
+                const toggleDeleteLeaderFilter = (name: string) =>
+                    setDeleteLeaderFilter(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s; });
                 return (
                     <BaseModal
                         open={deleteModal}
@@ -1042,6 +1079,28 @@ const PermissionManagementPage: React.FC = () => {
                             </div>
                             <TextField label="이름 검색" placeholder="이름을 입력하세요"
                                 value={deleteSearch} onChange={e => setDeleteSearch(e.target.value)} fullWidth />
+                            {deleteLeaderNames.length > 0 && (
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                        <span style={{ fontSize: 12, color: '#595959', fontWeight: 600 }}>직분 필터</span>
+                                        <Tooltip title="직분을 선택하면 해당 직분을 가진 멤버만 표시됩니다." arrow placement="right">
+                                            <span style={{ display: 'flex', alignItems: 'center', cursor: 'help' }}><Info size={13} color="#aaa" /></span>
+                                        </Tooltip>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {deleteLeaderNames.map(name => (
+                                            <button key={name} onClick={() => toggleDeleteLeaderFilter(name)}
+                                                style={{
+                                                    padding: '3px 10px', fontSize: 12, borderRadius: 12, cursor: 'pointer',
+                                                    border: `1px solid ${deleteLeaderFilter.has(name) ? '#4f86f7' : '#d9d9d9'}`,
+                                                    background: deleteLeaderFilter.has(name) ? '#eff6ff' : '#fff',
+                                                    color: deleteLeaderFilter.has(name) ? '#2563eb' : '#555',
+                                                    fontWeight: deleteLeaderFilter.has(name) ? 600 : 400,
+                                                }}>{name}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {filtered.length === 0 ? (
                                 <div style={{ fontSize: 12, color: '#aaa', padding: '8px 0' }}>
                                     {deletePreview.length === 0 ? '계정이 있는 리더가 없습니다.' : '검색 결과가 없습니다.'}
@@ -1057,6 +1116,7 @@ const PermissionManagementPage: React.FC = () => {
                                                     return next;
                                                 })} /></Th>
                                             <Th style={{ position: 'sticky', top: 0, zIndex: 1 }}>이름</Th>
+                                            <Th style={{ position: 'sticky', top: 0, zIndex: 1 }}>직분</Th>
                                             <Th style={{ position: 'sticky', top: 0, zIndex: 1 }}>계정 상태</Th>
                                             <Th style={{ position: 'sticky', top: 0, zIndex: 1 }}>전화번호</Th>
                                             <Th style={{ position: 'sticky', top: 0, zIndex: 1 }}>교구</Th>
@@ -1069,6 +1129,7 @@ const PermissionManagementPage: React.FC = () => {
                                                     <Td style={{ width: 40 }}><input type="checkbox" checked={deleteSelected.has(item.member_id)}
                                                         onChange={() => setDeleteSelected(prev => { const next = new Set(prev); next.has(item.member_id) ? next.delete(item.member_id) : next.add(item.member_id); return next; })} /></Td>
                                                     <Td>{item.name}</Td>
+                                                    <Td>{item.leader_names.join(', ')}</Td>
                                                     <Td><Badge variant={item.is_active ? 'active' : 'inactive'} size="small">{item.is_active ? '활성' : '비활성'}</Badge></Td>
                                                     <Td>{item.login_id}</Td>
                                                     <Td>{item.gyogu}</Td><Td>{item.team}</Td><Td>{item.group_no}</Td>
