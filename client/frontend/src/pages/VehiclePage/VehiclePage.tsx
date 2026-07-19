@@ -18,11 +18,13 @@ const BUS_TYPE_ORDER: BusType[] = ['후발', '픽업', '귀경'];
 
 const MULTI_SELECT_TYPES = new Set<BusType>(['후발', '픽업', '귀경']);
 
-const BUS_TYPE_META: Record<BusType, { label: string; desc: string }> = {
-    후발: { label: '후발',  desc: '정상 출발 이후 후발 탑승하는 차량' },
-    픽업: { label: '픽업',  desc: '수련회 기간 중 지정 장소에서 픽업하는 차량' },
-    귀경: { label: '귀경',  desc: '수련회 기간 중 귀가하는 차량' },
+const BUS_TYPE_META: Record<BusType, { label: string; desc: string; color: string }> = {
+    후발: { label: '후발',  desc: '정상 출발 이후 후발 탑승하는 차량',          color: '#0284c7' },
+    픽업: { label: '픽업',  desc: '수련회 기간 중 지정 장소에서 픽업하는 차량', color: '#ea580c' },
+    귀경: { label: '귀경',  desc: '수련회 기간 중 귀가하는 차량',               color: '#16a34a' },
 };
+
+const PERSONAL_VEHICLE_COLOR = '#71717a';
 
 const DAY_LABELS: Record<DayKey, string> = {
     day1: '첫째날',
@@ -328,8 +330,9 @@ const FieldValue = styled('span')(({ theme }) => ({
     padding: '6px 0',
 }));
 
-const BusSectionWrapper = styled('section')(({ theme }) => ({
+const BusSectionWrapper = styled('section')<{ $accentColor?: string }>(({ theme, $accentColor }) => ({
     border: `1px solid ${theme.custom.colors.primary.outline}`,
+    borderLeft: $accentColor ? `4px solid ${$accentColor}` : `1px solid ${theme.custom.colors.primary.outline}`,
     borderRadius: theme.custom.borderRadius, overflow: 'hidden',
     backgroundColor: theme.custom.colors.white,
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
@@ -383,8 +386,8 @@ const SlotGrid = styled('div')(({ theme }) => ({
 }));
 
 const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean; $waiting?: boolean }>(({ theme, $selected, $none, $waiting }) => ({
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    padding: '8px 20px', borderRadius: 100,
+    display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    padding: '10px 20px', borderRadius: 100,
     border: `2px solid ${
         $none
             ? ($selected ? theme.custom.colors.neutral._70 : theme.custom.colors.neutral._80)
@@ -406,8 +409,9 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean; $waitin
     cursor: 'pointer', transition: theme.custom.transitions.fast, whiteSpace: 'nowrap',
     '@media (max-width: 480px)': {
         width: '100%',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         padding: '10px 16px',
+        minHeight: 56,
         borderRadius: theme.custom.borderRadius,
         fontSize: theme.custom.typography.body2.fontSize,
     },
@@ -418,8 +422,15 @@ const SlotChip = styled('button')<{ $selected: boolean; $none?: boolean; $waitin
 }));
 
 const SlotTime = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
-    fontSize: 12, opacity: $selected ? 0.85 : 0.55, marginLeft: 6,
-    '@media (max-width: 480px)': { marginLeft: 0, fontSize: 13 },
+    fontSize: 16, fontWeight: 700, lineHeight: 1.2,
+    opacity: $selected ? 1 : 0.85,
+    '@media (max-width: 480px)': { fontSize: 15 },
+}));
+
+const SlotBusName = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
+    fontSize: 11, marginTop: 2, lineHeight: 1,
+    opacity: $selected ? 0.75 : 0.5,
+    '@media (max-width: 480px)': { fontSize: 11 },
 }));
 
 const EmptyNote = styled('span')(({ theme }) => ({
@@ -807,7 +818,7 @@ const VehiclePage: React.FC = () => {
                     .map((dk, idx) => dayOptions.find((o) => o.value === dk) ?? { value: dk, label: `${idx + 1}일차` });
 
                 return (
-                    <BusSectionWrapper key={type}>
+                    <BusSectionWrapper key={type} $accentColor={meta.color}>
                         <BusSectionHeader>
                             <BusSectionTitle>{meta.label}</BusSectionTitle>
                             <BusSectionDesc>{meta.desc}</BusSectionDesc>
@@ -840,11 +851,12 @@ const VehiclePage: React.FC = () => {
                                             $waiting={isWaiting}
                                             onClick={() => handleSlotSelect(type, bus)}
                                         >
-                                            {bus.bus_name}
-                                            {isWaiting && <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 700 }}>예비</span>}
                                             <SlotTime $selected={selected}>
                                                 {formatTime12h(bus.departure_time)}
                                             </SlotTime>
+                                            <SlotBusName $selected={selected}>
+                                                {bus.bus_name}{isWaiting ? ' 예비' : ''}
+                                            </SlotBusName>
                                         </SlotChip>
                                     );
                                 }) : (
@@ -858,7 +870,7 @@ const VehiclePage: React.FC = () => {
 
             {/* 개인차량 섹션 */}
             {personalVehicleUrl && (typeFilter === 'all' || typeFilter === '개인차량') && (
-                <BusSectionWrapper>
+                <BusSectionWrapper $accentColor={PERSONAL_VEHICLE_COLOR}>
                     <BusSectionHeader>
                         <BusSectionTitle>개인차량</BusSectionTitle>
                         <BusSectionDesc style={{ wordBreak: 'keep-all' }}>개인차량으로 수련회에 참석하는 경우 아래 링크에서 신청해주세요.</BusSectionDesc>
@@ -867,6 +879,7 @@ const VehiclePage: React.FC = () => {
                         <Button
                             variant="outlined"
                             onClick={() => window.open(personalVehicleUrl!, '_blank', 'noopener,noreferrer')}
+                            sx={{ '@media (max-width: 480px)': { width: '100%', borderRadius: '8px', minHeight: 56 } }}
                         >
                             개인차량 신청하기
                         </Button>

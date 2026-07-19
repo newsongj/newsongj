@@ -294,8 +294,8 @@ const HeadcountTab: React.FC = () => {
         />
         {dayData && (
           <DayTotalBadge>
-            <DayTotalLabel>{DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 총인원</DayTotalLabel>
-            <DayTotalValue>{dayData.total}명</DayTotalValue>
+            <DayTotalLabel>{DAY_LABEL_LIST[selectedDayIdx] ?? `${selectedDayIdx + 1}일차`} 참석인원</DayTotalLabel>
+            <DayTotalValue>{dayData.normal + dayData.attend + dayData.late}명</DayTotalValue>
           </DayTotalBadge>
         )}
       </FilterRow>
@@ -388,32 +388,48 @@ const SlotList = styled('div')(({ theme }) => ({
   flexWrap: 'wrap',
   gap: theme.custom.spacing.sm,
   marginTop: 4,
-}));
-
-const SlotChip = styled('div')<{ $selected: boolean }>(({ theme, $selected }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 14px',
-  borderRadius: 20,
-  border: `1px solid ${$selected ? theme.custom.colors.primary._500 : theme.custom.colors.primary.outline}`,
-  backgroundColor: $selected ? theme.custom.colors.primary._500 : '#fff',
-  color: $selected ? '#fff' : theme.custom.colors.text.high,
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: $selected ? 600 : 400,
-  transition: 'all 0.15s ease',
-  userSelect: 'none',
-  '&:hover': {
-    borderColor: theme.custom.colors.primary._500,
+  '@media (max-width: 480px)': {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
   },
 }));
 
-const SlotCount = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
-  fontWeight: 700,
-  fontSize: 14,
-  opacity: $selected ? 1 : 0.75,
+const SlotChip = styled('div')<{ $selected: boolean; $full?: boolean }>(({ theme, $selected, $full }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  padding: '10px 16px',
+  borderRadius: 12,
+  border: `1px solid ${$selected ? theme.custom.colors.primary._500 : $full ? '#f97316' : theme.custom.colors.primary.outline}`,
+  backgroundColor: $selected ? theme.custom.colors.primary._500 : $full ? '#fff7ed' : '#fff',
+  color: $selected ? '#fff' : theme.custom.colors.text.high,
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  userSelect: 'none',
+  minWidth: 72,
+  '@media (max-width: 480px)': {
+    width: '100%',
+  },
+  '&:hover': {
+    borderColor: $selected ? theme.custom.colors.primary._500 : '#f97316',
+  },
 }));
+
+const SlotTime = styled('span')<{ $selected: boolean }>(({ $selected }) => ({
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.2,
+  opacity: $selected ? 1 : 0.9,
+}));
+
+const SlotCount = styled('span')<{ $selected: boolean; $full?: boolean }>(({ $selected, $full }) => ({
+  fontSize: 12,
+  fontWeight: 500,
+  marginTop: 3,
+  color: $selected ? 'rgba(255,255,255,0.85)' : $full ? '#ea580c' : undefined,
+  opacity: $selected ? 0.85 : 0.65,
+}));
+
 
 
 const DaySectionLabel = styled('div')(({ theme }) => ({
@@ -464,17 +480,26 @@ const VehicleTypePanel: React.FC<{
             <DaySectionLabel>{getDayLabel(date, startDate)}</DaySectionLabel>
           )}
           <SlotList>
-            {dayBuses.map(bus => (
-              <SlotChip
-                key={bus.bus_id}
-                $selected={selectedBusId === bus.bus_id}
-                onClick={() => setSelectedBusId(prev => prev === bus.bus_id ? null : bus.bus_id)}
-              >
-                {bus.bus_name}
-                <span style={{ opacity: 0.7, marginLeft: 4, fontSize: 12 }}>{bus.departure_time}</span>
-                <SlotCount $selected={selectedBusId === bus.bus_id}>{bus.passenger_count}명</SlotCount>
-              </SlotChip>
-            ))}
+            {dayBuses.map(bus => {
+              const isFull = bus.passenger_count >= bus.seat_count;
+              const isSelected = selectedBusId === bus.bus_id;
+              return (
+                <SlotChip
+                  key={bus.bus_id}
+                  $selected={isSelected}
+                  $full={!isSelected && isFull}
+                  onClick={() => setSelectedBusId(prev => prev === bus.bus_id ? null : bus.bus_id)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <SlotTime $selected={isSelected}>{bus.departure_time}</SlotTime>
+                    {isFull && !isSelected && <span style={{ color: '#e60000', fontWeight: 700, fontSize: 12 }}>만석</span>}
+                  </div>
+                  <SlotCount $selected={isSelected} $full={!isSelected && isFull}>
+                    {bus.bus_name}&nbsp;·&nbsp;{bus.passenger_count}/{bus.seat_count}명
+                  </SlotCount>
+                </SlotChip>
+              );
+            })}
           </SlotList>
         </div>
       ))}
