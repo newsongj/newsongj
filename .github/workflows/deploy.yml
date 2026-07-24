@@ -113,6 +113,12 @@ jobs:
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
             EOF
 
+            cat > ~/newsongj/Caddyfile << 'CADDYEOF'
+            msnewsongj.com, www.msnewsongj.com {
+                reverse_proxy frontend:80
+            }
+            CADDYEOF
+
             cat > ~/newsongj/docker-compose.yml << 'COMPOSEOF'
             services:
               mariadb:
@@ -156,14 +162,27 @@ jobs:
               frontend:
                 image: ${{ secrets.DOCKERHUB_USERNAME }}/newsongj-front
                 restart: unless-stopped
-                ports:
-                  - "80:80"
                 depends_on:
                   - backend
                   - client-frontend
 
+              caddy:
+                image: caddy:2-alpine
+                restart: unless-stopped
+                ports:
+                  - "80:80"
+                  - "443:443"
+                volumes:
+                  - ./Caddyfile:/etc/caddy/Caddyfile:ro
+                  - caddy_data:/data
+                  - caddy_config:/config
+                depends_on:
+                  - frontend
+
             volumes:
               db_data:
+              caddy_data:
+              caddy_config:
 
             networks:
               default:
