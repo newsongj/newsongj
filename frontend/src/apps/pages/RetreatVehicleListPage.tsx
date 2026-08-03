@@ -197,7 +197,7 @@ const RetreatVehicleListPage: React.FC = () => {
     return [
       { value: '', label: '전체 버스' },
       ...[...buses]
-        .sort((a, b) => a.bus_name.localeCompare(b.bus_name))
+        .sort((a, b) => a.departure_date.localeCompare(b.departure_date) || a.departure_time.localeCompare(b.departure_time))
         .map((b) => ({ value: b.bus_name, label: `${b.bus_name} ${b.departure_time}` })),
     ];
   }, [busType, retreat]);
