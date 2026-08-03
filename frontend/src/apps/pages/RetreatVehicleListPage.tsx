@@ -192,23 +192,15 @@ const RetreatVehicleListPage: React.FC = () => {
   }, [gyogu, members]);
 
   const busNameOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    members.forEach((m) => {
-      DAY_BUS_KEYS.slice(0, numDays).forEach((key) => {
-        (m[key] ?? []).forEach((bus) => {
-          if (!busType || bus.bus_name.startsWith(busType)) {
-            if (!seen.has(bus.bus_name)) {
-              seen.set(bus.bus_name, `${bus.bus_name} ${bus.departure_time}`);
-            }
-          }
-        });
-      });
-    });
+    if (!retreat) return [{ value: '', label: '전체 버스' }];
+    const buses = retreat.buses.filter((b) => !busType || b.bus_name.startsWith(busType));
     return [
       { value: '', label: '전체 버스' },
-      ...[...seen.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([val, label]) => ({ value: val, label })),
+      ...[...buses]
+        .sort((a, b) => a.bus_name.localeCompare(b.bus_name))
+        .map((b) => ({ value: b.bus_name, label: `${b.bus_name} ${b.departure_time}` })),
     ];
-  }, [busType, members, numDays]);
+  }, [busType, retreat]);
 
   const columns = useMemo<Column<VehicleMemberListItem>[]>(() => {
     const dayColumns: Column<VehicleMemberListItem>[] = DAY_BUS_KEYS.slice(0, numDays).map((key, i) => ({
