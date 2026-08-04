@@ -376,24 +376,29 @@ def get_bus_passenger_count(db: Session, bus_id: int) -> int:
 
 
 def get_full_buses(db: Session, bus_ids: list[int]) -> list[int]:
-    """bus_ids 중 만석인 버스 id 목록 반환."""
+    """bus_ids 중 만석인 버스 id 목록 반환. (실제 JSON 배열에 포함된 고유 탑승자 수 기준)"""
+    responses = db.query(
+        RetreatResponse.day1_bus, RetreatResponse.day2_bus,
+        RetreatResponse.day3_bus, RetreatResponse.day4_bus,
+    ).all()
+
+    counts: dict[int, int] = {}
+    for row in responses:
+        seen: set[int] = set()
+        for raw in row:
+            if not raw:
+                continue
+            try:
+                seen.update(json.loads(raw))
+            except (ValueError, TypeError):
+                pass
+        for bid in seen:
+            counts[bid] = counts.get(bid, 0) + 1
+
     full = []
     for bus_id in bus_ids:
         bus = db.query(BusCustom).filter(BusCustom.bus_id == bus_id).first()
-        if not bus:
-            continue
-        confirmed = (
-            db.query(func.count())
-            .select_from(RetreatResponse)
-            .filter(
-                RetreatResponse.day1_bus.contains(str(bus_id)) |
-                RetreatResponse.day2_bus.contains(str(bus_id)) |
-                RetreatResponse.day3_bus.contains(str(bus_id)) |
-                RetreatResponse.day4_bus.contains(str(bus_id))
-            )
-            .scalar()
-        )
-        if confirmed >= bus.seat_count:
+        if bus and counts.get(bus_id, 0) >= bus.seat_count:
             full.append(bus_id)
     return full
 
