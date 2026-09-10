@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Date, DateTime, Numeric, Enum, Text, Time
+from sqlalchemy.dialects.mysql import YEAR
 from app.core.database import Base
 from app.core.timezone import now_kst
 
@@ -191,3 +192,59 @@ class PatientRoomApplication(Base):
     review_status    = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')
     review_comment   = Column(String(500), nullable=True)
     reviewed_at      = Column(DateTime, nullable=True)
+
+
+class MemberOpinionReport(Base):
+    # 소견서 본문 대상자 당 1건, 작성/수정자는 여러명
+    __tablename__ = "member_opinion_report"
+
+    opinion_report_id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    member_id  = Column(BigInteger, nullable=False)  # 회원 ID
+    report_year = Column(YEAR, nullable=False)  # 소견서 기준 연도
+
+    current_status     = Column(String(100), nullable=True)  # 현재상태
+    current_status_etc = Column(String(255), nullable=True)  # 현재상태 기타설명란
+
+    group_meeting_attendance_status  = Column(String(255), nullable=True)  # 그룹모임 출석현황
+    sunday_morning_attendance_status = Column(String(255), nullable=True)  # 주일낮예배 출석현황
+    sunday_evening_attendance_status = Column(String(255), nullable=True)  # 주일저녁예배 출석현황
+
+    next_year_plan     = Column(String(255), nullable=True)  # 다음년도 계획
+    next_year_plan_etc = Column(String(255), nullable=True)  # 다음년도 계획 기타설명란
+
+    general_opinion = Column(Text, nullable=True)  # 전체소견
+    special_opinion = Column(Text, nullable=True)  # 특별소견
+
+    created_at = Column(DateTime, nullable=False, default=now_kst)  # 생성 시각
+    updated_at = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)  # 수정 시각
+
+
+class OpinionReportCustom(Base):
+    # 소견서 회차 설정 — 연도당 1행
+    __tablename__ = "opinion_report_custom"
+
+    opinion_custom_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    report_year       = Column(YEAR, nullable=False, unique=True)  # 소견서 기준 연도
+    start_date        = Column(Date, nullable=True)  # 작성 시작일
+    end_date          = Column(Date, nullable=True)  # 작성 마감일
+    guide_text        = Column(String(500), nullable=True)  # 작성자 안내 문구
+    member_fields     = Column(Text, nullable=False)  # 교적 자동 기입 항목 JSON 배열. 예: ["name","gyogu","team"]
+    input_fields      = Column(Text, nullable=False)  # 작성자 직접 입력 항목 JSON 배열. 예: ["current_status","general_opinion"]
+    is_active         = Column(SmallInteger, nullable=False, default=1)  # 1=진행 중, 0=완료(팀배치 완료 시 전환)
+    created_at        = Column(DateTime, nullable=False, default=now_kst)
+    updated_at        = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
+    status_options    = Column(Text, nullable=True)  # 현재상태 선택지 JSON 배열
+    plan_options      = Column(Text, nullable=True)  # 다음년도 계획 선택지 JSON 배열
+
+
+class OpinionReportMapping(Base):
+    # 임원단 간 소견서 작성자 배정
+    __tablename__ = "opinion_report_mapping"
+    
+    mapping_id       = Column(BigInteger, primary_key=True, autoincrement=True)
+    report_year      = Column(YEAR, nullable=False)
+    writer_member_id = Column(BigInteger, nullable=False)  # 소견서 작성자
+    target_member_id = Column(BigInteger, nullable=False)  # 소견서 대상자
+    created_at       = Column(DateTime, nullable=False, default=now_kst)
+    updated_at       = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)

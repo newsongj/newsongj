@@ -7,4 +7,5 @@ pydantic-settings  # BaseSettings로 환경변수 관리
 python-dotenv
 python-jose[cryptography]
 bcrypt
+tzdata  # Windows에서 zoneinfo 시간대 데이터 제공
 # alembic

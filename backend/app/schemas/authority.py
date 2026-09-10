@@ -17,6 +17,9 @@ MENU_KEYS: List[str] = [
     "admin.retreat.vehicle_list",
     "admin.retreat.suspended_meal",
     "admin.retreat.patient_room",
+    "admin.opinion.create",
+    "admin.opinion.edit",
+    "admin.opinion.mapping",
     "user.research",
     "user.vehicle",
     "user.suspended_meal",
@@ -38,6 +41,9 @@ MENU_LABELS: Dict[str, str] = {
     "admin.retreat.vehicle_list":          "차량조사 명단",
     "admin.retreat.suspended_meal":        "서스펜디드밀 명단",
     "admin.retreat.patient_room":          "환자방 명단",
+    "admin.opinion.create":                "소견서 생성",
+    "admin.opinion.edit":                  "소견서 설정 수정",
+    "admin.opinion.mapping":               "소견서 작성자 배정",
     "user.research":                       "인원조사",
     "user.vehicle":                        "차량조사",
     "user.suspended_meal":                 "서스펜디드밀",
@@ -62,6 +68,7 @@ MENU_GROUPS: Dict[str, List[str]] = {
         "admin.retreat.suspended_meal",
         "admin.retreat.patient_room",
     ],
+    "소견서": ["admin.opinion.create", "admin.opinion.edit", "admin.opinion.mapping"],
     "사용자": ["user.research", "user.vehicle", "user.suspended_meal", "user.patient_room"],
 }
 
