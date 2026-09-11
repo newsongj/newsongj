@@ -12,6 +12,8 @@ import {
 } from '../memberForm.types';
 import { MemberEditPageProps } from './MemberEditPage.types';
 import { fetchLeaders, LeaderOption } from '@/api/meta';
+import { Button } from '@components/common/Button';
+import NewcomerHistoryModal from '../NewcomerHistoryModal';
 
 const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team', 'group', 'memberType'];
 
@@ -33,6 +35,12 @@ const EMPTY_FORM: MemberFormValue = {
   major: '',
   pid: '',
 };
+
+const EduHistoryBar = styled('div')(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'flex-end',
+  marginBottom: theme.custom.spacing.md,
+}));
 
 const FormGrid = styled('div')(({ theme }) => ({
   display: 'grid',
@@ -112,7 +120,10 @@ const isBirthDateFormat = (value: string) => {
   );
 };
 
-const MemberEditPage: React.FC<MemberEditPageProps> = ({ open, value, onClose, onSubmit, isSubmitting = false }) => {
+const MemberEditPage: React.FC<MemberEditPageProps> = ({
+  open, value, onClose, onSubmit, isSubmitting = false, memberId, hasEducationRecord = false,
+}) => {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState<MemberFormValue>(EMPTY_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
   const [leaderOptions, setLeaderOptions] = useState<LeaderOption[]>([]);
@@ -161,6 +172,22 @@ const MemberEditPage: React.FC<MemberEditPageProps> = ({ open, value, onClose, o
       saveText="저장"
       cancelText="취소"
     >
+      {hasEducationRecord && memberId !== undefined && (
+        <EduHistoryBar>
+          <Button variant="outlined" onClick={() => setHistoryOpen(true)}>
+            교육 이력 보기
+          </Button>
+        </EduHistoryBar>
+      )}
+
+      {historyOpen && memberId !== undefined && (
+        <NewcomerHistoryModal
+          memberId={memberId}
+          memberName={form.name}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+
       <FormGrid>
         <FieldBlock>
           <FieldLabel>이름<Required>*</Required></FieldLabel>

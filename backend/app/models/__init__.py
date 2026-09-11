@@ -49,7 +49,8 @@ class Member(Base):
     phone_number   = Column(String(13), unique=True, nullable=True)
     v8pid          = Column(String(64), unique=True, nullable=True)
     birthdate      = Column(Date, nullable=True)
-    enrolled_at    = Column(DateTime, nullable=True)
+    registered_at  = Column(Date, nullable=True)       # 최초 등록일 — 출석 관리 시작 기준
+    enrolled_at    = Column(DateTime, nullable=True)   # 등반일 (미등반이면 NULL)
     school_work    = Column(String(255), nullable=True)   # 학교 및 직장
     major          = Column(String(255), nullable=True)   # 전공
     deleted_at     = Column(DateTime, nullable=True)
@@ -143,6 +144,8 @@ class AttendanceRecord(Base):
     member_id     = Column(BigInteger, nullable=False)
     status        = Column(Enum('PRESENT', 'ABSENT'), nullable=False, default='ABSENT')
     absent_reason = Column(Enum('학교/학원', '회사', '알바', '가족모임', '개인일정', '아픔', '기타'), nullable=True)
+    edu_week      = Column(SmallInteger, nullable=True)   # 새가족 교육주차 (1·2·3), 해당 없으면 NULL
+    memo          = Column(String(500), nullable=False, default='')  # 새가족 교육 메모
     checked_at    = Column(DateTime, nullable=False)
 
 
@@ -170,6 +173,7 @@ class SuspendedMealApplication(Base):
     __tablename__ = "suspended_meal_application"
 
     application_id      = Column(BigInteger, primary_key=True, autoincrement=True)
+    retreat_custom_id   = Column(BigInteger, nullable=True)
     member_id           = Column(BigInteger, nullable=False)
     meal_count          = Column(SmallInteger, nullable=False, default=0)
     special_meal_count  = Column(SmallInteger, nullable=False, default=0)
@@ -184,8 +188,9 @@ class SuspendedMealApplication(Base):
 class PatientRoomApplication(Base):
     __tablename__ = "patient_room_application"
 
-    application_id   = Column(BigInteger, primary_key=True, autoincrement=True)
-    member_id        = Column(BigInteger, nullable=False)
+    application_id    = Column(BigInteger, primary_key=True, autoincrement=True)
+    retreat_custom_id = Column(BigInteger, nullable=True)
+    member_id         = Column(BigInteger, nullable=False)
     applicant_reason = Column(String(500), nullable=True)
     applied_at       = Column(DateTime, nullable=False)
     review_status    = Column(Enum('PENDING', 'APPROVED', 'REJECTED'), nullable=False, default='PENDING')

@@ -8,13 +8,17 @@ from sqlalchemy.orm import Session
 from app.schemas.attendance import (
     AttendanceMemberItem, AttendanceListResponse,
     AttendanceBatchRequest, AttendanceBatchResponse,
+    NewcomerAttendanceBatchRequest, NewcomerAttendanceHistoryItem,
+    NewcomerAttendanceMemberItem, NewcomerAttendanceListResponse,
 )
 from app.schemas.common import PageMeta
 from app.crud.leaders import get_leader_map
 from app.crud.attendance import (
     get_attendance_records as crud_get_attendance_records,
+    get_newcomer_attendance_records as crud_get_newcomer_attendance_records,
     upsert_attendance_batch as crud_upsert_attendance_batch,
     upsert_newcomer_attendance_batch as crud_upsert_newcomer_attendance_batch,
+    get_newcomer_attendance_history as crud_get_newcomer_attendance_history,
 )
 from app.services.members import resolve_leader_names
 
@@ -66,7 +70,58 @@ def save_attendance_batch(db: Session, body: AttendanceBatchRequest) -> Attendan
     return AttendanceBatchResponse(saved_count=saved)
 
 
-def save_newcomer_attendance_batch(db: Session, body: AttendanceBatchRequest) -> AttendanceBatchResponse:
-    """미등반 새가족 출석 일괄 upsert. 일반 출석률은 갱신하지 않는다."""
+def build_newcomer_attendance_list_response(
+    db: Session,
+    worship_date: datetime.date,
+    gyogu_no: int,
+    team_no: Optional[int],
+    group_no: Optional[int],
+    page: int,
+    page_size: int,
+) -> NewcomerAttendanceListResponse:
+    """미등반 새가족 출석 목록 조회 + 응답 조립."""
+    rows, total = crud_get_newcomer_attendance_records(
+        db, worship_date, gyogu_no, team_no, group_no, page, page_size,
+    )
+    items = [
+        NewcomerAttendanceMemberItem(
+            member_id=member.member_id,
+            name=member.name,
+            generation=member.generation,
+            gender=member.gender,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
+            status=record.status if record else None,
+            absent_reason=record.absent_reason if record else None,
+            edu_week=record.edu_week if record else None,
+            memo=(record.memo if record else "") or "",
+        )
+        for member, profile, record in rows
+    ]
+    return NewcomerAttendanceListResponse(
+        items=items,
+        meta=PageMeta(current_page=page, page_size=page_size, total_items=total),
+    )
+
+
+def save_newcomer_attendance_batch(db: Session, body: NewcomerAttendanceBatchRequest) -> AttendanceBatchResponse:
+    """미등반 새가족 출석 일괄 upsert. 출석률/등급도 함께 갱신한다."""
     saved = crud_upsert_newcomer_attendance_batch(db, body)
     return AttendanceBatchResponse(saved_count=saved)
+
+
+def build_newcomer_history_response(
+    db: Session, member_id: int, limit: Optional[int] = None,
+) -> list[NewcomerAttendanceHistoryItem]:
+    """새가족 교육 이력 조회 + 응답 조립."""
+    records = crud_get_newcomer_attendance_history(db, member_id, limit)
+    return [
+        NewcomerAttendanceHistoryItem(
+            worship_date=r.worship_date,
+            status=r.status,
+            edu_week=r.edu_week,
+            memo=r.memo,
+        )
+        for r in records
+    ]

@@ -238,6 +238,7 @@ const PatientRoomPage: React.FC = () => {
 
   const columns = [
     { id: 'member_name', label: '신청자',   minWidth: 100 },
+    { id: 'gender',   label: '성별', minWidth: 60,  align: 'center' as const },
     { id: 'gyogu',    label: '교구', minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}교구` },
     { id: 'team',     label: '팀',   minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}팀` },
     { id: 'group_no', label: '그룹', minWidth: 60,  align: 'center' as const, render: (v: number) => `${v}그룹` },

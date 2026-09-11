@@ -8,6 +8,8 @@ export interface NewcomerBody {
   generation: number;
   phone_number?: string;
   birthdate?: string;
+  /** 최초 등록일 (YYYY-MM-DD) — 필수. 출석률 산정 앵커 */
+  registered_at: string;
   v8pid?: string;
   school_work?: string;
   major?: string;

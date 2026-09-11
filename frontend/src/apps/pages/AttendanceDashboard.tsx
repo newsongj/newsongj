@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Users, TrendingUp, CalendarCheck } from 'lucide-react';
+import { Users, CalendarCheck, UserPlus } from 'lucide-react';
 import { fetchAttendanceDashboard } from '@/api/attendance';
 import { DashboardQuery, DashboardResponse } from '@/models/attendance.types';
 import StatCard from '@components/common/StatCard';
@@ -419,8 +419,9 @@ const AttendanceDashboard: React.FC = () => {
   }, [yearLineConfig, mostRecentSat]);
 
   // ── KPI 파생값 ────────────────────────────────────────────────────────
-  const gen45 = dashboardData?.kpi.by_gen.find(g => g.gen === 45);
-  const gen46 = dashboardData?.kpi.by_gen.find(g => g.gen === 46);
+  // 기수는 백엔드가 DB의 저기수(최상위기수) 기수 2개를 오름차순으로 내려준다 (하드코딩 금지)
+  const genStats = dashboardData?.kpi.by_gen ?? [];
+  const GEN_CARD_COLORS = ['#dcfce7', '#f3e8ff'];
 
   const absentReasonChartData = useMemo(() =>
     periodUnit !== 'weekly' ? [] :
@@ -551,29 +552,24 @@ const AttendanceDashboard: React.FC = () => {
           icon={<CalendarCheck size={24} />}
           iconBgColor="#e0f2fe"
         />
+        {genStats.map((g, i) => (
+          <StatCard
+            key={g.gen}
+            label={`평균 ${g.gen}기 출석 인원`}
+            value={`${g.present}명`}
+            change={`전체 ${g.total}명 중`}
+            isPositive={true}
+            icon={<Users size={24} />}
+            iconBgColor={GEN_CARD_COLORS[i % GEN_CARD_COLORS.length]}
+          />
+        ))}
         <StatCard
-          label="평균 45기 출석 인원"
-          value={gen45 ? `${gen45.present}명` : '-'}
-          change={gen45 ? `전체 ${gen45.total}명 중` : ''}
+          label="평균 새가족 출석 인원"
+          value={dashboardData ? `${dashboardData.kpi.newcomer.present}명` : '-'}
+          change={dashboardData ? `전체 미등반 새가족 ${dashboardData.kpi.newcomer.total}명 중` : ''}
           isPositive={true}
-          icon={<Users size={24} />}
-          iconBgColor="#dcfce7"
-        />
-        <StatCard
-          label="평균 46기 출석 인원"
-          value={gen46 ? `${gen46.present}명` : '-'}
-          change={gen46 ? `전체 ${gen46.total}명 중` : ''}
-          isPositive={true}
-          icon={<Users size={24} />}
-          iconBgColor="#f3e8ff"
-        />
-        <StatCard
-          label="평균 최다 결석 사유"
-          value={dashboardData?.kpi.top_reason?.reason ?? '-'}
-          change={dashboardData?.kpi.top_reason ? `${dashboardData.kpi.top_reason.count}명` : ''}
-          isPositive={false}
-          icon={<TrendingUp size={24} />}
-          iconBgColor="#fef9c3"
+          icon={<UserPlus size={24} />}
+          iconBgColor="#fce7f3"
         />
       </KpiGrid>
 

@@ -36,6 +36,9 @@ const SuspendedMealPage = React.lazy(() => import('./pages/SuspendedMealPage'));
 const PatientRoomPage   = React.lazy(() => import('./pages/PatientRoomPage'));
 const RetreatCreatePage = React.lazy(() => import('./pages/RetreatCreatePage'));
 const RetreatEditPage = React.lazy(() => import('./pages/RetreatEditPage'));
+const OpinionDashboardPage = React.lazy(() => import('./pages/OpinionDashboardPage'));
+const OpinionSettingsPage = React.lazy(() => import('./pages/OpinionSettingsPage'));
+const TeamAssignmentPage = React.lazy(() => import('./pages/TeamAssignmentPage'));
 
 const Orchestrator: React.FC = () => {
   return (
@@ -56,6 +59,10 @@ const Orchestrator: React.FC = () => {
           <Route path="/retreat/edit" element={<RetreatEditPage />} />
           <Route path="/retreat/suspended-meal" element={<SuspendedMealPage />} />
           <Route path="/retreat/patient-room"  element={<PatientRoomPage />} />
+
+          <Route path="/opinion/dashboard" element={<OpinionDashboardPage />} />
+          <Route path="/opinion/settings" element={<OpinionSettingsPage />} />
+          <Route path="/opinion/team-assignment" element={<TeamAssignmentPage />} />
 
           <Route path="/permission/accounts" element={<PermissionManagementPage />} />
           <Route path="/permission/policies" element={<PermissionManagementPage />} />

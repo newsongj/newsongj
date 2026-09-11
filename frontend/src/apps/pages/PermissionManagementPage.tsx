@@ -310,7 +310,7 @@ const SCOPE_OPTIONS = [
     { value: 'group', label: '그룹 단위 접근' },
 ];
 
-const ADMIN_PAGE_GROUPS = ['권한관리', '교적관리', '수련회'];
+const ADMIN_PAGE_GROUPS = ['권한관리', '교적관리', '수련회', '소견서'];
 const USER_PAGE_GROUPS = ['사용자'];
 
 // ── Main Component ────────────────────────────────────────────────────────────

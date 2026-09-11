@@ -7,11 +7,17 @@ import datetime
 from app.core.database import get_db
 from app.core.date_utils import is_saturday
 from app.core.security import require_menu
-from app.schemas.attendance import AttendanceBatchRequest, AttendanceBatchResponse, AttendanceListResponse
+from app.schemas.attendance import (
+    AttendanceBatchRequest, AttendanceBatchResponse, AttendanceListResponse,
+    NewcomerAttendanceBatchRequest, NewcomerAttendanceHistoryItem,
+    NewcomerAttendanceListResponse,
+)
 from app.services.attendance import (
     build_attendance_list_response,
+    build_newcomer_attendance_list_response,
     save_attendance_batch,
     save_newcomer_attendance_batch,
+    build_newcomer_history_response,
 )
 
 router = APIRouter(
@@ -51,10 +57,44 @@ def batch_save_attendance(body: AttendanceBatchRequest, db: Session = Depends(ge
     return save_attendance_batch(db, body)
 
 
+@router.get(
+    "/newcomers",
+    response_model=NewcomerAttendanceListResponse,
+    summary="미등반 새가족 출석 목록 조회",
+)
+def list_newcomer_attendance_records(
+    worship_date: datetime.date = Query(..., description="예배 날짜 (YYYY-MM-DD)"),
+    gyogu_no: int = Query(..., description="교구 번호"),
+    team_no: Optional[int] = Query(None, description="팀 번호"),
+    group_no: Optional[int] = Query(None, description="그룹 번호"),
+    page: int = Query(1, description="페이지 (1-based)"),
+    page_size: int = Query(20, description="페이지당 건수"),
+    db: Session = Depends(get_db),
+):
+    if not is_saturday(worship_date):
+        raise HTTPException(422, "worship_date는 토요일이어야 합니다.")
+    return build_newcomer_attendance_list_response(
+        db, worship_date, gyogu_no, team_no, group_no, page, page_size,
+    )
+
+
 @router.post(
     "/newcomers/records/batch",
     response_model=AttendanceBatchResponse,
     summary="미등반 새가족 출석 기록 일괄 저장 (upsert)",
 )
-def batch_save_newcomer_attendance(body: AttendanceBatchRequest, db: Session = Depends(get_db)):
+def batch_save_newcomer_attendance(body: NewcomerAttendanceBatchRequest, db: Session = Depends(get_db)):
     return save_newcomer_attendance_batch(db, body)
+
+
+@router.get(
+    "/newcomers/{member_id}/history",
+    response_model=list[NewcomerAttendanceHistoryItem],
+    summary="새가족 교육 이력 조회",
+)
+def get_newcomer_history(
+    member_id: int,
+    limit: Optional[int] = Query(None, description="최근 N건만 조회 (기본값: 전체)"),
+    db: Session = Depends(get_db),
+):
+    return build_newcomer_history_response(db, member_id, limit)

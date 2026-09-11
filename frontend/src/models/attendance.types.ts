@@ -97,6 +97,7 @@ export interface NewcomerAttendanceMemberRow {
   team: number;
   group_no: number;
   status: AttendanceStatus | null;
+  absent_reason: AbsentReason | null;
   edu_week: 1 | 2 | 3 | null;
   memo: string;
 }
@@ -113,6 +114,7 @@ export interface NewcomerAttendanceRecordsParams {
 export interface NewcomerAttendanceRecordItem {
   member_id: number;
   status: AttendanceStatus;
+  absent_reason: AbsentReason | null;
   edu_week: 1 | 2 | 3 | null;
   memo: string;
 }
@@ -124,11 +126,19 @@ export interface NewcomerAttendanceBatchRequest {
 
 export type NewcomerAttendancePageResponse = Page<NewcomerAttendanceMemberRow>;
 
+export interface NewcomerAttendanceHistoryItem {
+  worship_date: string;
+  status: AttendanceStatus;
+  edu_week: 1 | 2 | 3 | null;
+  memo: string;
+}
+
 export interface DashboardResponse {
   kpi: {
     all: { present: number; total: number };
     by_gen: { gen: number; present: number; total: number }[];
     top_reason: { reason: string; count: number } | null;
+    newcomer: { present: number; total: number };
   };
   trend: TrendItem[];
   dimension: {

@@ -14,6 +14,7 @@ class MemberResponse(BaseModel):
     group_no: Optional[int]
     phone_number: Optional[str]
     birthdate: Optional[datetime.date]
+    registered_at: Optional[datetime.date]   # 최초 등록일 (출석 관리 시작 기준)
     member_type: Optional[str]
     attendance_grade: Optional[str]
     plt_status: Optional[str]
@@ -23,6 +24,7 @@ class MemberResponse(BaseModel):
     major: Optional[str]            # 전공
     updated_at: Optional[datetime.date]
     enrolled_at: Optional[datetime.datetime]
+    has_education_record: bool = False   # 새가족 교육 이력 보유 여부 (등반 후에도 유지)
 
     class Config:
         from_attributes = True
