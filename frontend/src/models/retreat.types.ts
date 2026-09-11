@@ -42,6 +42,7 @@ export interface PatientRoomApplication {
   application_id:   number;
   member_id:        number;
   member_name:      string;
+  gender:           '남' | '여';
   gyogu:            number;
   team:             number;
   group_no:         number;

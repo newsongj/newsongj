@@ -12,6 +12,7 @@ from app.schemas.members import (
     MemberBulkDeleteRequest, MemberIdResponse, MemberBulkResponse,
 )
 from app.crud.leaders import get_leader_map
+from app.crud.attendance import has_education_record as crud_has_education_record
 from app.crud.members import (
     get_members as crud_get_members,
     get_deleted_members as crud_get_deleted_members,
@@ -39,9 +40,10 @@ def resolve_leader_names(leader_ids_json: str | None, leader_map: dict) -> list[
     return [leader_map[str(id)] for id in ids if str(id) in leader_map]
 
 
-def _to_member_response(member, profile, leader_map) -> MemberResponse:
+def _to_member_response(member, profile, leader_map, edu_ids: set[int] | None = None) -> MemberResponse:
     """Member + MemberProfile ORM 객체 → MemberResponse 스키마 변환"""
     return MemberResponse(
+        has_education_record=member.member_id in edu_ids if edu_ids else False,
         member_id=member.member_id,
         name=member.name,
         gender=member.gender,
@@ -51,6 +53,7 @@ def _to_member_response(member, profile, leader_map) -> MemberResponse:
         group_no=profile.group_no if profile else None,
         phone_number=member.phone_number,
         birthdate=member.birthdate,
+        registered_at=member.registered_at,
         member_type=profile.member_type if profile else None,
         attendance_grade=profile.attendance_grade if profile else None,
         plt_status=profile.plt_status if profile else None,
@@ -82,7 +85,8 @@ def build_member_response(member, profile, db: Session) -> MemberResponse:
 def build_member_list(rows, total: int, page: int, page_size: int, db: Session) -> MemberListResponse:
     """활성 멤버 목록 → MemberListResponse 변환"""
     leader_map = get_leader_map(db)
-    items = [_to_member_response(member, profile, leader_map) for member, profile in rows]
+    edu_ids = crud_has_education_record(db, [member.member_id for member, _ in rows])
+    items = [_to_member_response(member, profile, leader_map, edu_ids) for member, profile in rows]
     return MemberListResponse(
         items=items,
         meta=PageMeta(current_page=page, page_size=page_size, total_items=total),

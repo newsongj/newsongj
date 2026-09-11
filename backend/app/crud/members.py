@@ -38,6 +38,8 @@ def _apply_keyword_filter(query, db: Session, field: str, keyword: str):
         return query.filter(cast(Member.birthdate, String).like(f"%{keyword}%")), False
     elif field == "enrolled_at":
         return query.filter(cast(Member.enrolled_at, String).like(f"%{keyword}%")), False
+    elif field == "registered_at":
+        return query.filter(cast(Member.registered_at, String).like(f"%{keyword}%")), False
     elif field == "school_work":
         return query.filter(Member.school_work.like(f"%{keyword}%")), False
     elif field == "major":

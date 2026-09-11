@@ -22,6 +22,7 @@ class KpiResponse(BaseModel):
     all: AttendanceStats
     by_gen: list[GenStats]
     top_reason: Optional[TopReason]
+    newcomer: AttendanceStats   # 미등반 새가족 주 평균 (present=출석, total=조사 대상)
 
 
 class TrendItem(BaseModel):

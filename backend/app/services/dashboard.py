@@ -2,17 +2,14 @@
 import datetime
 from collections import defaultdict
 from sqlalchemy.orm import Session
-from app.crud.dashboard import get_kpi_stats, get_trend_stats, get_dimension_stats, get_absent_reason_stats, get_gyogu_status_stats, ABSENT_REASONS, GYOGU_KEYS
+from app.crud.dashboard import get_kpi_stats, get_newcomer_kpi_stats, get_top_generations, get_trend_stats, get_dimension_stats, get_absent_reason_stats, get_gyogu_status_stats, ABSENT_REASONS, GYOGU_KEYS
 from app.core.date_utils import saturdays_between
 from app.schemas.dashboard import KpiResponse, AttendanceStats, GenStats, TopReason, TrendItem, DimensionItem, AbsentReasonItem, GyoguStatusItem, DimensionBreakdown, DashboardResponse
 
 
-def _empty_gen_stats(end_date) -> list[GenStats]:
-    gen_curr = end_date.year - 1980
-    return [
-        GenStats(gen=gen_curr - 1, present=0, total=0),
-        GenStats(gen=gen_curr,     present=0, total=0),
-    ]
+def _empty_gen_stats(db: Session) -> list[GenStats]:
+    """기록이 없는 기간 — 기수는 DB에서 뽑되 수치는 0으로."""
+    return [GenStats(gen=g, present=0, total=0) for g in get_top_generations(db)]
 
 
 def build_kpi_response(
@@ -27,8 +24,9 @@ def build_kpi_response(
     if stats is None:
         return KpiResponse(
             all=AttendanceStats(present=0, total=0),
-            by_gen=_empty_gen_stats(end_date),
+            by_gen=_empty_gen_stats(db),
             top_reason=None,
+            newcomer=AttendanceStats(present=0, total=0),
         )
 
     n = stats["n"]
@@ -36,22 +34,24 @@ def build_kpi_response(
     top = stats["reason_counter"].most_common(1)
     top_reason = TopReason(reason=top[0][0], count=round(top[0][1] / n, 1)) if top else None
 
+    nc = get_newcomer_kpi_stats(db, start_date, end_date, gyogu_no, team_no)
+
     return KpiResponse(
+        newcomer=AttendanceStats(
+            present=round(nc["present"] / n, 1),
+            total=round(nc["total"] / n, 1),
+        ),
         all=AttendanceStats(
             present=round(stats["total_present"] / n, 1),
             total=round(stats["total_members"] / n, 1),
         ),
         by_gen=[
             GenStats(
-                gen=stats["gen_prev"],
-                present=round(stats["gen_stats"][stats["gen_prev"]]["present"] / n, 1),
-                total=round(stats["gen_stats"][stats["gen_prev"]]["total"] / n, 1),
-            ),
-            GenStats(
-                gen=stats["gen_curr"],
-                present=round(stats["gen_stats"][stats["gen_curr"]]["present"] / n, 1),
-                total=round(stats["gen_stats"][stats["gen_curr"]]["total"] / n, 1),
-            ),
+                gen=g,
+                present=round(stats["gen_stats"][g]["present"] / n, 1),
+                total=round(stats["gen_stats"][g]["total"] / n, 1),
+            )
+            for g in stats["generations"]
         ],
         top_reason=top_reason,
     )

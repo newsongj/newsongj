@@ -29,7 +29,11 @@ def get_newcomers(db: Session, page: int, page_size: int, year: int, gyogu=None,
 
 
 def create_newcomer(db: Session, data: NewcomerCreate) -> Member:
-    """새가족 생성 — `member_type='새가족'`, `enrolled_at`은 등반 전이라 NULL."""
+    """새가족 생성 — `member_type='새가족'`, `enrolled_at`은 등반 전이라 NULL.
+
+    `registered_at`(최초 등록일)은 요청값을 그대로 쓴다 — 출석률 산정 앵커라
+    실제 등록한 날짜여야 한다. 서버 시각으로 대체하지 않는다.
+    """
     member = Member(
         name=data.name,
         gender=data.gender,
@@ -37,6 +41,7 @@ def create_newcomer(db: Session, data: NewcomerCreate) -> Member:
         phone_number=data.phone_number,
         v8pid=data.v8pid,
         birthdate=data.birthdate,
+        registered_at=data.registered_at,
         school_work=data.school_work,
         major=data.major,
         enrolled_at=None,  # 등반 전 — enroll_newcomer에서 세팅
@@ -68,6 +73,7 @@ def update_newcomer(db: Session, member_id: int, data: NewcomerUpdate) -> int:
     member.phone_number = data.phone_number
     member.v8pid = data.v8pid
     member.birthdate = data.birthdate
+    member.registered_at = data.registered_at
     member.school_work = data.school_work
     member.major = data.major
 
@@ -131,6 +137,7 @@ def enroll_newcomer(db: Session, member_id: int, data: EnrollRequest) -> int:
             MemberProfile.team,
             MemberProfile.group_no,
             MemberProfile.leader_ids,
+            cast(func.nullif(MemberProfile.attendance_grade, ""), String).label("attendance_grade"),
             cast(func.nullif(MemberProfile.plt_status, ""), String).label("plt_status"),
         )
         .filter(MemberProfile.member_id == member_id)
@@ -139,11 +146,15 @@ def enroll_newcomer(db: Session, member_id: int, data: EnrollRequest) -> int:
     )
     assert latest is not None, "_is_newcomer가 True면 profile이 반드시 존재"
 
+    # attendance_grade 이월 — 등반 직후 다음 출석 저장 전까지 등급이 비지 않도록.
+    # 출석률 앵커(첫 기록일)는 등반과 무관하게 유지되므로 재계산해도 값이 이어진다.
     upsert_profile_on_date(
         db, member_id, today_kst(),
         gyogu=latest.gyogu, team=latest.team, group_no=latest.group_no,
         member_type=data.member_type,
-        leader_ids=latest.leader_ids, plt_status=latest.plt_status,
+        leader_ids=latest.leader_ids,
+        attendance_grade=latest.attendance_grade,
+        plt_status=latest.plt_status,
     )
     member.enrolled_at = data.enrolled_at
 
@@ -171,6 +182,7 @@ def enroll_newcomers(db: Session, data: BulkEnrollRequest) -> list[int]:
                 MemberProfile.team,
                 MemberProfile.group_no,
                 MemberProfile.leader_ids,
+                cast(func.nullif(MemberProfile.attendance_grade, ""), String).label("attendance_grade"),
                 cast(func.nullif(MemberProfile.plt_status, ""), String).label("plt_status"),
             )
             .filter(MemberProfile.member_id == member_id)
@@ -188,7 +200,9 @@ def enroll_newcomers(db: Session, data: BulkEnrollRequest) -> list[int]:
             db, member_id, today,
             gyogu=latest.gyogu, team=latest.team, group_no=latest.group_no,
             member_type=data.member_type,
-            leader_ids=latest.leader_ids, plt_status=latest.plt_status,
+            leader_ids=latest.leader_ids,
+            attendance_grade=latest.attendance_grade,
+            plt_status=latest.plt_status,
         )
         member_by_id[member_id].enrolled_at = data.enrolled_at
 

@@ -676,7 +676,9 @@ def svc_get_suspended_meal_members(
     retreat = crud_get_active_retreat(db)
     if not retreat:
         raise NotFoundError("활성 수련회가 없습니다.")
-    rows = crud_get_suspended_meal_members(db, data_scope, gyogu, team, group_no, query_gyogu, query_team)
+    rows = crud_get_suspended_meal_members(
+        db, retreat.retreat_custom_id, data_scope, gyogu, team, group_no, query_gyogu, query_team,
+    )
     result = []
     for member, profile, app in rows:
         app_item = None
@@ -708,7 +710,10 @@ def svc_get_suspended_meal_members(
 def svc_upsert_suspended_meal(
     db: Session, member_id: int, body: SuspendedMealSubmitBody
 ) -> None:
-    crud_upsert_suspended_meal(db, member_id, body)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    crud_upsert_suspended_meal(db, retreat.retreat_custom_id, member_id, body)
 
 
 # ── 서스펜디드밀 관리자 ──────────────────────────────────────────────────────────
@@ -719,7 +724,12 @@ def svc_get_admin_suspended_meal_list(
     page: int,
     size: int,
 ) -> AdminSuspendedMealListResponse:
-    total, rows = crud_get_admin_suspended_meal_list(db, review_status, page, size)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    total, rows = crud_get_admin_suspended_meal_list(
+        db, retreat.retreat_custom_id, review_status, page, size,
+    )
     items = [
         AdminSuspendedMealItem(
             application_id=app.application_id,
@@ -743,7 +753,12 @@ def svc_get_admin_suspended_meal_list(
 
 
 def svc_get_admin_suspended_meal_stats(db: Session) -> AdminSuspendedMealStats:
-    total, pending, approved, rejected = crud_get_admin_suspended_meal_stats(db)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    total, pending, approved, rejected = crud_get_admin_suspended_meal_stats(
+        db, retreat.retreat_custom_id,
+    )
     return AdminSuspendedMealStats(total=total, pending=pending, approved=approved, rejected=rejected)
 
 
@@ -771,7 +786,12 @@ def svc_get_patient_room_members(
     query_gyogu: Optional[int] = None,
     query_team: Optional[int] = None,
 ) -> List[PatientRoomMemberResponse]:
-    rows = crud_get_patient_room_members(db, data_scope, gyogu, team, group_no, query_gyogu, query_team)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    rows = crud_get_patient_room_members(
+        db, retreat.retreat_custom_id, data_scope, gyogu, team, group_no, query_gyogu, query_team,
+    )
     result = []
     for member, profile, app in rows:
         app_item = None
@@ -798,7 +818,10 @@ def svc_get_patient_room_members(
 
 
 def svc_upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody) -> None:
-    crud_upsert_patient_room(db, member_id, body)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    crud_upsert_patient_room(db, retreat.retreat_custom_id, member_id, body)
 
 
 def svc_get_admin_patient_room_list(
@@ -807,12 +830,18 @@ def svc_get_admin_patient_room_list(
     page: int,
     size: int,
 ) -> AdminPatientRoomListResponse:
-    total, rows = crud_get_admin_patient_room_list(db, review_status, page, size)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    total, rows = crud_get_admin_patient_room_list(
+        db, retreat.retreat_custom_id, review_status, page, size,
+    )
     items = [
         AdminPatientRoomItem(
             application_id=app.application_id,
             member_id=app.member_id,
             member_name=member.name,
+            gender=member.gender,
             gyogu=profile.gyogu,
             team=profile.team,
             group_no=profile.group_no,
@@ -828,7 +857,12 @@ def svc_get_admin_patient_room_list(
 
 
 def svc_get_admin_patient_room_stats(db: Session) -> AdminPatientRoomStats:
-    total, pending, approved, rejected = crud_get_admin_patient_room_stats(db)
+    retreat = crud_get_active_retreat(db)
+    if not retreat:
+        raise NotFoundError("활성 수련회가 없습니다.")
+    total, pending, approved, rejected = crud_get_admin_patient_room_stats(
+        db, retreat.retreat_custom_id,
+    )
     return AdminPatientRoomStats(total=total, pending=pending, approved=approved, rejected=rejected)
 
 
