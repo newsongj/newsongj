@@ -41,6 +41,70 @@ class AttendanceBatchResponse(BaseModel):
     saved_count: int
 
 
+class NewcomerAttendanceRecordItem(BaseModel):
+    member_id: int
+    status: Literal["PRESENT", "ABSENT"]
+    absent_reason: Optional[Literal["학교/학원", "회사", "알바", "가족모임", "개인일정", "아픔", "기타"]] = None
+    edu_week: Optional[Literal[1, 2, 3]] = None
+    memo: str = ""
+
+    @model_validator(mode="after")
+    def validate_status_fields(self) -> "NewcomerAttendanceRecordItem":
+        if self.status == "PRESENT" and self.absent_reason is not None:
+            raise ValueError("PRESENT 상태에서는 absent_reason을 입력할 수 없습니다.")
+        if self.status == "ABSENT":
+            if self.absent_reason is None:
+                raise ValueError("ABSENT 상태에서는 absent_reason이 필요합니다.")
+            if self.edu_week is not None:
+                raise ValueError("ABSENT 상태에서는 edu_week를 입력할 수 없습니다.")
+        return self
+
+
+class NewcomerAttendanceBatchRequest(BaseModel):
+    worship_date: date
+    records: list[NewcomerAttendanceRecordItem]
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "NewcomerAttendanceBatchRequest":
+        if not is_saturday(self.worship_date):
+            raise ValueError("worship_date는 토요일이어야 합니다.")
+        if self.worship_date > today_kst():
+            raise ValueError("worship_date는 미래 날짜를 허용하지 않습니다.")
+        ids = [r.member_id for r in self.records]
+        duplicates = {i for i in ids if ids.count(i) > 1}
+        if duplicates:
+            raise ValueError(f"member_id 중복 요청: {sorted(duplicates)}")
+        return self
+
+
+class NewcomerAttendanceHistoryItem(BaseModel):
+    """새가족 교육 이력 조회 응답 단건"""
+    worship_date: date
+    status: Literal["PRESENT", "ABSENT"]
+    edu_week: Optional[Literal[1, 2, 3]] = None
+    memo: str = ""
+
+
+class NewcomerAttendanceMemberItem(BaseModel):
+    """새가족 출석 목록 조회 응답 단건 — 기록 없는 새가족도 포함"""
+    member_id: int
+    name: str
+    generation: int
+    gender: str
+    gyogu: int
+    team: int
+    group_no: int
+    status: Optional[Literal["PRESENT", "ABSENT"]] = None  # 기록 없으면 None
+    absent_reason: Optional[Literal["학교/학원", "회사", "알바", "가족모임", "개인일정", "아픔", "기타"]] = None
+    edu_week: Optional[Literal[1, 2, 3]] = None
+    memo: str = ""
+
+
+class NewcomerAttendanceListResponse(BaseModel):
+    items: list[NewcomerAttendanceMemberItem]
+    meta: PageMeta
+
+
 class AttendanceMemberItem(BaseModel):
     """출석 목록 조회 응답 단건 — member_profile 기준, 출석 기록은 없을 수 있음"""
     member_id: int

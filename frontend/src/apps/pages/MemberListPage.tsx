@@ -34,9 +34,11 @@ interface DisplayRow {
   schoolWork: string;
   major: string;
   pid: string;
+  hasEducationRecord: boolean;
 }
 
 const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
+  hasEducationRecord: item.has_education_record ?? false,
   id: item.member_id,
   year: item.updated_at ? `${item.updated_at.slice(0, 4)}년` : '-',
   parish: item.gyogu ? `${item.gyogu}교구` : '-',
@@ -380,6 +382,8 @@ const MemberListPage: React.FC = () => {
         onClose={() => setEditOpen(false)}
         onSubmit={handleEdit}
         isSubmitting={isSubmitting}
+        memberId={selectedRow?.id}
+        hasEducationRecord={selectedRow?.hasEducationRecord ?? false}
       />
 
       {deleteOpen && (

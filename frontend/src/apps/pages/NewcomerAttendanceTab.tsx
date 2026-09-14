@@ -9,8 +9,13 @@ import { Snackbar } from '@components/common/Snackbar';
 import Popup from '@components/common/Popup';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
-import { saveNewcomerAttendanceBatch } from '@/api/attendance';
-import { AttendanceStatus, NewcomerAttendanceMemberRow, NewcomerUiStatus } from '@/models/attendance.types';
+import { fetchNewcomerAttendanceRecords, saveNewcomerAttendanceBatch } from '@/api/attendance';
+import {
+  AbsentReason,
+  AttendanceStatus,
+  NewcomerAttendanceMemberRow,
+  NewcomerUiStatus,
+} from '@/models/attendance.types';
 import {
   addDaysToDateKey,
   buildCalendarGrid,
@@ -29,11 +34,13 @@ interface NewcomerRow {
   team: number;
   groupNo: number;
   status: NewcomerUiStatus | null;
+  absentReason: AbsentReason | null;
   memo: string;
 }
 
 interface NewcomerChange {
   status: NewcomerUiStatus | null;
+  absentReason: AbsentReason | null;
   memo: string;
 }
 
@@ -56,6 +63,18 @@ const STATUS_OPTIONS = [
   { value: 'EDU_1',  label: <span style={{ color: '#1677ff', fontWeight: 600 }}>1주차 교육</span> },
   { value: 'EDU_2',  label: <span style={{ color: '#1677ff', fontWeight: 600 }}>2주차 교육</span> },
   { value: 'EDU_3',  label: <span style={{ color: '#1677ff', fontWeight: 600 }}>3주차 교육</span> },
+];
+
+// 백엔드 absent_reason enum과 일치해야 함 (app/schemas/attendance.py)
+const ABSENT_REASON_OPTIONS = [
+  { value: '', label: '사유 선택' },
+  { value: '학교/학원', label: '학교/학원' },
+  { value: '회사', label: '회사' },
+  { value: '알바', label: '알바' },
+  { value: '가족모임', label: '가족모임' },
+  { value: '개인일정', label: '개인일정' },
+  { value: '아픔', label: '아픔' },
+  { value: '기타', label: '기타' },
 ];
 
 const GYOGU_OPTIONS = [
@@ -100,23 +119,9 @@ const toNewcomerRow = (item: NewcomerAttendanceMemberRow): NewcomerRow => ({
   team: item.team,
   groupNo: item.group_no,
   status: toUiStatus(item.status, item.edu_week),
+  absentReason: item.absent_reason,
   memo: item.memo ?? '',
 });
-
-// ── Mock data (백엔드 연동 전 테스트용) ──────────────────────────────────────
-
-const MOCK_NEWCOMERS: NewcomerAttendanceMemberRow[] = [
-  { member_id: 1001, name: '김새가족', generation: 46, gender: '남', gyogu: 1, team: 1, group_no: 1, status: null,      edu_week: null, memo: '' },
-  { member_id: 1002, name: '이새가족', generation: 46, gender: '여', gyogu: 1, team: 1, group_no: 2, status: null,      edu_week: null, memo: '' },
-  { member_id: 1003, name: '박새가족', generation: 46, gender: '남', gyogu: 1, team: 2, group_no: 1, status: 'PRESENT', edu_week: 1,    memo: '적응 중' },
-  { member_id: 1004, name: '최새가족', generation: 46, gender: '여', gyogu: 1, team: 2, group_no: 2, status: 'PRESENT', edu_week: 2,    memo: '' },
-  { member_id: 1005, name: '정새가족', generation: 46, gender: '남', gyogu: 2, team: 3, group_no: 1, status: null,      edu_week: null, memo: '' },
-  { member_id: 1006, name: '강새가족', generation: 46, gender: '여', gyogu: 2, team: 3, group_no: 2, status: 'ABSENT',  edu_week: null, memo: '연락 안됨' },
-  { member_id: 1007, name: '윤새가족', generation: 46, gender: '남', gyogu: 2, team: 4, group_no: 1, status: 'PRESENT', edu_week: 3,    memo: '' },
-  { member_id: 1008, name: '장새가족', generation: 46, gender: '여', gyogu: 3, team: 5, group_no: 1, status: null,      edu_week: null, memo: '' },
-  { member_id: 1009, name: '임새가족', generation: 46, gender: '남', gyogu: 3, team: 5, group_no: 2, status: null,      edu_week: null, memo: '' },
-  { member_id: 1010, name: '오새가족', generation: 46, gender: '여', gyogu: 3, team: 6, group_no: 1, status: 'PRESENT', edu_week: 1,    memo: '열심히 참석' },
-];
 
 // ── Styled ────────────────────────────────────────────────────────────────────
 
@@ -284,6 +289,7 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
   const [rows, setRows] = useState<NewcomerRow[]>([]);
   const [changesMap, setChangesMap] = useState<Map<number, NewcomerChange>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -324,23 +330,36 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
       return;
     }
 
-    // TODO: 백엔드 연동 시 아래 mock 로직을 실제 API 호출로 교체
-    const filtered = MOCK_NEWCOMERS.filter((item) => {
-      if (item.gyogu !== Number(filters.gyogu)) return false;
-      if (filters.team && item.team !== Number(filters.team)) return false;
-      if (filters.groupNo && item.group_no !== Number(filters.groupNo)) return false;
-      return true;
-    });
-    const start = page * rowsPerPage;
-    const pageItems = filtered.slice(start, start + rowsPerPage);
-    const loaded = pageItems.map((item) => {
-      const row = toNewcomerRow(item);
-      const change = changesMapRef.current.get(item.member_id);
-      return change ? { ...row, status: change.status, memo: change.memo } : row;
-    });
-    setRows(loaded);
-    setTotalCount(filtered.length);
-  }, [filters.gyogu, filters.team, filters.groupNo, page, rowsPerPage, worshipDate]);
+    let cancelled = false;
+    setIsLoading(true);
+    fetchNewcomerAttendanceRecords({
+      worship_date: worshipDate,
+      gyogu_no: Number(filters.gyogu),
+      ...(filters.team    ? { team_no:  Number(filters.team) }    : {}),
+      ...(filters.groupNo ? { group_no: Number(filters.groupNo) } : {}),
+      page: page + 1,
+      page_size: rowsPerPage,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const loaded = res.items.map((item) => {
+          const row = toNewcomerRow(item);
+          const change = changesMapRef.current.get(item.member_id);
+          return change ? { ...row, ...change } : row;
+        });
+        setRows(loaded);
+        setTotalCount(res.meta.total_items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRows([]);
+        setTotalCount(0);
+        showSnackbar('새가족 명단을 불러오지 못했습니다.', 'error');
+      })
+      .finally(() => { if (!cancelled) setIsLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [filters.gyogu, filters.team, filters.groupNo, page, rowsPerPage, worshipDate, showSnackbar]);
 
   const confirmDiscard = useCallback((action: () => void) => {
     if (isDirtyRef.current) {
@@ -351,21 +370,43 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
     }
   }, []);
 
-  const updateRow = useCallback((memberId: number, field: 'status' | 'memo', value: string | null) => {
-    const current = rowsRef.current.find((r) => r.memberId === memberId);
-    if (!current) return;
+  const updateRow = useCallback(
+    (memberId: number, field: 'status' | 'absentReason' | 'memo', value: string | null) => {
+      const current = rowsRef.current.find((r) => r.memberId === memberId);
+      if (!current) return;
 
-    const existing = changesMapRef.current.get(memberId) ?? { status: current.status, memo: current.memo };
-    const updated: NewcomerChange =
-      field === 'status'
-        ? { ...existing, status: (value === '' ? null : value) as NewcomerUiStatus | null }
-        : { ...existing, memo: value ?? '' };
+      const existing = changesMapRef.current.get(memberId) ?? {
+        status: current.status,
+        absentReason: current.absentReason,
+        memo: current.memo,
+      };
 
-    setRows((prev) => prev.map((r) => r.memberId === memberId ? { ...r, ...updated } : r));
-    setChangesMap((prev) => new Map(prev).set(memberId, updated));
-  }, []);
+      let updated: NewcomerChange;
+      if (field === 'status') {
+        const status = (value === '' ? null : value) as NewcomerUiStatus | null;
+        // 결석이 아니면 사유는 의미가 없으므로 비운다
+        updated = { ...existing, status, absentReason: status === 'ABSENT' ? existing.absentReason : null };
+      } else if (field === 'absentReason') {
+        updated = { ...existing, absentReason: (value === '' ? null : value) as AbsentReason | null };
+      } else {
+        updated = { ...existing, memo: value ?? '' };
+      }
+
+      setRows((prev) => prev.map((r) => r.memberId === memberId ? { ...r, ...updated } : r));
+      setChangesMap((prev) => new Map(prev).set(memberId, updated));
+    },
+    []
+  );
 
   const handleSave = useCallback(async () => {
+    const missingReason = Array.from(changesMap.values()).some(
+      (c) => c.status === 'ABSENT' && !c.absentReason
+    );
+    if (missingReason) {
+      showSnackbar('결석인 경우 결석 사유를 선택해주세요.', 'error');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const records = Array.from(changesMap.entries())
@@ -373,6 +414,7 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
         .map(([memberId, c]) => ({
           member_id: memberId,
           ...toDbFields(c.status as NewcomerUiStatus),
+          absent_reason: c.status === 'ABSENT' ? c.absentReason : null,
           memo: c.memo,
         }));
 
@@ -451,6 +493,21 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
           value={row.status ?? ''}
           options={STATUS_OPTIONS}
           onChange={(v) => updateRow(row.memberId, 'status', String(v))}
+          width={140}
+        />
+      ),
+    },
+    {
+      id: 'absentReason',
+      label: '결석 사유',
+      minWidth: 150,
+      align: 'center',
+      render: (_v, row) => (
+        <Select
+          value={row.absentReason ?? ''}
+          options={ABSENT_REASON_OPTIONS}
+          onChange={(v) => updateRow(row.memberId, 'absentReason', v === '' ? null : String(v))}
+          disabled={row.status !== 'ABSENT'}
           width={140}
         />
       ),
@@ -549,6 +606,7 @@ const NewcomerAttendanceTab: React.FC<Props> = ({ filters, onFiltersChange }) =>
           <DataTable
             columns={columns}
             data={rows}
+            loading={isLoading}
             getRowId={(row) => String(row.memberId)}
             pagination={{
               page,

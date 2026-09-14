@@ -334,6 +334,7 @@ class AdminPatientRoomItem(BaseModel):
     application_id:   int
     member_id:        int
     member_name:      str
+    gender:           str
     gyogu:            int
     team:             int
     group_no:         int

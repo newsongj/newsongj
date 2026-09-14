@@ -10,6 +10,8 @@ export interface MemberRow {
   group_no: number | null;
   phone_number: string | null;
   birthdate: string | null;
+  /** 최초 등록일 — 출석 관리 시작 기준 */
+  registered_at: string | null;
   member_type: string | null;
   attendance_grade: string | null;
   plt_status: string | null;
@@ -19,6 +21,7 @@ export interface MemberRow {
   major: string | null;
   updated_at: string | null;
   enrolled_at: string | null;
+  has_education_record?: boolean;
 }
 
 export interface DeletedMemberRow extends MemberRow {

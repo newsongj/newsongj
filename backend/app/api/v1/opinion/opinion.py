@@ -19,27 +19,25 @@ from app.services.opinion import (
 
 router = APIRouter()
 
-_create  = Depends(require_menu("admin.opinion.create"))
-_edit    = Depends(require_menu("admin.opinion.edit"))
-_mapping = Depends(require_menu("admin.opinion.mapping"))
+_settings = Depends(require_menu("admin.opinion.settings"))
 
 
-@router.get("/member-fields/options", response_model=List[MemberFieldOption], summary="교적 자동기입 항목 선택지", dependencies=[_create])
+@router.get("/member-fields/options", response_model=List[MemberFieldOption], summary="교적 자동기입 항목 선택지", dependencies=[_settings])
 def get_member_field_options():
     return svc_get_member_field_options()
 
 
-@router.get("/active", response_model=OpinionReportCustomResponse, summary="진행 중인 소견서 회차 조회", dependencies=[_edit])
+@router.get("/active", response_model=OpinionReportCustomResponse, summary="진행 중인 소견서 회차 조회", dependencies=[_settings])
 def get_active_opinion_custom(db: Session = Depends(get_db)):
     return svc_get_active_opinion_custom(db)
 
 
-@router.post("", response_model=OpinionReportCustomResponse, status_code=201, summary="소견서 회차 생성", dependencies=[_create])
+@router.post("", response_model=OpinionReportCustomResponse, status_code=201, summary="소견서 회차 생성", dependencies=[_settings])
 def create_opinion_custom(body: OpinionReportCreate, db: Session = Depends(get_db)):
     return svc_create_opinion_custom(db, body)
 
 
-@router.put("/{opinion_custom_id}", status_code=200, summary="소견서 회차 설정 수정", dependencies=[_edit])
+@router.put("/{opinion_custom_id}", status_code=200, summary="소견서 회차 설정 수정", dependencies=[_settings])
 def update_opinion_custom(
     opinion_custom_id: int = Path(...),
     body: OpinionReportUpdate = ...,
@@ -49,18 +47,18 @@ def update_opinion_custom(
     return {"ok": True}
 
 
-@router.put("/{opinion_custom_id}/complete", status_code=200, summary="소견서 회차 완료 처리", dependencies=[_edit])
+@router.put("/{opinion_custom_id}/complete", status_code=200, summary="소견서 회차 완료 처리", dependencies=[_settings])
 def complete_opinion_custom(opinion_custom_id: int = Path(...), db: Session = Depends(get_db)):
     svc_complete_opinion_custom(db, opinion_custom_id)
     return {"ok": True}
 
 
-@router.get("/{report_year}/mapping", response_model=List[OpinionMappingResponse], summary="작성자 배정 현황 조회", dependencies=[_mapping])
+@router.get("/{report_year}/mapping", response_model=List[OpinionMappingResponse], summary="작성자 배정 현황 조회", dependencies=[_settings])
 def get_mapping_list(report_year: int = Path(...), db: Session = Depends(get_db)):
     return svc_get_mapping_list(db, report_year)
 
 
-@router.post("/{report_year}/mapping/bulk", status_code=200, summary="작성자 일괄 배정", dependencies=[_mapping])
+@router.post("/{report_year}/mapping/bulk", status_code=200, summary="작성자 일괄 배정", dependencies=[_settings])
 def bulk_create_mapping(
     report_year: int = Path(...),
     body: OpinionMappingBulkCreate = ...,
@@ -70,7 +68,7 @@ def bulk_create_mapping(
     return {"ok": True}
 
 
-@router.delete("/mapping/{mapping_id}", status_code=200, summary="작성자 배정 취소", dependencies=[_mapping])
+@router.delete("/mapping/{mapping_id}", status_code=200, summary="작성자 배정 취소", dependencies=[_settings])
 def delete_mapping(mapping_id: int = Path(...), db: Session = Depends(get_db)):
     svc_delete_mapping(db, mapping_id)
     return {"ok": True}

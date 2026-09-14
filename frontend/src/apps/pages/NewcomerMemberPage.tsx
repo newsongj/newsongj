@@ -20,6 +20,7 @@ import { useSnackbar } from '@/hooks/common/useSnackbar';
 import { MemberFormValue, MEMBER_MEMBER_TYPE_OPTIONS } from '@components/user/memberForm.types';
 import { useNewcomers } from '@/hooks/member';
 import { MemberRow } from '@/models/member.types';
+import { NewcomerHistoryModal } from '@components/user';
 import {
   createNewcomer,
   deleteNewcomers,
@@ -29,13 +30,24 @@ import {
   updateNewcomer,
 } from '@/api/newcomer';
 
-const REQUIRED_KEYS: Array<keyof MemberFormValue> = ['name', 'gender', 'generation', 'parish', 'team'];
+/**
+ * 새가족 폼 값 — 공용 `MemberFormValue`에 등록일자를 덧붙인다.
+ *
+ * `registeredAt`은 새가족 도메인에만 필요해서 공용 타입을 건드리지 않았다.
+ * 일반 교적 추가/수정에도 필요해지면 `memberForm.types.ts`로 올리면 된다.
+ */
+type NewcomerFormValue = MemberFormValue & { registeredAt: string };
 
-const INITIAL_FORM: MemberFormValue = {
+const REQUIRED_KEYS: Array<keyof NewcomerFormValue> = [
+  'name', 'gender', 'generation', 'parish', 'team', 'registeredAt',
+];
+
+const INITIAL_FORM: NewcomerFormValue = {
   name: '',
   generation: '',
   phone: '',
   birthDate: '',
+  registeredAt: '',
   parish: '',
   team: '',
   group: '',
@@ -62,7 +74,7 @@ interface DisplayRow {
   phone: string;
   birthDate: string;
   role: string;
-  createdAt: string;
+  registeredAt: string;
   memberType: string;
   attendanceGrade: string;
   pltCompleted: string;
@@ -83,7 +95,7 @@ const mapToDisplayRow = (item: MemberRow): DisplayRow => ({
   phone: item.phone_number || '-',
   birthDate: item.birthdate || '-',
   role: item.leader_names?.join(', ') || '-',
-  createdAt: item.enrolled_at ? item.enrolled_at.slice(0, 10) : '-',
+  registeredAt: item.registered_at ? item.registered_at.slice(0, 10) : '-',
   memberType: item.member_type || '-',
   attendanceGrade: item.attendance_grade || '-',
   pltCompleted: item.plt_status || '-',
@@ -98,263 +110,12 @@ const searchOptions: SearchOption[] = [
   { value: 'phone_number', label: '연락처' },
   { value: 'birthdate', label: '생년월일' },
   { value: 'leader', label: '직분' },
-  { value: 'enrolled_at', label: '등반일자' },
+  { value: 'registered_at', label: '등록일자' },
   { value: 'school_work', label: '학교 및 직장' },
   { value: 'major', label: '전공' },
   { value: 'v8pid', label: 'V8 PID' },
 ];
 
-// ── 교육 이력 모달 ──────────────────────────────────────────────────────────
-
-interface EduRecord {
-  worship_date: string;
-  status: 'PRESENT' | 'ABSENT';
-  edu_week: 1 | 2 | 3 | null;
-  memo: string;
-}
-
-// TODO: 백엔드 연동 시 API 호출로 교체
-const getMockHistory = (memberId: number): EduRecord[] => {
-  const variants: EduRecord[][] = [
-    [],
-    [{ worship_date: '2026-05-31', status: 'PRESENT', edu_week: 1, memo: '1주차 교육은 교회와 공동체에 대해서 진행하였음' }],
-    [
-      { worship_date: '2026-05-31', status: 'PRESENT', edu_week: 2, memo: '2주차 교육은 신앙 생활에 대해서 진행하였음' },
-      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 1, memo: '밝은 분위기 속에서 잘 적응하는 듯해 보였음, 교육 중에는 신앙적인 고민을 많이 나누었음' },
-    ],
-    [
-      { worship_date: '2026-05-31', status: 'ABSENT',  edu_week: null, memo: '' },
-      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 2,    memo: '' },
-      { worship_date: '2026-05-17', status: 'PRESENT', edu_week: 1,    memo: '첫 방문이라 목사님과 인사하고 교제함' },
-    ],
-    [
-      { worship_date: '2026-05-31', status: 'PRESENT', edu_week: 3, memo: '3주차 교육은 예수님에 대해서 교육하였음' },
-      { worship_date: '2026-05-24', status: 'PRESENT', edu_week: 2, memo: '2주차 교육 참여하면서 이전에 다녔던 교회에 대해서 나누고 신앙적인 고민도 나누었음' },
-      { worship_date: '2026-05-17', status: 'PRESENT', edu_week: 1, memo: '첫 방문이라 목사님과 인사하고 교제함' },
-    ],
-  ];
-  return variants[memberId % 5];
-};
-
-const ModalOverlay = styled('div')({
-  position: 'fixed',
-  inset: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.45)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1300,
-});
-
-const ModalBox = styled('div')(({ theme }) => ({
-  backgroundColor: '#fff',
-  borderRadius: theme.custom.borderRadius,
-  width: '100%',
-  maxWidth: 560,
-  maxHeight: '80vh',
-  overflow: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
-  margin: '0 16px',
-}));
-
-const ModalHeader = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: `${theme.custom.spacing.md} ${theme.custom.spacing.lg}`,
-  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-}));
-
-const ModalTitle = styled('h3')(({ theme }) => ({
-  margin: 0,
-  fontSize: theme.custom.typography.subtitle.fontSize,
-  fontWeight: 700,
-  color: theme.custom.colors.text.high,
-}));
-
-const ModalCloseBtn = styled('button')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 32,
-  height: 32,
-  border: 'none',
-  borderRadius: '50%',
-  background: 'transparent',
-  cursor: 'pointer',
-  fontSize: 18,
-  color: theme.custom.colors.text.medium,
-  '&:hover': { backgroundColor: theme.custom.colors.neutral._95 },
-}));
-
-const ModalBody = styled('div')(({ theme }) => ({
-  padding: theme.custom.spacing.lg,
-  overflowY: 'auto',
-}));
-
-const HistoryTable = styled('table')(({ theme }) => ({
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: theme.custom.typography.body2.fontSize,
-  tableLayout: 'fixed',
-  '@media (max-width: 560px)': { display: 'none' },
-}));
-
-const HistoryTh = styled('th')(({ theme }) => ({
-  padding: '8px 12px',
-  textAlign: 'center',
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-  color: theme.custom.colors.text.high,
-  backgroundColor: theme.custom.colors.neutral._95,
-  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-}));
-
-const HistoryTd = styled('td')(({ theme }) => ({
-  padding: '8px 12px',
-  textAlign: 'center',
-  verticalAlign: 'top',
-  whiteSpace: 'nowrap',
-  color: theme.custom.colors.text.high,
-  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-}));
-
-const MemoTd = styled('td')(({ theme }) => ({
-  padding: '8px 12px',
-  textAlign: 'left',
-  verticalAlign: 'top',
-  wordBreak: 'break-word',
-  color: theme.custom.colors.text.high,
-  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-}));
-
-const HistoryCardList = styled('div')(({ theme }) => ({
-  display: 'none',
-  flexDirection: 'column',
-  gap: theme.custom.spacing.sm,
-  '@media (max-width: 560px)': { display: 'flex' },
-}));
-
-const HistoryCard = styled('div')(({ theme }) => ({
-  border: `1px solid ${theme.custom.colors.primary.outline}`,
-  borderRadius: theme.custom.borderRadius,
-  padding: theme.custom.spacing.md,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: theme.custom.spacing.xs,
-}));
-
-const CardRow = styled('div')(({ theme }) => ({
-  display: 'flex',
-  gap: theme.custom.spacing.sm,
-  fontSize: theme.custom.typography.body2.fontSize,
-  alignItems: 'flex-start',
-}));
-
-const CardLabel = styled('span')(({ theme }) => ({
-  color: theme.custom.colors.text.medium,
-  fontWeight: 600,
-  minWidth: 56,
-  flexShrink: 0,
-}));
-
-const CardValue = styled('span')(({ theme }) => ({
-  color: theme.custom.colors.text.high,
-  wordBreak: 'break-word',
-  flex: 1,
-}));
-
-const EmptyHistory = styled('div')(({ theme }) => ({
-  textAlign: 'center',
-  padding: '40px 0',
-  color: theme.custom.colors.text.medium,
-  fontSize: theme.custom.typography.body2.fontSize,
-}));
-
-interface HistoryModalProps {
-  memberId: number;
-  memberName: string;
-  onClose: () => void;
-}
-
-const NewcomerHistoryModal: React.FC<HistoryModalProps> = ({ memberId, memberName, onClose }) => {
-  const records = getMockHistory(memberId);
-  return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox onClick={(e) => e.stopPropagation()}>
-        <ModalHeader>
-          <ModalTitle>{memberName} · 교육 이력</ModalTitle>
-          <ModalCloseBtn onClick={onClose}>✕</ModalCloseBtn>
-        </ModalHeader>
-        <ModalBody>
-          {records.length === 0 ? (
-            <EmptyHistory>교육 이력이 없습니다.</EmptyHistory>
-          ) : (
-            <>
-              {/* 데스크톱: 테이블 */}
-              <HistoryTable>
-                <colgroup>
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <HistoryTh>날짜</HistoryTh>
-                    <HistoryTh>출석여부</HistoryTh>
-                    <HistoryTh>교육주차</HistoryTh>
-                    <HistoryTh style={{ textAlign: 'left' }}>교육 메모</HistoryTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((r, i) => (
-                    <tr key={i}>
-                      <HistoryTd>{r.worship_date}</HistoryTd>
-                      <HistoryTd style={{ color: r.status === 'PRESENT' ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
-                        {r.status === 'PRESENT' ? '출석' : '결석'}
-                      </HistoryTd>
-                      <HistoryTd>{r.edu_week ? `${r.edu_week}주차 교육` : '-'}</HistoryTd>
-                      <MemoTd>{r.memo || '-'}</MemoTd>
-                    </tr>
-                  ))}
-                </tbody>
-              </HistoryTable>
-
-              {/* 모바일: 카드 */}
-              <HistoryCardList>
-                {records.map((r, i) => (
-                  <HistoryCard key={i}>
-                    <CardRow>
-                      <CardLabel>날짜</CardLabel>
-                      <CardValue>{r.worship_date}</CardValue>
-                    </CardRow>
-                    <CardRow>
-                      <CardLabel>출석여부</CardLabel>
-                      <CardValue style={{ color: r.status === 'PRESENT' ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
-                        {r.status === 'PRESENT' ? '출석' : '결석'}
-                      </CardValue>
-                    </CardRow>
-                    <CardRow>
-                      <CardLabel>교육주차</CardLabel>
-                      <CardValue>{r.edu_week ? `${r.edu_week}주차 교육` : '-'}</CardValue>
-                    </CardRow>
-                    <CardRow>
-                      <CardLabel>교육 메모</CardLabel>
-                      <CardValue>{r.memo || '-'}</CardValue>
-                    </CardRow>
-                  </HistoryCard>
-                ))}
-              </HistoryCardList>
-            </>
-          )}
-        </ModalBody>
-      </ModalBox>
-    </ModalOverlay>
-  );
-};
 
 const FilterPanel = styled('section')(({ theme }) => ({
   display: 'flex',
@@ -491,9 +252,15 @@ const isBirthDateFormat = (value: string) => {
   return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 };
 
-const useFormValidation = (form: MemberFormValue, birthDateTouched: boolean) =>
+/** 오늘 날짜 (YYYY-MM-DD, 로컬 기준) */
+const getTodayStr = (): string => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const useFormValidation = (form: NewcomerFormValue, birthDateTouched: boolean) =>
   useMemo(() => {
-    const next: Partial<Record<keyof MemberFormValue, string>> = {};
+    const next: Partial<Record<keyof NewcomerFormValue, string>> = {};
 
     REQUIRED_KEYS.forEach((key) => {
       const value = form[key];
@@ -502,17 +269,23 @@ const useFormValidation = (form: MemberFormValue, birthDateTouched: boolean) =>
 
     if (!isBirthDateFormat(form.birthDate)) next.birthDate = '생년월일은 YYYY-MM-DD 형식으로 입력해 주세요.';
 
+    // 등록일자는 출석률 산정 앵커라 미래 날짜가 들어가면 계산이 어긋난다
+    if (form.registeredAt && form.registeredAt > getTodayStr()) {
+      next.registeredAt = '등록일자는 오늘 이후로 지정할 수 없습니다.';
+    }
+
     const phoneDigits = getPhoneDigits(form.phone);
     if (phoneDigits.length > 0 && phoneDigits.length !== 11) next.phone = '연락처는 11자리로 입력해 주세요.';
 
     return next;
   }, [birthDateTouched, form]);
 
-const toFormFromRow = (row: DisplayRow): MemberFormValue => ({
+const toFormFromRow = (row: DisplayRow): NewcomerFormValue => ({
   name: row.name,
   generation: row.generation.replace('기', ''),
   phone: row.phone === '-' ? '' : row.phone,
   birthDate: row.birthDate === '-' ? '' : row.birthDate,
+  registeredAt: row.registeredAt === '-' ? '' : row.registeredAt,
   parish: row.parish === '-' ? '' : row.parish,
   team: row.team === '-' ? '' : row.team,
   group: row.group === '-' ? '' : row.group,
@@ -532,12 +305,13 @@ const parseIntField = (value: string): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const toApiBody = (form: MemberFormValue): NewcomerBody => ({
+const toApiBody = (form: NewcomerFormValue): NewcomerBody => ({
   name: form.name,
   gender: form.gender,
   generation: parseInt(form.generation, 10),
   phone_number: form.phone || undefined,
   birthdate: form.birthDate || undefined,
+  registered_at: form.registeredAt,
   gyogu: parseIntField(form.parish) as number,
   team: parseIntField(form.team) as number,
   group_no: parseIntField(form.group) as number,
@@ -554,7 +328,7 @@ const toEnrollPayload = (date: string, memberType: string) => ({
 interface NewcomerCreateModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (form: MemberFormValue) => Promise<void>;
+  onSubmit: (form: NewcomerFormValue) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -564,7 +338,7 @@ const NewcomerCreateModal: React.FC<NewcomerCreateModalProps> = ({
   onSubmit,
   isSubmitting,
 }) => {
-  const [form, setForm] = useState<MemberFormValue>(INITIAL_FORM);
+  const [form, setForm] = useState<NewcomerFormValue>(INITIAL_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
 
   const errors = useFormValidation(form, birthDateTouched);
@@ -718,6 +492,26 @@ const NewcomerCreateModal: React.FC<NewcomerCreateModalProps> = ({
         </FieldBlock>
 
         <FieldBlock>
+          <FieldLabel>등록일자<Required>*</Required></FieldLabel>
+          <ErrorTextFieldWrapper $error={Boolean(errors.registeredAt)}>
+            <TextField
+              type="date"
+              max={getTodayStr()}
+              value={form.registeredAt}
+              onChange={(e) => setForm((prev) => ({ ...prev, registeredAt: e.target.value }))}
+              error={Boolean(errors.registeredAt)}
+              helperText={
+                errors.registeredAt
+                  ? errors.registeredAt
+                  : '새가족으로 등록한 실제 날짜를 입력하세요. 이 날짜부터 출석 관리가 시작됩니다.'
+              }
+              disableAnimation
+              fullWidth
+            />
+          </ErrorTextFieldWrapper>
+        </FieldBlock>
+
+        <FieldBlock>
           <FieldLabel>학교 및 직장</FieldLabel>
           <TextField
             value={form.schoolWork}
@@ -741,9 +535,9 @@ const NewcomerCreateModal: React.FC<NewcomerCreateModalProps> = ({
 
 interface NewcomerEditModalProps {
   open: boolean;
-  value: MemberFormValue | null;
+  value: NewcomerFormValue | null;
   onClose: () => void;
-  onSubmit: (form: MemberFormValue) => Promise<void>;
+  onSubmit: (form: NewcomerFormValue) => Promise<void>;
   onEnroll: () => void;
   isSubmitting: boolean;
 }
@@ -756,7 +550,7 @@ const NewcomerEditModal: React.FC<NewcomerEditModalProps> = ({
   onEnroll,
   isSubmitting,
 }) => {
-  const [form, setForm] = useState<MemberFormValue>(INITIAL_FORM);
+  const [form, setForm] = useState<NewcomerFormValue>(INITIAL_FORM);
   const [birthDateTouched, setBirthDateTouched] = useState(false);
 
   useEffect(() => {
@@ -944,6 +738,26 @@ const NewcomerEditModal: React.FC<NewcomerEditModalProps> = ({
         </FieldBlock>
 
         <FieldBlock>
+          <FieldLabel>등록일자<Required>*</Required></FieldLabel>
+          <ErrorTextFieldWrapper $error={Boolean(errors.registeredAt)}>
+            <TextField
+              type="date"
+              max={getTodayStr()}
+              value={form.registeredAt}
+              onChange={(e) => setForm((prev) => ({ ...prev, registeredAt: e.target.value }))}
+              error={Boolean(errors.registeredAt)}
+              helperText={
+                errors.registeredAt
+                  ? errors.registeredAt
+                  : '새가족으로 등록한 실제 날짜를 입력하세요. 이 날짜부터 출석 관리가 시작됩니다.'
+              }
+              disableAnimation
+              fullWidth
+            />
+          </ErrorTextFieldWrapper>
+        </FieldBlock>
+
+        <FieldBlock>
           <FieldLabel>학교 및 직장</FieldLabel>
           <TextField
             value={form.schoolWork}
@@ -1009,7 +823,7 @@ const NewcomerMemberPage: React.FC = () => {
     { id: 'phone', label: '연락처', minWidth: 140, align: 'center' },
     { id: 'birthDate', label: '생년월일', minWidth: 120, align: 'center' },
     { id: 'role', label: '직분', minWidth: 150, align: 'center' },
-    { id: 'createdAt', label: '등반일자', minWidth: 120, align: 'center' },
+    { id: 'registeredAt', label: '등록일자', minWidth: 120, align: 'center' },
     { id: 'attendanceGrade', label: '출석등급', minWidth: 98, align: 'center' },
     { id: 'pltCompleted', label: 'PLT 수료여부', minWidth: 126, align: 'center' },
     { id: 'schoolWork', label: '학교 및 직장', minWidth: 170, align: 'center' },
@@ -1025,10 +839,7 @@ const NewcomerMemberPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [enrollMemberType] = useState(MEMBER_MEMBER_TYPE_OPTIONS[0]);
 
-  const todayStr = useMemo(() => {
-    const date = new Date();
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  }, []);
+  const todayStr = useMemo(() => getTodayStr(), []);
 
   const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
@@ -1047,7 +858,7 @@ const NewcomerMemberPage: React.FC = () => {
     [rows, selectedIds]
   );
 
-  const handleCreate = async (form: MemberFormValue) => {
+  const handleCreate = async (form: NewcomerFormValue) => {
     setIsSubmitting(true);
     try {
       await createNewcomer(toApiBody(form));
@@ -1061,7 +872,7 @@ const NewcomerMemberPage: React.FC = () => {
     }
   };
 
-  const handleEdit = async (form: MemberFormValue) => {
+  const handleEdit = async (form: NewcomerFormValue) => {
     if (!selectedRow) return;
 
     setIsSubmitting(true);

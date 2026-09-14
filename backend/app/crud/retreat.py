@@ -3,7 +3,7 @@ import datetime
 import json
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -572,6 +572,7 @@ def get_bus_waiting_list(db: Session, bus_id: int) -> list[tuple]:
 
 def get_suspended_meal_members(
     db: Session,
+    retreat_custom_id: int,
     data_scope: str,
     gyogu: Optional[int],
     team: Optional[int],
@@ -584,7 +585,10 @@ def get_suspended_meal_members(
         db.query(Member, MemberProfile, SuspendedMealApplication)
         .join(latest_sq, Member.member_id == latest_sq.c.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
-        .outerjoin(SuspendedMealApplication, SuspendedMealApplication.member_id == Member.member_id)
+        .outerjoin(SuspendedMealApplication, and_(
+            SuspendedMealApplication.member_id == Member.member_id,
+            SuspendedMealApplication.retreat_custom_id == retreat_custom_id,
+        ))
         .filter(Member.deleted_at.is_(None))
     )
     if data_scope == "team":
@@ -610,6 +614,7 @@ def get_suspended_meal_members(
 
 def get_admin_suspended_meal_list(
     db: Session,
+    retreat_custom_id: int,
     review_status: Optional[str],
     page: int,
     size: int,
@@ -624,6 +629,7 @@ def get_admin_suspended_meal_list(
         .join(Member, Member.member_id == SuspendedMealApplication.member_id)
         .join(latest_sq, latest_sq.c.member_id == SuspendedMealApplication.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
+        .filter(SuspendedMealApplication.retreat_custom_id == retreat_custom_id)
     )
     if review_status in ('PENDING', 'APPROVED', 'REJECTED'):
         q = q.filter(SuspendedMealApplication.review_status == review_status)
@@ -638,11 +644,14 @@ def get_admin_suspended_meal_list(
     return total, items
 
 
-def get_admin_suspended_meal_stats(db: Session):
-    total    = db.query(SuspendedMealApplication).count()
-    pending  = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'PENDING').count()
-    approved = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'APPROVED').count()
-    rejected = db.query(SuspendedMealApplication).filter(SuspendedMealApplication.review_status == 'REJECTED').count()
+def get_admin_suspended_meal_stats(db: Session, retreat_custom_id: int):
+    base = db.query(SuspendedMealApplication).filter(
+        SuspendedMealApplication.retreat_custom_id == retreat_custom_id
+    )
+    total    = base.count()
+    pending  = base.filter(SuspendedMealApplication.review_status == 'PENDING').count()
+    approved = base.filter(SuspendedMealApplication.review_status == 'APPROVED').count()
+    rejected = base.filter(SuspendedMealApplication.review_status == 'REJECTED').count()
     return total, pending, approved, rejected
 
 
@@ -664,11 +673,14 @@ def review_suspended_meal(
 
 
 def upsert_suspended_meal(
-    db: Session, member_id: int, body: SuspendedMealSubmitBody
+    db: Session, retreat_custom_id: int, member_id: int, body: SuspendedMealSubmitBody
 ) -> None:
     existing = (
         db.query(SuspendedMealApplication)
-        .filter(SuspendedMealApplication.member_id == member_id)
+        .filter(
+            SuspendedMealApplication.member_id == member_id,
+            SuspendedMealApplication.retreat_custom_id == retreat_custom_id,
+        )
         .first()
     )
     is_empty = body.meal_count == 0 and body.special_meal_count == 0 and not body.fee_support
@@ -684,6 +696,7 @@ def upsert_suspended_meal(
             existing.applicant_reason = body.applicant_reason
     elif not is_empty:
         db.add(SuspendedMealApplication(
+            retreat_custom_id=retreat_custom_id,
             member_id=member_id,
             meal_count=body.meal_count,
             special_meal_count=body.special_meal_count,
@@ -698,6 +711,7 @@ def upsert_suspended_meal(
 
 def get_patient_room_members(
     db: Session,
+    retreat_custom_id: int,
     data_scope: str,
     gyogu: Optional[int],
     team: Optional[int],
@@ -710,7 +724,10 @@ def get_patient_room_members(
         db.query(Member, MemberProfile, PatientRoomApplication)
         .join(latest_sq, Member.member_id == latest_sq.c.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
-        .outerjoin(PatientRoomApplication, PatientRoomApplication.member_id == Member.member_id)
+        .outerjoin(PatientRoomApplication, and_(
+            PatientRoomApplication.member_id == Member.member_id,
+            PatientRoomApplication.retreat_custom_id == retreat_custom_id,
+        ))
         .filter(Member.deleted_at.is_(None))
     )
     if data_scope == "team":
@@ -734,10 +751,15 @@ def get_patient_room_members(
     )
 
 
-def upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody) -> None:
+def upsert_patient_room(
+    db: Session, retreat_custom_id: int, member_id: int, body: PatientRoomSubmitBody
+) -> None:
     existing = (
         db.query(PatientRoomApplication)
-        .filter(PatientRoomApplication.member_id == member_id)
+        .filter(
+            PatientRoomApplication.member_id == member_id,
+            PatientRoomApplication.retreat_custom_id == retreat_custom_id,
+        )
         .first()
     )
     if existing:
@@ -746,6 +768,7 @@ def upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody
         existing.applicant_reason = body.applicant_reason
     else:
         db.add(PatientRoomApplication(
+            retreat_custom_id=retreat_custom_id,
             member_id=member_id,
             applicant_reason=body.applicant_reason,
             applied_at=now_kst(),
@@ -755,6 +778,7 @@ def upsert_patient_room(db: Session, member_id: int, body: PatientRoomSubmitBody
 
 def get_admin_patient_room_list(
     db: Session,
+    retreat_custom_id: int,
     review_status: Optional[str],
     page: int,
     size: int,
@@ -769,6 +793,7 @@ def get_admin_patient_room_list(
         .join(Member, Member.member_id == PatientRoomApplication.member_id)
         .join(latest_sq, latest_sq.c.member_id == PatientRoomApplication.member_id)
         .join(MemberProfile, MemberProfile.profile_id == latest_sq.c.max_id)
+        .filter(PatientRoomApplication.retreat_custom_id == retreat_custom_id)
     )
     if review_status in ('PENDING', 'APPROVED', 'REJECTED'):
         q = q.filter(PatientRoomApplication.review_status == review_status)
@@ -782,11 +807,14 @@ def get_admin_patient_room_list(
     return total, items
 
 
-def get_admin_patient_room_stats(db: Session):
-    total    = db.query(PatientRoomApplication).count()
-    pending  = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'PENDING').count()
-    approved = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'APPROVED').count()
-    rejected = db.query(PatientRoomApplication).filter(PatientRoomApplication.review_status == 'REJECTED').count()
+def get_admin_patient_room_stats(db: Session, retreat_custom_id: int):
+    base = db.query(PatientRoomApplication).filter(
+        PatientRoomApplication.retreat_custom_id == retreat_custom_id
+    )
+    total    = base.count()
+    pending  = base.filter(PatientRoomApplication.review_status == 'PENDING').count()
+    approved = base.filter(PatientRoomApplication.review_status == 'APPROVED').count()
+    rejected = base.filter(PatientRoomApplication.review_status == 'REJECTED').count()
     return total, pending, approved, rejected
 
 

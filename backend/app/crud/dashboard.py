@@ -9,6 +9,7 @@ from app.crud.query_builders import (
     apply_attendance_filters,
     get_worship_dates_in_range,
     get_leader_id,
+    newcomers_only,
 )
 from app.models import AttendanceRecord, Leader, Member, MemberProfile
 
@@ -47,10 +48,45 @@ def _fetch_filtered_records_and_dates(
     날짜별 루프 + build_attendance_records_query 호출 패턴(N+1)을 대체한다.
     """
     dates = get_worship_dates_in_range(db, start_date, end_date)
-    q = build_attendance_records_range_query(db, start_date, end_date)
+    q = build_attendance_records_range_query(db, start_date, end_date, include_newcomers=True)
     q = apply_attendance_filters(q, gyogu_no, team_no)
     rows = q.all()
     return rows, dates
+
+
+TOP_GENERATION_COUNT = 2
+GENERATION_POOL_SIZE = 6      # 후보로 볼 최근 기수 수
+GENERATION_OUTLIER_MAX = 5    # 인원이 이 값 이하인 기수는 소수 기수로 보고 버린다
+
+
+def get_top_generations(db: Session, limit: int = TOP_GENERATION_COUNT) -> list[int]:
+    """KPI 카드가 볼 기수를 DB에서 뽑아 오름차순으로 반환.
+
+    단순히 최상위 기수를 고르면 아직 한두 명뿐인 신규 기수(예: 48기 1명)가 카드를
+    차지한다. 그래서 최근 6개 기수를 후보로 모은 뒤 인원 5명 이하인 기수를 버리고,
+    남은 것 중 가장 어린 N개를 고른다. 신규 기수도 인원이 차오르면 자동으로 편입된다.
+
+    필터(교구/팀)와 무관하게 전체 기준 — 필터에 따라 카드 라벨이 바뀌면 혼란스럽다.
+    """
+    rows = (
+        db.query(Member.generation, func.count(Member.member_id))
+        .filter(Member.deleted_at.is_(None))
+        .group_by(Member.generation)
+        .order_by(Member.generation.desc())
+        .limit(GENERATION_POOL_SIZE)
+        .all()
+    )
+    if not rows:
+        return []
+
+    counts = {gen: cnt for gen, cnt in rows}
+    eligible = [gen for gen, cnt in counts.items() if cnt > GENERATION_OUTLIER_MAX]
+
+    # 남는 기수가 부족하면(전부 소수 기수인 경우) 인원 많은 순으로 채운다
+    if len(eligible) < limit:
+        eligible = [gen for gen, _ in sorted(counts.items(), key=lambda kv: (-kv[1], -kv[0]))]
+
+    return sorted(sorted(eligible, reverse=True)[:limit])
 
 
 def get_kpi_stats(
@@ -74,12 +110,8 @@ def get_kpi_stats(
     if not dates:
         return None
 
-    gen_curr = end_date.year - 1980
-    gen_prev = gen_curr - 1
-    gen_stats: dict[int, dict] = {
-        gen_prev: {"present": 0, "total": 0},
-        gen_curr: {"present": 0, "total": 0},
-    }
+    generations = get_top_generations(db)
+    gen_stats: dict[int, dict] = {g: {"present": 0, "total": 0} for g in generations}
 
     total_present = 0
     total_members = 0
@@ -102,11 +134,42 @@ def get_kpi_stats(
         "n": len(dates),
         "total_present": total_present,
         "total_members": total_members,
-        "gen_prev": gen_prev,
-        "gen_curr": gen_curr,
+        "generations": generations,
         "gen_stats": gen_stats,
         "reason_counter": reason_counter,
     }
+
+
+def get_newcomer_kpi_stats(
+    db: Session,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    gyogu_no: int | None,
+    team_no: int | None,
+) -> dict:
+    """기간 내 새가족 출석 집계 — KPI 카드용.
+
+    각 기록의 worship_date 시점 profile이 '새가족'인 건만 센다. 등반 이후 기록은
+    일반 멤버로 잡히므로, 과거 수치가 등반 때문에 소급 변동하지 않는다.
+
+    반환값: {"n": 예배 횟수, "present": PRESENT 수, "total": 전체 기록 수}
+    """
+    dates = get_worship_dates_in_range(db, start_date, end_date)
+
+    base = build_attendance_records_range_query(
+        db, start_date, end_date, include_newcomers=True
+    )
+    base = newcomers_only(base)
+    base = apply_attendance_filters(base, gyogu_no, team_no)
+
+    total = base.with_entities(func.count()).scalar() or 0
+    present = (
+        base.with_entities(func.count())
+        .filter(AttendanceRecord.status == "PRESENT")
+        .scalar()
+    ) or 0
+
+    return {"n": len(dates), "present": present, "total": total}
 
 
 def get_trend_stats(
@@ -123,7 +186,7 @@ def get_trend_stats(
     dates = get_worship_dates_in_range(db, start_date, end_date)
     result: dict[datetime.date, int] = {d: 0 for d in dates}
 
-    base = build_attendance_records_range_query(db, start_date, end_date)
+    base = build_attendance_records_range_query(db, start_date, end_date, include_newcomers=True)
     base = apply_attendance_filters(base, gyogu_no, team_no)
 
     agg = (
@@ -194,7 +257,7 @@ def _dimension_stats_sql(
     dates = get_worship_dates_in_range(db, start_date, end_date)
     buckets: dict[str, list[int]] = {k: [0] for k in keys}
 
-    base = build_attendance_records_range_query(db, start_date, end_date)
+    base = build_attendance_records_range_query(db, start_date, end_date, include_newcomers=True)
     base = apply_attendance_filters(base, gyogu_no, team_no)
 
     if dimension == "team":
@@ -334,7 +397,7 @@ def get_absent_reason_stats(
     dates = get_worship_dates_in_range(db, start_date, end_date)
     buckets: dict[str, list[int]] = {r: [0] for r in ABSENT_REASONS}
 
-    base = build_attendance_records_range_query(db, start_date, end_date)
+    base = build_attendance_records_range_query(db, start_date, end_date, include_newcomers=True)
     base = apply_attendance_filters(base, gyogu_no, team_no)
 
     agg = (

@@ -3,6 +3,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, Literal
 import datetime
 from app.schemas.members import MemberIdsRequest
+from app.core.timezone import today_kst
 
 
 # 등반 가능한 일반 member_type — 새가족은 이 set로 전환되며 enrolled_at 세팅
@@ -10,18 +11,30 @@ EnrollableMemberType = Literal['토요예배', '주일예배', '래사랑', '군
 
 
 class NewcomerCreate(BaseModel):
-    """새가족 생성 요청 — `member_type`은 항상 '새가족'으로 강제, `enrolled_at`은 등반 시점에 세팅"""
+    """새가족 생성 요청 — `member_type`은 항상 '새가족'으로 강제, `enrolled_at`은 등반 시점에 세팅
+
+    `registered_at`은 **필수**다. 출석률 산정 앵커가 이 날짜라서 비어 있으면
+    해당 새가족이 출석등급 계산 대상에서 빠진다.
+    """
     name: str
     gender: Literal['남', '여']
     generation: int
     phone_number: Optional[str] = None
     v8pid: Optional[str] = None
     birthdate: Optional[datetime.date] = None
+    registered_at: datetime.date
     school_work: Optional[str] = None
     major: Optional[str] = None
     gyogu: int
     team: int
     group_no: int
+
+    @field_validator("registered_at")
+    @classmethod
+    def validate_registered_at(cls, value: datetime.date) -> datetime.date:
+        if value > today_kst():
+            raise ValueError("등록일자는 미래일 수 없습니다.")
+        return value
 
 
 class NewcomerUpdate(NewcomerCreate):
