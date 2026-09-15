@@ -246,10 +246,52 @@ class OpinionReportCustom(Base):
 class OpinionReportMapping(Base):
     # 임원단 간 소견서 작성자 배정
     __tablename__ = "opinion_report_mapping"
-    
+
     mapping_id       = Column(BigInteger, primary_key=True, autoincrement=True)
     report_year      = Column(YEAR, nullable=False)
     writer_member_id = Column(BigInteger, nullable=False)  # 소견서 작성자
     target_member_id = Column(BigInteger, nullable=False)  # 소견서 대상자
     created_at       = Column(DateTime, nullable=False, default=now_kst)
     updated_at       = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
+
+
+class TeamAssignmentRun(Base):
+    # 팀배치 회차 — 연도당 1행
+    __tablename__ = "team_assignment_run"
+
+    run_id            = Column(BigInteger, primary_key=True, autoincrement=True)
+    target_year       = Column(YEAR, nullable=False, unique=True)
+    total_team_count  = Column(SmallInteger, nullable=False, default=36)
+    gyogu_count       = Column(SmallInteger, nullable=False, default=3)
+    random_seed       = Column(Integer, nullable=True)
+    status            = Column(Enum('draft', 'assigned', 'committed'), nullable=False, default='draft')
+    assigned_at       = Column(DateTime, nullable=True)
+    committed_at      = Column(DateTime, nullable=True)
+    created_at        = Column(DateTime, nullable=False, default=now_kst)
+    updated_at        = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)
+
+
+class TeamAssignmentCompanion(Base):
+    # 동반배치 묶음 — (companion_no, member_id) 1쌍 = 1행
+    __tablename__ = "team_assignment_companion"
+
+    id            = Column(BigInteger, primary_key=True, autoincrement=True)
+    target_year   = Column(YEAR, nullable=False)
+    companion_no  = Column(SmallInteger, nullable=False)
+    member_id     = Column(BigInteger, nullable=False)
+
+
+class TeamAssignmentResult(Base):
+    # 배치 결과 임시 테이블 — 확정 전까지 여기서 조정, 커밋 시 member_profile로 이관
+    __tablename__ = "team_assignment_result"
+
+    id            = Column(BigInteger, primary_key=True, autoincrement=True)
+    target_year   = Column(YEAR, nullable=False)
+    member_id     = Column(BigInteger, nullable=False)
+    gyogu         = Column(SmallInteger, nullable=False)
+    team          = Column(SmallInteger, nullable=False)
+    group_no      = Column(SmallInteger, nullable=False, default=0)
+    companion_no  = Column(SmallInteger, nullable=True)
+    is_manual     = Column(SmallInteger, nullable=False, default=0)
+    created_at    = Column(DateTime, nullable=False, default=now_kst)
+    updated_at    = Column(DateTime, nullable=False, default=now_kst, onupdate=now_kst)

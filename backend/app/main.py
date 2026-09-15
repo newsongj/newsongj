@@ -18,6 +18,7 @@ from app.api.v1.retreat import bus as bus_router
 from app.api.v1.retreat import client as retreat_client_router
 from app.api.v1.opinion import opinion as opinion_router
 from app.api.v1.opinion import client as opinion_client_router
+from app.api.v1.opinion import team_assignment as team_assignment_router
 from app.api.v1.authority import authority as authority_router
 
 logging.basicConfig(
@@ -52,6 +53,7 @@ app.include_router(authority_router.router)
 app.include_router(retreat_client_router.router)
 app.include_router(opinion_router.router, prefix="/api/opinion-report")
 app.include_router(opinion_client_router.router)
+app.include_router(team_assignment_router.router)
 
 
 @app.get("/")
