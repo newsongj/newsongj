@@ -159,8 +159,12 @@ def run_docker(workspace: Path, args: argparse.Namespace) -> int:
                     raise RuntimeError("Disposable MariaDB did not become ready in 60 seconds.")
                 time.sleep(1)
             database_env = ["-e", "NEWSONGJ_TEST_DATABASE=mariadb"]
+        # TemporaryDirectory is mode 0700. Match its owner so Linux bind mounts
+        # remain readable with all capabilities dropped, without widening access.
+        owner = workspace.stat()
         command = [
             "docker", "run", "--rm", "--name", test_name,
+            "--user", f"{owner.st_uid}:{owner.st_gid}",
             "--network", network if network_created else "none", "--read-only",
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--tmpfs", "/tmp:rw,nosuid",
             "--mount", f"type=bind,source={workspace},target=/workspace,readonly",

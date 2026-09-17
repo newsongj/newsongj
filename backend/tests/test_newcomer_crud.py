@@ -1,11 +1,16 @@
 """미등반 새가족 전용 CRUD 도메인 — 생성/수정/삭제/등반처리 회귀 테스트."""
 import datetime
 
+import pytest
+
+from app.core.timezone import today_kst
+
 
 def _newcomer_body(name="새사람", **overrides):
     body = {
         "name": name, "gender": "남", "generation": 21,
         "phone_number": None, "v8pid": None, "birthdate": None,
+        "registered_at": "2026-05-01",
         "school_work": None, "major": None,
         "gyogu": 1, "team": 1, "group_no": 1,
     }
@@ -30,19 +35,41 @@ def test_create_newcomer_succeeds(client, db):
 
 def test_create_newcomer_does_not_set_enrolled_at(client, db):
     r = client.post("/api/v1/gyojeok/members/newcomers", json=_newcomer_body(name="등반전"))
+    assert r.status_code == 201
     nid = r.json()["member_id"]
 
     from app.models import Member
     db.rollback()
     m = db.query(Member).filter(Member.member_id == nid).first()
     assert m.enrolled_at is None  # 등반 전이라 NULL
+    assert m.registered_at == datetime.date(2026, 5, 1)
 
 
-def test_update_newcomer_succeeds(client, seed_members):
+def test_update_newcomer_succeeds(client, seed_members, db):
     _, newcomer_id = seed_members
     body = _newcomer_body(name="수정됨", phone_number="01011112222")
     r = client.put(f"/api/v1/gyojeok/members/newcomers/{newcomer_id}", json=body)
     assert r.status_code == 200
+
+    from app.models import Member
+    db.rollback()
+    assert db.get(Member, newcomer_id).registered_at == datetime.date(2026, 5, 1)
+
+
+@pytest.mark.parametrize("method", ["post", "put"])
+@pytest.mark.parametrize("invalid_date", ["missing", "future"])
+def test_newcomer_rejects_missing_or_future_registration_date(client, seed_members, method, invalid_date):
+    body = _newcomer_body()
+    if invalid_date == "missing":
+        body.pop("registered_at")
+    else:
+        body["registered_at"] = (today_kst() + datetime.timedelta(days=1)).isoformat()
+    url = "/api/v1/gyojeok/members/newcomers"
+    if method == "put":
+        url += f"/{seed_members[1]}"
+    response = client.request(method, url, json=body)
+    assert response.status_code == 422
+    assert any(error["loc"] == ["body", "registered_at"] for error in response.json()["detail"])
 
 
 def test_update_newcomer_on_regular_member_returns_404(client, seed_members):

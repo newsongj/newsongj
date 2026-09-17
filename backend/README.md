@@ -39,6 +39,8 @@ python3 backend/tools/verify_backend.py --runtime docker --database mariadb
 Docker를 사용할 수 없으면 macOS의 `sandbox-exec`와 `uv`로 임시 환경을 만들고
 네트워크 접근을 차단한다. 런타임을 지정하려면 `--runtime docker` 또는 `--runtime sandbox`를 쓴다.
 Docker 데몬이나 기존 Compose 서비스를 자동으로 시작하지 않는다.
+테스트 컨테이너는 임시 소스 폴더 소유자의 UID/GID로 실행한다. 폴더의 `0700` 권한과
+읽기 전용 마운트·Linux capability 제거를 유지하면서 CI에서도 소스를 읽을 수 있다.
 
 앱·테스트·의존성 파일만 임시 복사하며 `.env`와 기존 DB 파일은 제외한다.
 의존성 설치에는 네트워크가 필요할 수 있지만 앱 import는 격리 이후에만 수행한다.
