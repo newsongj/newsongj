@@ -129,7 +129,9 @@ const FilterPanel = styled('section')(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.custom.spacing.sm,
-  backgroundColor: theme.custom.colors.neutral._99,
+  // 주변 카드·섹션이 옅은 하늘색(_99)이라 필터까지 같은 색이면 경계가 묻힌다.
+  // 필터 영역만 흰 바탕으로 띄운다.
+  backgroundColor: theme.custom.colors.white,
   border: `1px solid ${theme.custom.colors.primary.outline}`,
   borderRadius: theme.custom.borderRadius,
   padding: theme.custom.spacing.md,

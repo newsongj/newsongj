@@ -10,6 +10,7 @@ import { Snackbar } from '@components/common/Snackbar';
 import { DataTable } from '@components/common/DataTable';
 import { Column } from '@components/common/DataTable/DataTable.types';
 import StatCard from '@components/common/StatCard';
+import { FILTER_SIZES, FILTER_STACK_BREAKPOINT } from '@/styles/filterSizes';
 import { useSnackbar } from '@/hooks/common/useSnackbar';
 import {
   fetchOpinionList,
@@ -87,17 +88,44 @@ const PageWrapper = styled('div')(({ theme }) => ({
   display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.lg,
 }));
 
-const FilterRow = styled('div')(({ theme }) => ({
+/**
+ * 필터 박스 — 출석 대시보드(`AttendanceDashboard`)의 `FilterPanel` 과 같은 규격이다.
+ * 배경·테두리·패딩으로 필터 영역을 한 덩어리로 묶는다.
+ */
+const FilterPanel = styled('section')(({ theme }) => ({
   display: 'flex', alignItems: 'center', gap: theme.custom.spacing.sm, flexWrap: 'wrap',
-  '@media (max-width: 760px)': {
+  // 주변 카드·섹션이 옅은 하늘색(_99)이라 필터까지 같은 색이면 경계가 묻힌다.
+  // 필터 영역만 흰 바탕으로 띄운다.
+  backgroundColor: theme.custom.colors.white,
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: theme.custom.borderRadius,
+  padding: theme.custom.spacing.md,
+  [`@media (max-width: ${FILTER_STACK_BREAKPOINT}px)`]: {
     alignItems: 'stretch',
-    '& .MuiFormControl-root': { width: '100% !important' },
   },
 }));
 
+/**
+ * 라벨 + 컨트롤 한 쌍.
+ *
+ * 좁은 화면에서는 `[라벨 고정폭][컨트롤 나머지 전부]` 2단으로 만든다.
+ * 그러지 않으면 라벨 길이(「기준 연도」 vs 「팀」)만큼 남는 폭이 달라져
+ * 컨트롤 너비가 제각각이 된다.
+ *
+ * `Select` 의 루트는 `MuiFormControl`, `TextField` 의 루트는 그냥 `div` 라
+ * 클래스 선택자로는 둘을 함께 잡을 수 없다. 그래서 자식 위치로 지정한다.
+ * 두 컴포넌트 모두 emotion 으로 `width` 를 박으므로 `!important` 가 필요하다.
+ *
+ * `:first-of-type` 이 아니라 `:first-child` 인 이유 — 라벨은 `span`, 컨트롤은 `div` 로
+ * 타입이 달라서 `*:first-of-type` 은 **둘 다** 매칭된다 (각자 자기 타입의 첫 번째).
+ */
 const FilterGroup = styled('div')({
   display: 'flex', alignItems: 'center', gap: 6,
-  '@media (max-width: 760px)': { width: '100%' },
+  [`@media (max-width: ${FILTER_STACK_BREAKPOINT}px)`]: {
+    width: '100%',
+    '& > *:first-child': { flex: `0 0 ${FILTER_SIZES.labelColumn}px` },
+    '& > *:last-child': { flex: '1 1 auto', width: 'auto !important', minWidth: 0 },
+  },
 });
 
 const FilterLabel = styled('span')(({ theme }) => ({
@@ -108,8 +136,33 @@ const FilterLabel = styled('span')(({ theme }) => ({
 
 const FilterSpacer = styled('div')({
   marginLeft: 'auto',
-  '@media (max-width: 760px)': { marginLeft: 0, width: '100%' },
+  [`@media (max-width: ${FILTER_STACK_BREAKPOINT}px)`]: { marginLeft: 0, width: '100%' },
 });
+
+/**
+ * 선택 해제 + PDF 다운로드 버튼.
+ *
+ * 좁은 화면에서는 세로로 쌓고 버튼을 한 줄 꽉 채운다 — 위 필터 컨트롤들이
+ * 전부 전체 폭이라, 버튼만 제 크기로 남으면 줄이 들쭉날쭉해 보인다.
+ * `Button` 에 `fullWidth` prop 이 없어 마지막 자식을 직접 늘린다.
+ */
+const PrintGroup = styled('div')(({ theme }) => ({
+  display: 'flex', alignItems: 'center', gap: theme.custom.spacing.sm,
+  [`@media (max-width: ${FILTER_STACK_BREAKPOINT}px)`]: {
+    width: '100%',
+    flexDirection: 'column', alignItems: 'stretch',
+    gap: theme.custom.spacing.xs,
+    '& > *:last-child': { width: '100%' },
+  },
+}));
+
+const ClearSelection = styled('button')(({ theme }) => ({
+  border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+  fontSize: theme.custom.typography.body2.fontSize,
+  color: theme.custom.colors.text.medium,
+  textDecoration: 'underline', whiteSpace: 'nowrap',
+  '&:hover': { color: theme.custom.colors.text.high },
+}));
 
 const StatsGrid = styled('div')({
   display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20,
@@ -157,12 +210,21 @@ const WriterBox = styled('div')(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const WriterRow = styled('div')(({ theme }) => ({
+/** `$muted` — 실제 작성자가 아니라 「작성 예정자」를 보여줄 때 흐리게 */
+const WriterRow = styled('div')<{ $muted?: boolean }>(({ theme, $muted }) => ({
   display: 'flex', gap: 12, alignItems: 'baseline',
   padding: '7px 10px',
   fontSize: theme.custom.typography.body2.fontSize,
+  color: $muted ? theme.custom.colors.text.disabled : 'inherit',
   '&:not(:last-of-type)': { borderBottom: `1px solid ${theme.custom.colors.primary.outline}` },
   '@media (max-width: 560px)': { flexWrap: 'wrap', gap: 6 },
+}));
+
+/** 명단 「작성자」 칸 — 미작성 건의 예정 작성자 */
+const ExpectedWriter = styled('span')(({ theme }) => ({
+  color: theme.custom.colors.text.disabled,
+  fontSize: theme.custom.typography.body2.fontSize,
+  whiteSpace: 'nowrap',
 }));
 
 const WriterAff = styled('span')(({ theme }) => ({
@@ -260,6 +322,9 @@ const OpinionDashboardPage: React.FC = () => {
 
   // 인쇄
   const [printRows, setPrintRows] = useState<OpinionReportRow[]>([]);
+
+  // 일괄 PDF 대상 선택 (member_id 문자열)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const handlePrintDone = useCallback(() => setPrintRows([]), []);
 
   // ── 로드 ────────────────────────────────────────────────────────────────────
@@ -305,6 +370,10 @@ const OpinionDashboardPage: React.FC = () => {
   useEffect(() => loadList(), [loadList]);
 
   useEffect(() => { setPage(0); }, [reportYear, gyogu, team, groupNo, status, search]);
+
+  // 기준 연도가 바뀌면 명단 자체가 다른 회차로 갈리므로 선택을 비운다.
+  // 교구·팀·그룹 필터는 selectedRows 가 items 기준으로 되짚어 알아서 떨어진다.
+  useEffect(() => { setSelectedIds([]); }, [reportYear]);
 
   // ── 필터 옵션 ───────────────────────────────────────────────────────────────
 
@@ -358,11 +427,32 @@ const OpinionDashboardPage: React.FC = () => {
     [visibleItems, page, rowsPerPage],
   );
 
+  /**
+   * 체크박스로 고른 행.
+   *
+   * `items` 를 기준으로 되짚어 실제 행을 얻는다 — 필터가 바뀌어 더 이상 명단에 없는
+   * 선택은 자연히 떨어져 나가므로, 화면에 없는 사람이 PDF에 섞이지 않는다.
+   * 이름 검색은 조회 보조 수단이라 선택을 지우지 않는다 (검색어를 지워도 선택 유지).
+   */
+  const selectedRows = useMemo(() => {
+    if (selectedIds.length === 0) return [];
+    const picked = new Set(selectedIds);
+    return items.filter((r) => picked.has(String(r.member_id)));
+  }, [items, selectedIds]);
+
+  /** 고른 게 있으면 그것만, 없으면 필터에 걸린 전체 */
+  const printTargets = selectedRows.length > 0 ? selectedRows : visibleItems;
+
   const columns = useMemo<Column<OpinionReportRow>[]>(() => [
     { id: 'gyogu',      label: '교구', align: 'center', width: 80, render: (v: number | null) => (v != null ? `${v}교구` : '—') },
     { id: 'team',       label: '팀',   align: 'center', width: 70, render: (v: number | null) => (v != null ? `${v}팀` : '—') },
     { id: 'group_no',   label: '그룹', align: 'center', width: 80, render: (v: number | null) => (v != null ? `${v}그룹` : '—') },
     { id: 'generation', label: '기수', align: 'center', width: 70, render: (v: number | null) => (v != null ? `${v}기` : '—') },
+    {
+      // 직분에 따라 예정 작성자가 갈리므로(팀장은 0명, 리더는 팀장만) 명단에서 바로 보이게 둔다
+      id: 'leader_names', label: '직분', align: 'center', width: 120,
+      render: (v: string[]) => (v.length > 0 ? v.join(', ') : '—'),
+    },
     {
       id: 'name', label: '이름', align: 'center', width: 130,
       render: (v: string, row: OpinionReportRow) => (
@@ -373,16 +463,33 @@ const OpinionDashboardPage: React.FC = () => {
       ),
     },
     {
+      // 실제로 쓴 사람을 보여주고, 아직 아무도 안 썼으면 예정 작성자를 회색으로 둔다.
+      // 미작성 건의 독촉 대상을 알 수 있어야 하기 때문이다.
       id: 'writers', label: '작성자', align: 'center', width: 130,
-      render: (v: OpinionWriter[]) => (
-        v.length > 0
-          ? (
-            <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{writerFull(v)}</span>} arrow>
-              <span>{writerSummary(v)}</span>
+      render: (_v: unknown, row: OpinionReportRow) => {
+        const actual = row.writers;
+        if (actual.length > 0) {
+          return (
+            <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{writerFull(actual)}</span>} arrow>
+              <span>{writerSummary(actual)}</span>
             </Tooltip>
-          )
-          : '—'
-      ),
+          );
+        }
+        const expected = row.expected_writers;
+        if (expected.length === 0) return '—';
+        return (
+          <Tooltip
+            title={(
+              <span style={{ whiteSpace: 'pre-line' }}>
+                {`아직 작성 전입니다. 작성 예정자\n${writerFull(expected)}`}
+              </span>
+            )}
+            arrow
+          >
+            <ExpectedWriter>{writerSummary(expected)} (예정)</ExpectedWriter>
+          </Tooltip>
+        );
+      },
     },
     {
       id: 'is_written', label: '작성 여부', align: 'center', width: 110,
@@ -448,12 +555,13 @@ const OpinionDashboardPage: React.FC = () => {
 
   // ── 인쇄 ────────────────────────────────────────────────────────────────────
 
+  /** 체크박스로 고른 행이 있으면 그것만, 없으면 필터에 걸린 전체를 출력한다 */
   const handlePrintAll = () => {
-    if (visibleItems.length === 0) {
+    if (printTargets.length === 0) {
       showSnackbar('출력할 소견서가 없습니다.', 'warning');
       return;
     }
-    setPrintRows(visibleItems);
+    setPrintRows(printTargets);
   };
 
   const handlePrintOne = () => {
@@ -468,46 +576,60 @@ const OpinionDashboardPage: React.FC = () => {
   return (
     <PageWrapper>
       {/* 필터 */}
-      <FilterRow>
+      <FilterPanel>
         <FilterGroup>
           <FilterLabel>기준 연도</FilterLabel>
           <Select value={String(reportYear)} options={YEAR_OPTIONS}
-            onChange={(v) => setReportYear(Number(v))} width={110} />
+            onChange={(v) => setReportYear(Number(v))} width={FILTER_SIZES.select} />
         </FilterGroup>
         <FilterGroup>
           <FilterLabel>교구</FilterLabel>
-          <Select value={gyogu} options={gyoguOptions} onChange={handleGyoguChange} width={110} />
+          <Select value={gyogu} options={gyoguOptions} onChange={handleGyoguChange} width={FILTER_SIZES.select} />
         </FilterGroup>
         <FilterGroup>
           <FilterLabel>팀</FilterLabel>
           <Select value={team} options={teamOptions} onChange={handleTeamChange}
-            disabled={!gyogu} width={100} />
+            disabled={!gyogu} width={FILTER_SIZES.select} />
         </FilterGroup>
         <FilterGroup>
           <FilterLabel>그룹</FilterLabel>
           <Select value={groupNo} options={groupOptions}
-            onChange={(v) => setGroupNo(String(v))} disabled={!team} width={100} />
+            onChange={(v) => setGroupNo(String(v))} disabled={!team} width={FILTER_SIZES.select} />
         </FilterGroup>
         <FilterGroup>
           <FilterLabel>작성 여부</FilterLabel>
           <Select value={status} options={STATUS_OPTIONS}
-            onChange={(v) => setStatus(String(v) as OpinionWriteStatus)} width={120} />
+            onChange={(v) => setStatus(String(v) as OpinionWriteStatus)} width={FILTER_SIZES.select} />
         </FilterGroup>
         <FilterGroup>
+          <FilterLabel>이름</FilterLabel>
           <TextField
             placeholder="이름 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             leadingIcon={<Search size={16} />}
-            width={180}
+            width={FILTER_SIZES.search}
           />
         </FilterGroup>
         <FilterSpacer>
-          <Button variant="outlined" onClick={handlePrintAll} disabled={loading || visibleItems.length === 0}>
-            PDF 일괄 다운로드 ({visibleItems.length}건)
-          </Button>
+          <PrintGroup>
+            {selectedRows.length > 0 && (
+              <ClearSelection type="button" onClick={() => setSelectedIds([])}>
+                선택 해제
+              </ClearSelection>
+            )}
+            <Button
+              variant="outlined"
+              onClick={handlePrintAll}
+              disabled={loading || printTargets.length === 0}
+            >
+              {selectedRows.length > 0
+                ? `선택 PDF 다운로드 (${selectedRows.length}건)`
+                : `PDF 일괄 다운로드 (${visibleItems.length}건)`}
+            </Button>
+          </PrintGroup>
         </FilterSpacer>
-      </FilterRow>
+      </FilterPanel>
 
       {/* KPI */}
       {loading ? (
@@ -565,6 +687,9 @@ const OpinionDashboardPage: React.FC = () => {
         columns={columns}
         data={paginated}
         loading={loading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
         getRowId={(row) => String(row.member_id)}
         onRowClick={openDetail}
         pagination={{
@@ -664,21 +789,36 @@ const OpinionDashboardPage: React.FC = () => {
               })}
             </div>
 
+            {/*
+              실제로 저장한 사람을 보여준다. 아직 아무도 쓰지 않았으면 예정 작성자를
+              회색으로 대신 보여줘 독촉 대상을 알 수 있게 한다.
+              관리자가 이 모달에서 대리 수정한 것은 작성자로 기록되지 않는다.
+            */}
             <div>
-              <ModalSectionTitle>작성자</ModalSectionTitle>
-              {detailRow.writers.length === 0 ? (
+              <ModalSectionTitle>
+                {detailRow.writers.length > 0 ? '작성자' : '작성 예정자'}
+              </ModalSectionTitle>
+              {detailRow.writers.length === 0 && detailRow.expected_writers.length === 0 ? (
                 <NoticeText style={{ margin: '8px 0' }}>지정된 작성자가 없습니다.</NoticeText>
               ) : (
-                <WriterBox style={{ marginTop: 8 }}>
-                  {detailRow.writers.map((w) => (
-                    <WriterRow key={w.member_id}>
-                      <WriterAff>{formatWriterAffiliation(w)}</WriterAff>
-                      <WriterRole>{w.role}</WriterRole>
-                      <WriterName>{w.name}</WriterName>
-                      <WriterTel>{w.phone_number ?? '—'}</WriterTel>
-                    </WriterRow>
-                  ))}
-                </WriterBox>
+                <>
+                  {detailRow.writers.length === 0 && (
+                    <NoticeText style={{ margin: '8px 0' }}>
+                      아직 작성 전입니다. 아래는 이 소견서를 쓸 수 있는 사람입니다.
+                    </NoticeText>
+                  )}
+                  <WriterBox style={{ marginTop: 8 }}>
+                    {(detailRow.writers.length > 0 ? detailRow.writers : detailRow.expected_writers)
+                      .map((w) => (
+                        <WriterRow key={w.member_id} $muted={detailRow.writers.length === 0}>
+                          <WriterAff>{formatWriterAffiliation(w)}</WriterAff>
+                          <WriterRole>{w.role}</WriterRole>
+                          <WriterName>{w.name}</WriterName>
+                          <WriterTel>{w.phone_number ?? '—'}</WriterTel>
+                        </WriterRow>
+                      ))}
+                  </WriterBox>
+                </>
               )}
             </div>
 

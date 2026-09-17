@@ -2,10 +2,11 @@
 //
 // ⚠️ 현재 백엔드 미구현 상태로, 아래 함수들은 목데이터를 반환한다.
 //    실제 연동 시 각 함수 본문의 목데이터 처리를 주석 처리된 get/put 호출로 교체하면 된다.
-//    엔드포인트·요청/응답 형태는 `OPINION_API_SPEC.md` 참고.
+//    엔드포인트·요청/응답 형태는 `OPINION_ADMINPAGE_APISPEC.md` 참고.
 
 // import { get, put } from '@/api/client';
 import {
+  EXECUTIVE_LEADER_NAME,
   InputFieldKey,
   MemberFieldKey,
   OpinionCompanion,
@@ -152,6 +153,8 @@ const buildDefaultSettings = (reportYear: number): OpinionSettings => ({
   report_year: reportYear,
   exists: reportYear <= MOCK_CURRENT_YEAR,
   is_active: reportYear >= MOCK_CURRENT_YEAR,
+  // 완료된 회차는 사용자 페이지도 닫혀 있다
+  is_open: reportYear >= MOCK_CURRENT_YEAR,
   theme: '하나님의 열심이 이루시리라',
   start_date: reportYear + '-11-01',
   end_date: reportYear + '-12-15',
@@ -174,13 +177,33 @@ const ensureMappings = (): OpinionMappingGroup[] => {
 // ── 작성자 산출 ───────────────────────────────────────────────────────────────
 
 /**
- * 대상자 1명의 작성자 목록 — 우선순위가 아니라 **합집합**이다.
+ * 대상자 1명의 **예정 작성자** — 「누가 써야 하는가」.
  *
- * 교구에서 팀장이 그룹장들과 전체 팀원을 함께 작성하므로, 팀원 한 명에 대해
- * 팀장과 그룹장이 모두 작성자가 된다. 소견서 자체는 대상자당 1건이고
- * 여러 작성자가 같은 건을 나눠 수정하는 형태다.
+ * 실제로 쓴 사람이 아니라 권한상 쓸 수 있는 사람이다. 아직 아무도 쓰지 않은
+ * 소견서에서 독촉 대상을 보여주는 용도이고, PDF 에는 넣지 않는다.
+ *
+ * **대상자의 직분**에 따라 갈린다 (`OPINION_ADMINPAGE_APISPEC.md` §2-1).
+ *
+ *   | 대상자        | 예정 작성자                     |
+ *   |---------------|---------------------------------|
+ *   | 임원단        | 매핑된 작성자 (소속 무시)        |
+ *   | 팀장          | **없음** — 팀장 위에는 작성자가 없다 |
+ *   | 그룹장        | 같은 팀의 팀장                   |
+ *   | 직분 없음     | 같은 팀의 팀장 + 같은 그룹의 그룹장 |
+ *
+ * 팀 안의 **모든 리더는 팀장이 쓰고**, 직분 없는 팀원만 그룹장과 팀장 둘 다 쓴다.
+ * 그룹장에게 그룹장(자기 자신)을 붙이지 않으려는 게 아니라, 리더에게는 애초에
+ * 그룹장 경로를 열지 않는 것이다 — 팀장이 아닌 다른 사람이 그룹장을 맡고 있어도
+ * 그 그룹장이 같은 그룹 리더의 작성자가 되지는 않는다.
+ *
+ * 임원단은 **배타**다. 팀장이면서 임원단이면 매핑 대상자만 쓰고, 자기 팀원의
+ * 작성자로는 잡히지 않는다. 임원단 매핑은 「올해 이 사람이 누구를 쓰는가」를
+ * 조직이 직접 지정한 결과이므로 소속 범위를 더하면 의도하지 않은 대상자가 섞인다.
+ *
+ * 실제 구현에서는 임원단·리더 판정을 `member_profile` 의 해당 연도 스냅샷으로 해야 한다.
+ * 목데이터에는 연도별 직분 이력이 없어 현재 `leader_names` 로 대신한다.
  */
-const findWriters = (m: OpinionMemberCandidate): OpinionWriter[] => {
+const findExpectedWriters = (m: OpinionMemberCandidate): OpinionWriter[] => {
   const out: OpinionWriter[] = [];
 
   const push = (x: OpinionMemberCandidate, role: OpinionWriterRole) => {
@@ -197,23 +220,57 @@ const findWriters = (m: OpinionMemberCandidate): OpinionWriter[] => {
     });
   };
 
-  // 1) 임원단 매핑
-  ensureMappings().forEach((g) => {
-    if (g.targets.some((t) => t.member_id === m.member_id)) push(g.writer, '임원단');
-  });
+  const isExecutive = (x: OpinionMemberCandidate) =>
+    x.leader_names.includes(EXECUTIVE_LEADER_NAME);
 
-  // 2) 같은 그룹의 그룹장
-  MOCK_MEMBERS
-    .filter((x) => x.gyogu === m.gyogu && x.team === m.team && x.group_no === m.group_no
-      && x.leader_names.includes('그룹장'))
-    .forEach((x) => push(x, '그룹장'));
+  // ① 임원단 대상자는 매핑이 유일한 경로다. 소속으로는 작성자를 붙이지 않는다.
+  if (isExecutive(m)) {
+    ensureMappings().forEach((g) => {
+      if (g.targets.some((t) => t.member_id === m.member_id)) push(g.writer, '임원단');
+    });
+    return out;
+  }
 
-  // 3) 같은 팀의 팀장
+  // ② 같은 팀의 팀장 — 팀 안의 모든 리더·팀원을 팀장이 쓴다.
+  //    대상자가 팀장 본인이면 self-check 에 걸려 빠지므로 결과가 0명이 된다
+  //    (팀장 위에는 작성자가 없다 — 임원단 매핑이 없는 한).
   MOCK_MEMBERS
-    .filter((x) => x.gyogu === m.gyogu && x.team === m.team && x.leader_names.includes('팀장'))
+    .filter((x) => !isExecutive(x)
+      && x.gyogu === m.gyogu && x.team === m.team
+      && x.leader_names.includes('팀장'))
     .forEach((x) => push(x, '팀장'));
 
+  // ③ 같은 그룹의 그룹장 — **직분 없는 팀원에게만** 붙는다.
+  //    그룹장·팀장 같은 리더는 팀장만 쓰므로 여기서 제외한다.
+  const isLeader = m.leader_names.length > 0;
+  if (!isLeader) {
+    MOCK_MEMBERS
+      .filter((x) => !isExecutive(x)
+        && x.gyogu === m.gyogu && x.team === m.team && x.group_no === m.group_no
+        && x.leader_names.includes('그룹장'))
+      .forEach((x) => push(x, '그룹장'));
+  }
+
   return out;
+};
+
+/**
+ * **실제 작성자** — 사용자 페이지에서 저장한 사람들.
+ *
+ * 실제 구현에서는 `member_opinion_report_writer` 를 조인해 가져온다. 저장 시
+ * 로그인 토큰의 `member_id` 를 UPSERT 하므로 팀장·그룹장이 나눠 쓰면 둘 다 쌓인다.
+ * 관리자의 대리 수정은 기록하지 않는다.
+ *
+ * 목데이터에는 저장 이력이 없으므로, 예정 작성자 중 일부가 실제로 썼다고
+ * 가정해 흉내 낸다 — 보통 한 명, 가끔 전원이 쓴 형태다.
+ */
+const findActualWriters = (m: OpinionMemberCandidate, written: boolean): OpinionWriter[] => {
+  if (!written) return [];
+  const expected = findExpectedWriters(m);
+  if (expected.length === 0) return [];
+  // 약 30%는 예정 작성자 전원이 나눠 쓴 것으로 둔다
+  if (rand(m.member_id * 61) < 0.3) return expected;
+  return [expected[m.member_id % expected.length]];
 };
 
 // ── 행 생성 ───────────────────────────────────────────────────────────────────
@@ -251,7 +308,9 @@ const buildRow = (m: OpinionMemberCandidate, reportYear: number): OpinionReportR
     major: pick(MAJORS, seed * 43),
 
     is_written: written,
-    writers: findWriters(m),
+    // 실제로 쓴 사람 / 아직 아무도 안 썼으면 예정 작성자를 대신 내려준다
+    writers: findActualWriters(m, written),
+    expected_writers: written ? [] : findExpectedWriters(m),
     companions: findCompanions(m.member_id, reportYear),
     updated_at: written ? reportYear + '-11-' + pad2(1 + (seed % 28)) + 'T14:20:00' : null,
 
@@ -321,6 +380,15 @@ export async function saveOpinionSettings(body: OpinionSettingsSaveBody): Promis
   MOCK_MAPPINGS = groups;
 
   return delay(undefined);
+}
+
+/**
+ * 팀배치 완료 시 서버가 수행하는 상태 전환 — 목데이터용 헬퍼.
+ * 회차를 완료 처리하면서 사용자 작성 페이지도 함께 닫는다.
+ */
+export function closeOpinionRound(reportYear: number): void {
+  const prev = MOCK_SETTINGS.get(reportYear) ?? buildDefaultSettings(reportYear);
+  MOCK_SETTINGS.set(reportYear, { ...prev, exists: true, is_active: false, is_open: false });
 }
 
 /** GET /api/opinion/mappings?report_year= */

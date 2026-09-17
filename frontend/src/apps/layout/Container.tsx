@@ -50,6 +50,7 @@ const getPageInfo = (path: string) => {
     '/retreat/patient-room':   { title: '환자방 명단',       breadcrumb: '수련회 > 환자방 명단' },
     '/opinion/dashboard': { title: '소견서 현황 대시보드', breadcrumb: '소견서 > 소견서 현황 대시보드' },
     '/opinion/settings':  { title: '소견서 설정',          breadcrumb: '소견서 > 소견서 설정' },
+    '/opinion/pre-assignment': { title: '팀배치 사전 설정', breadcrumb: '소견서 > 팀배치 사전 설정' },
     '/opinion/team-assignment': { title: '팀배치 작업', breadcrumb: '소견서 > 팀배치 작업' },
   };
   return menuMap[path] || { title: '대시보드', breadcrumb: '대시보드' };
@@ -100,6 +101,7 @@ export const buildMenuItems = (permissions: string[]): MenuItem[] => {
       subItems: [
         ...(has('admin.opinion.settings')  ? [{ id: 'opinion-settings',  label: '소견서 설정',          path: '/opinion/settings' }]  : []),
         ...(has('admin.opinion.dashboard') ? [{ id: 'opinion-dashboard', label: '소견서 현황 대시보드', path: '/opinion/dashboard' }] : []),
+        ...(has('admin.opinion.pre_assignment') ? [{ id: 'opinion-pre-assignment', label: '팀배치 사전 설정', path: '/opinion/pre-assignment' }] : []),
         ...(has('admin.opinion.team_assignment') ? [{ id: 'opinion-team-assignment', label: '팀배치 작업', path: '/opinion/team-assignment' }] : []),
       ],
     },

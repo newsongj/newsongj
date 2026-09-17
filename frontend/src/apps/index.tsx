@@ -38,6 +38,7 @@ const RetreatCreatePage = React.lazy(() => import('./pages/RetreatCreatePage'));
 const RetreatEditPage = React.lazy(() => import('./pages/RetreatEditPage'));
 const OpinionDashboardPage = React.lazy(() => import('./pages/OpinionDashboardPage'));
 const OpinionSettingsPage = React.lazy(() => import('./pages/OpinionSettingsPage'));
+const PreAssignmentPage = React.lazy(() => import('./pages/PreAssignmentPage'));
 const TeamAssignmentPage = React.lazy(() => import('./pages/TeamAssignmentPage'));
 
 const Orchestrator: React.FC = () => {
@@ -62,6 +63,7 @@ const Orchestrator: React.FC = () => {
 
           <Route path="/opinion/dashboard" element={<OpinionDashboardPage />} />
           <Route path="/opinion/settings" element={<OpinionSettingsPage />} />
+          <Route path="/opinion/pre-assignment" element={<PreAssignmentPage />} />
           <Route path="/opinion/team-assignment" element={<TeamAssignmentPage />} />
 
           <Route path="/permission/accounts" element={<PermissionManagementPage />} />

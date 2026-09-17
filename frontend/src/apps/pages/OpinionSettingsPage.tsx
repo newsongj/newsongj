@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { IconButton, Skeleton } from '@mui/material';
+import { FormControlLabel, IconButton, Skeleton, Switch, Tooltip } from '@mui/material';
+import { Info } from 'lucide-react';
 import { TextField } from '@components/common/TextField';
 import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
@@ -26,6 +27,7 @@ import {
   MemberFieldKey,
   OpinionMappingGroup,
   OpinionMappingPair,
+  EXECUTIVE_LEADER_NAME,
   OpinionMemberCandidate,
   OPINION_PHASE_LABEL,
   OpinionPhase,
@@ -115,21 +117,59 @@ const InputsCard = styled('div')(({ theme }) => ({
   borderRadius: theme.custom.borderRadius,
 }));
 
+/**
+ * `repeat(3, …)` 고정은 최소 600px + gap 을 요구한다. 사이드바가 아직 살아 있는
+ * 901~1000px 구간에서는 본문이 그보다 좁아 가로로 넘치는데, 900px 미디어쿼리는
+ * 그 아래에서만 걸려 이 구간을 못 잡는다.
+ *
+ * `auto-fit` 은 폭이 모자라면 알아서 2열 → 1열로 접으므로 구간이 비지 않는다.
+ * 같은 파일의 `FieldGrid` 도 같은 방식을 쓴다.
+ */
 const FormGrid = styled('div')(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(200px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
   gap: theme.custom.spacing.md,
-  '@media (max-width: 900px)': { gridTemplateColumns: '1fr' },
+  alignItems: 'start',
+  '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
+}));
+
+/**
+ * 라벨 + 입력 한 묶음.
+ *
+ * `TextField`의 라벨은 `position: absolute` 플로팅이라 박스 위 공간을 차지하지 않고,
+ * `Select`는 라벨 prop이 없어 블록 라벨을 따로 붙여야 한다. 둘을 같은 행에 섞으면
+ * 시작 위치가 어긋나므로 **전부 외부 라벨로 통일**한다.
+ */
+const FieldBlock = styled('div')(({ theme }) => ({
+  display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.xs,
+}));
+
+const FieldLabel = styled('label')(({ theme }) => ({
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 600,
+  color: theme.custom.colors.text.high,
 }));
 
 const BulkActions = styled('div')({
-  display: 'flex', gap: 8,
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
 });
 
 const TextButton = styled('button')(({ theme }) => ({
-  padding: '2px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
-  fontSize: 12, color: theme.custom.colors.primary._500, borderRadius: 4,
-  '&:hover': { backgroundColor: theme.custom.overlay.primary.hover },
+  padding: '6px 14px',
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: 6,
+  background: theme.custom.colors.white,
+  cursor: 'pointer',
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 600,
+  color: theme.custom.colors.text.medium,
+  whiteSpace: 'nowrap',
+  transition: 'all 0.15s ease',
+  '&:hover': {
+    borderColor: theme.custom.colors.primary._500,
+    color: theme.custom.colors.primary._500,
+    backgroundColor: theme.custom.overlay.primary.hover,
+  },
 }));
 
 const FieldGrid = styled('div')({
@@ -147,51 +187,89 @@ const FieldItem = styled('label')<{ $disabled?: boolean }>(({ theme, $disabled }
   '&:hover': { backgroundColor: $disabled ? 'transparent' : theme.custom.overlay.primary.hover },
 }));
 
-const SelectedCount = styled('span')(({ theme }) => ({
-  fontSize: 12, color: theme.custom.colors.text.medium, whiteSpace: 'nowrap',
+/** 선택 개수 배지 — 전부 선택되면 색을 바꿔 한눈에 구분되게 한다 */
+const SelectedCount = styled('span')<{ $all: boolean }>(({ theme, $all }) => ({
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  padding: '5px 14px', borderRadius: 999,
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+  color: $all ? '#059669' : theme.custom.colors.primary._600,
+  background: $all ? '#d1fae5' : theme.custom.colors.primary._050,
+  border: `1px solid ${$all ? '#a7f3d0' : theme.custom.colors.primary._100}`,
 }));
 
-// 매핑 테이블
+const CountNum = styled('strong')({ fontSize: 15, lineHeight: 1 });
+
+// 매핑 테이블 — 다른 섹션의 InputsCard 와 같은 카드 위에 얹는다
+const TableCard = styled('div')(({ theme }) => ({
+  backgroundColor: theme.custom.colors.white,
+  border: `1px solid ${theme.custom.colors.primary.outline}`,
+  borderRadius: theme.custom.borderRadius,
+  overflow: 'hidden',
+}));
+
 const TableScroll = styled('div')({ overflowX: 'auto', WebkitOverflowScrolling: 'touch' });
 
 const MapTable = styled('table')(({ theme }) => ({
-  width: '100%', minWidth: 640, borderCollapse: 'collapse',
+  width: '100%', minWidth: 600, borderCollapse: 'collapse',
   fontSize: theme.custom.typography.body2.fontSize,
   '& th, & td': {
-    padding: `${theme.custom.spacing.xs} ${theme.custom.spacing.sm}`,
+    padding: `${theme.custom.spacing.sm} ${theme.custom.spacing.md}`,
     borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-    textAlign: 'left', verticalAlign: 'top',
+    textAlign: 'left', verticalAlign: 'middle',
   },
   '& th': {
-    color: theme.custom.colors.text.medium, fontWeight: 500,
-    background: theme.custom.colors.neutral._99, whiteSpace: 'nowrap',
+    background: theme.custom.colors.neutral._95,
+    color: theme.custom.colors.text.medium,
+    fontWeight: 600, whiteSpace: 'nowrap',
   },
+  '& tbody tr:last-of-type td': { borderBottom: 'none' },
   '& tbody tr:hover': { background: theme.custom.overlay.primary.hover },
 }));
 
 const WriterCell = styled('div')({ display: 'flex', flexDirection: 'column', gap: 2 });
 
-const WriterName = styled('span')({ fontWeight: 600, whiteSpace: 'nowrap' });
-
-const SubText = styled('span')(({ theme }) => ({
-  fontSize: 12, color: theme.custom.colors.text.medium, whiteSpace: 'nowrap',
+const WriterName = styled('span')(({ theme }) => ({
+  fontSize: theme.custom.typography.body1.fontSize,
+  fontWeight: 700,
+  color: theme.custom.colors.text.high,
+  whiteSpace: 'nowrap',
 }));
 
-const TargetChips = styled('div')({ display: 'flex', flexWrap: 'wrap', gap: 4 });
+const SubText = styled('span')(({ theme }) => ({
+  fontSize: theme.custom.typography.caption.fontSize,
+  color: theme.custom.colors.text.medium,
+  whiteSpace: 'nowrap',
+}));
+
+const CountText = styled('span')(({ theme }) => ({
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 600,
+  color: theme.custom.colors.text.medium,
+  whiteSpace: 'nowrap',
+}));
+
+const TargetChips = styled('div')({ display: 'flex', flexWrap: 'wrap', gap: 6 });
 
 const TargetChip = styled('span')(({ theme }) => ({
-  display: 'inline-flex', alignItems: 'center', gap: 4,
-  padding: '2px 6px 2px 8px', borderRadius: 999,
-  fontSize: 12, color: theme.custom.colors.primary._600,
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '4px 8px 4px 12px', borderRadius: 999,
+  fontSize: theme.custom.typography.body2.fontSize,
+  fontWeight: 500,
+  color: theme.custom.colors.primary._600,
   background: theme.custom.colors.primary._050,
   border: `1px solid ${theme.custom.colors.primary._100}`,
 }));
 
-const ChipRemove = styled('button')({
+const ChipRemove = styled('button')(({ theme }) => ({
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  width: 16, height: 16, borderRadius: '50%',
   border: 'none', background: 'transparent', cursor: 'pointer',
-  padding: 0, lineHeight: 1, fontSize: 13, color: 'inherit', opacity: 0.7,
-  '&:hover': { opacity: 1 },
-});
+  padding: 0, lineHeight: 1, fontSize: 14,
+  color: theme.custom.colors.primary._600, opacity: 0.6,
+  '&:hover': { opacity: 1, background: theme.custom.colors.primary._100 },
+}));
 
 const EmptyHint = styled('div')(({ theme }) => ({
   padding: `${theme.custom.spacing.lg} 0`,
@@ -210,51 +288,80 @@ const DeleteIconButton = styled(IconButton)(({ theme }) => ({
   '&:hover': { backgroundColor: 'rgba(24,126,244,0.08)' },
 }));
 
-// 모달
-const ModalBody = styled('div')(({ theme }) => ({
-  display: 'flex', flexDirection: 'column', gap: theme.custom.spacing.lg,
-  padding: theme.custom.spacing.lg, width: '100%', minWidth: 0,
-  boxSizing: 'border-box',
-}));
+// ── 모달 ──────────────────────────────────────────────────────────────────────
+//
+// 멤버 선택 테이블은 「권한관리 > 일괄 계정 생성」 팝업 디자인을 그대로 따른다
+// (`PermissionManagementPage.tsx`의 ModalGrid / ModalTableWrapper / AccountTable / Th / Td).
+// 다만 정책·데이터 범위 선택은 계정 생성 전용이라 여기에는 없다.
+
+const ModalGrid = styled('div')({
+  display: 'flex', flexDirection: 'column', gap: 14,
+  padding: '20px 24px',
+  '@media (max-width: 600px)': { padding: '12px', gap: 10 },
+});
 
 const ModalActions = styled('div')({
   display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap',
   '@media (max-width: 480px)': { '& > *': { width: '100%' } },
 });
 
-const PickerBlock = styled('div')({ display: 'flex', flexDirection: 'column', gap: 8 });
+const PickerBlock = styled('div')({ display: 'flex', flexDirection: 'column', gap: 10 });
 
 const PickerTitle = styled('div')(({ theme }) => ({
   display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
-  fontSize: theme.custom.typography.body2.fontSize,
-  fontWeight: 600, color: theme.custom.colors.text.high,
+  fontSize: theme.custom.typography.body1.fontSize,
+  fontWeight: 700, color: theme.custom.colors.text.high,
 }));
 
-const PickerTableWrap = styled('div')(({ theme }) => ({
-  maxHeight: 220, overflowY: 'auto',
-  border: `1px solid ${theme.custom.colors.primary.outline}`,
-  borderRadius: theme.custom.borderRadius,
+const PickerCount = styled('div')({ fontSize: 12, color: '#555' });
+
+const FilterLabelRow = styled('div')({
+  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+});
+
+const FilterLabelText = styled('span')({ fontSize: 12, color: '#595959', fontWeight: 600 });
+
+const ChipRow = styled('div')({ display: 'flex', flexWrap: 'wrap', gap: 6 });
+
+const LeaderChip = styled('button')<{ $active: boolean }>(({ $active }) => ({
+  padding: '3px 10px', fontSize: 12, borderRadius: 12,
+  border: `1px solid ${$active ? '#4f86f7' : '#d9d9d9'}`,
+  background: $active ? '#eff6ff' : '#fff',
+  color: $active ? '#2563eb' : '#555',
+  fontWeight: $active ? 600 : 400,
+  // 임원단 하나뿐이라 토글할 대상이 없다 — 표시 전용
+  cursor: 'default',
+  '&:disabled': { opacity: 1 },
 }));
 
-const PickerTable = styled('table')(({ theme }) => ({
-  width: '100%', borderCollapse: 'collapse',
-  fontSize: theme.custom.typography.body2.fontSize,
-  '& th, & td': {
-    padding: '6px 10px',
-    borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
-    textAlign: 'left', whiteSpace: 'nowrap',
-  },
-  '& th': {
-    position: 'sticky', top: 0, zIndex: 1,
-    background: theme.custom.colors.neutral._95,
-    color: theme.custom.colors.text.medium, fontWeight: 500,
-  },
-  '& tbody tr': { cursor: 'pointer' },
-  '& tbody tr:hover': { background: theme.custom.overlay.primary.hover },
+const ModalTableWrapper = styled('div')({
+  overflowX: 'auto', overflowY: 'auto',
+  maxHeight: 320, width: '100%',
+  border: '1px solid #f0f0f0', borderRadius: 6,
+  '@media (max-width: 600px)': { maxHeight: 'none', overflowY: 'visible' },
+});
+
+const PickerTable = styled('table')({
+  width: 'max-content', minWidth: '100%',
+  borderCollapse: 'collapse', fontSize: 13,
+});
+
+const Th = styled('th')(({ theme }) => ({
+  padding: '10px 8px',
+  background: theme.custom.colors.primary._050,
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+  textAlign: 'left', fontWeight: 600,
+  color: theme.custom.colors.text.medium,
+  whiteSpace: 'nowrap',
+  position: 'sticky', top: 0, zIndex: 1,
 }));
 
-const RowSelected = styled('tr')<{ $selected: boolean }>(({ theme, $selected }) => ({
-  background: $selected ? theme.custom.colors.primary._050 : 'transparent',
+const Td = styled('td')(({ theme }) => ({
+  padding: '10px 8px',
+  borderBottom: `1px solid ${theme.custom.colors.primary.outline}`,
+  color: theme.custom.colors.text.high,
+  verticalAlign: 'middle',
+  whiteSpace: 'nowrap',
 }));
 
 // 요약
@@ -292,13 +399,28 @@ interface MemberPickerProps {
   members: OpinionMemberCandidate[];
   selected: Set<number>;
   onToggle: (memberId: number) => void;
+  /** true면 헤더 전체선택 체크박스를 노출한다 (대상자 선택용) */
   multiple: boolean;
+  /** 다중 선택 시 한 번에 교체 — 헤더 전체선택/해제용 */
+  onReplace?: (memberIds: number[]) => void;
   /** 선택 후보에서 제외할 member_id (작성자를 대상에서 빼는 용도) */
   excludeId?: number | null;
 }
 
-const MemberPicker: React.FC<MemberPickerProps> = ({ members, selected, onToggle, multiple, excludeId }) => {
+/**
+ * 멤버 선택 테이블 — 「권한관리 > 일괄 계정 생성」 팝업과 같은 디자인.
+ *
+ * 후보는 **임원단 직분 보유자만**이다. 팀장·그룹장은 소속으로 대상자가 자동 산출되므로
+ * 이 매핑에 등록할 필요가 없다. 그래서 직분 필터 칩에는 「임원단」 하나만 나타난다.
+ */
+const MemberPicker: React.FC<MemberPickerProps> = ({
+  members, selected, onToggle, multiple, onReplace, excludeId,
+}) => {
   const [search, setSearch] = useState('');
+
+  // 후보가 이미 임원단으로 한정돼 있으므로 직분은 「임원단」 하나뿐이다.
+  // 멤버가 그룹장·팀장을 함께 보유해도 이 화면에서는 임원단만 노출한다.
+  const leaderNames = [EXECUTIVE_LEADER_NAME];
 
   const filtered = useMemo(() => members.filter((m) => {
     if (excludeId && m.member_id === excludeId) return false;
@@ -306,8 +428,22 @@ const MemberPicker: React.FC<MemberPickerProps> = ({ members, selected, onToggle
     return true;
   }), [members, search, excludeId]);
 
+  const allFiltered = filtered.length > 0 && filtered.every((m) => selected.has(m.member_id));
+
+  const toggleAll = () => {
+    if (!onReplace) return;
+    const ids = filtered.map((m) => m.member_id);
+    onReplace(allFiltered
+      ? [...selected].filter((id) => !ids.includes(id))
+      : [...new Set([...selected, ...ids])]);
+  };
+
   return (
     <>
+      <PickerCount>
+        후보 {filtered.length}명 · {selected.size}명 선택됨
+      </PickerCount>
+
       <TextField
         label="이름 검색"
         placeholder="이름을 입력하세요"
@@ -315,46 +451,72 @@ const MemberPicker: React.FC<MemberPickerProps> = ({ members, selected, onToggle
         onChange={(e) => setSearch(e.target.value)}
         fullWidth
       />
-      <PickerTableWrap>
-        <PickerTable>
-          <thead>
-            <tr>
-              <th style={{ width: 40 }} />
-              <th>이름</th>
-              <th>소속</th>
-              <th>기수</th>
-              <th>직분</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
+
+      <div>
+        <FilterLabelRow>
+          <FilterLabelText>직분</FilterLabelText>
+          <Tooltip title="임원단 매핑이므로 임원단 직분 보유자만 후보로 표시됩니다." arrow placement="right">
+            <span style={{ display: 'flex', alignItems: 'center', cursor: 'help' }}>
+              <Info size={13} color="#aaa" />
+            </span>
+          </Tooltip>
+        </FilterLabelRow>
+        <ChipRow>
+          {leaderNames.map((name) => (
+            <LeaderChip key={name} type="button" $active disabled>
+              {name}
+            </LeaderChip>
+          ))}
+        </ChipRow>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyHint>
+          {members.length === 0 ? '임원단 직분을 가진 멤버가 없습니다.' : '검색 결과가 없습니다.'}
+        </EmptyHint>
+      ) : (
+        <ModalTableWrapper>
+          <PickerTable>
+            <thead>
               <tr>
-                <td colSpan={5} style={{ padding: 0 }}>
-                  <EmptyHint>검색 결과가 없습니다.</EmptyHint>
-                </td>
+                <Th style={{ width: 40 }}>
+                  {multiple && (
+                    <input type="checkbox" checked={allFiltered} onChange={toggleAll} />
+                  )}
+                </Th>
+                <Th>이름</Th>
+                <Th>직분</Th>
+                <Th>전화번호</Th>
+                <Th>기수</Th>
+                <Th>교구</Th>
+                <Th>팀</Th>
+                <Th>그룹</Th>
               </tr>
-            ) : filtered.map((m) => {
-              const isSelected = selected.has(m.member_id);
-              return (
-                <RowSelected key={m.member_id} $selected={isSelected} onClick={() => onToggle(m.member_id)}>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={isSelected}
+            </thead>
+            <tbody>
+              {filtered.map((m) => (
+                <tr key={m.member_id}>
+                  <Td style={{ width: 40 }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(m.member_id)}
                       onChange={() => onToggle(m.member_id)}
-                      size="small"
-                      sx={multiple ? undefined : { borderRadius: '50%' }}
                     />
-                  </td>
-                  <td>{m.name}</td>
-                  <td>{affiliation(m) || '—'}</td>
-                  <td>{m.generation ? `${m.generation}기` : '—'}</td>
-                  <td>{m.leader_names.length > 0 ? m.leader_names.join(', ') : '—'}</td>
-                </RowSelected>
-              );
-            })}
-          </tbody>
-        </PickerTable>
-      </PickerTableWrap>
+                  </Td>
+                  <Td>{m.name}</Td>
+                  {/* 그룹장·팀장을 함께 보유해도 이 화면에서는 임원단만 표시한다 */}
+                  <Td>{EXECUTIVE_LEADER_NAME}</Td>
+                  <Td>{m.phone_number ?? '—'}</Td>
+                  <Td>{m.generation != null ? `${m.generation}기` : '—'}</Td>
+                  <Td>{m.gyogu ?? '—'}</Td>
+                  <Td>{m.team ?? '—'}</Td>
+                  <Td>{m.group_no ?? '—'}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </PickerTable>
+        </ModalTableWrapper>
+      )}
     </>
   );
 };
@@ -372,6 +534,7 @@ const OpinionSettingsPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [guideText, setGuideText] = useState('');
+  const [isOpen, setIsOpen] = useState(true);
   const [memberFields, setMemberFields] = useState<Set<MemberFieldKey>>(new Set());
   const [inputFields, setInputFields] = useState<Set<InputFieldKey>>(new Set());
   const [mappings, setMappings] = useState<OpinionMappingGroup[]>([]);
@@ -400,6 +563,7 @@ const OpinionSettingsPage: React.FC = () => {
         setStartDate(settings.start_date ?? '');
         setEndDate(settings.end_date ?? '');
         setGuideText(settings.guide_text ?? '');
+        setIsOpen(settings.is_open);
         setMemberFields(new Set(settings.member_fields));
         setInputFields(new Set(settings.input_fields));
         setMappings(maps);
@@ -503,6 +667,17 @@ const OpinionSettingsPage: React.FC = () => {
   /** 팀배치가 끝난(완료) 연도는 조회 전용 */
   const locked = phase === 'done';
 
+  /**
+   * 매핑 모달의 선택 후보 — **임원단 직분 보유자만**.
+   *
+   * 팀장·그룹장은 소속 팀·그룹으로 대상자가 자동 산출되므로 이 매핑에 등록할 필요가 없다.
+   * 회장→부회장, 부회장→국장처럼 임원단 안에서만 작성자·대상이 정해진다.
+   */
+  const executiveCandidates = useMemo(
+    () => candidates.filter((m) => m.leader_names.includes(EXECUTIVE_LEADER_NAME)),
+    [candidates],
+  );
+
   const summary = useMemo(() => {
     const period = startDate && endDate ? `${startDate} ~ ${endDate}` : '—';
     const targetTotal = mappings.reduce((sum, g) => sum + g.targets.length, 0);
@@ -520,13 +695,15 @@ const OpinionSettingsPage: React.FC = () => {
         ? `작성자 ${mappings.length}명 / 대상 ${targetTotal}명`
         : '등록된 매핑 없음',
       guideText: guideText.trim() || '없음',
+      userPage: isOpen ? '열림' : '닫힘',
     };
-  }, [reportYear, theme, startDate, endDate, memberFields, inputFields, mappings, guideText]);
+  }, [reportYear, theme, startDate, endDate, memberFields, inputFields, mappings, guideText, isOpen]);
 
   // ── 저장 ────────────────────────────────────────────────────────────────────
 
   const handleReset = () => {
     setTheme('');
+    setIsOpen(true);
     setStartDate('');
     setEndDate('');
     setGuideText('');
@@ -554,6 +731,7 @@ const OpinionSettingsPage: React.FC = () => {
         start_date: startDate || null,
         end_date: endDate || null,
         guide_text: guideText.trim() || null,
+        is_open: isOpen,
         member_fields: MEMBER_FIELD_ORDER.filter((k) => memberFields.has(k)),
         input_fields: INPUT_FIELD_ORDER.filter((k) => inputFields.has(k)),
         mappings: pairs,
@@ -593,52 +771,66 @@ const OpinionSettingsPage: React.FC = () => {
         <SectionTitle>기본 정보 입력</SectionTitle>
         <InputsCard>
           <FormGrid>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4, color: '#595959' }}>기준 연도</div>
+            <FieldBlock>
+              <FieldLabel htmlFor="opinion-report-year">기준 연도</FieldLabel>
               <Select
+                id="opinion-report-year"
                 value={String(reportYear)}
                 options={YEAR_OPTIONS}
                 onChange={(v) => setReportYear(Number(v))}
                 width="100%"
               />
-            </div>
-            <TextField
-              id="opinion-start-date" label="작성 시작일" type="date"
-              value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              disabled={locked} disableAnimation fullWidth
-            />
-            <TextField
-              id="opinion-end-date" label="작성 마감일" type="date"
-              value={endDate} min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
-              disabled={locked} disableAnimation fullWidth
-            />
-            <div style={{ gridColumn: '1 / -1' }}>
+            </FieldBlock>
+
+            <FieldBlock>
+              <FieldLabel htmlFor="opinion-start-date">작성 시작일</FieldLabel>
               <TextField
-                label="소견서 주제"
+                id="opinion-start-date" type="date"
+                value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                disabled={locked} disableAnimation fullWidth
+              />
+            </FieldBlock>
+
+            <FieldBlock>
+              <FieldLabel htmlFor="opinion-end-date">작성 마감일</FieldLabel>
+              <TextField
+                id="opinion-end-date" type="date"
+                value={endDate} min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+                helperText="*사용자 소견서 작성 화면에 D-day 마감일로 표시됩니다."
+                disabled={locked} disableAnimation fullWidth
+              />
+            </FieldBlock>
+
+            <FieldBlock style={{ gridColumn: '1 / -1' }}>
+              <FieldLabel htmlFor="opinion-theme">소견서 주제</FieldLabel>
+              <TextField
+                id="opinion-theme"
                 value={theme}
                 onChange={(e) => setTheme(e.target.value)}
                 placeholder="예: 하나님의 열심이 이루시리라"
                 maxLength={200}
-                helperText="소견서 PDF 머리말에 표시됩니다."
+                helperText="*소견서 PDF 머리말에 표시됩니다."
                 disabled={locked}
                 fullWidth
               />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
+            </FieldBlock>
+
+            <FieldBlock style={{ gridColumn: '1 / -1' }}>
+              <FieldLabel htmlFor="opinion-guide">작성자 안내 문구</FieldLabel>
               <TextField
-                label="작성자 안내 문구"
+                id="opinion-guide"
                 value={guideText}
                 onChange={(e) => setGuideText(e.target.value)}
                 placeholder="예: 담당 지체 한 분 한 분을 떠올리며 사실에 근거해 작성해 주세요."
                 multiline
                 rows={2}
                 maxLength={500}
-                helperText="사용자 소견서 작성 페이지 상단에 표시됩니다. PDF에는 나오지 않습니다."
+                helperText="*사용자 소견서 작성 화면 상단에 표시됩니다. PDF에는 나오지 않습니다."
                 disabled={locked}
                 fullWidth
               />
-            </div>
+            </FieldBlock>
           </FormGrid>
         </InputsCard>
       </FormSection>
@@ -648,7 +840,9 @@ const OpinionSettingsPage: React.FC = () => {
         <SectionHeader>
           <SectionTitle>교적 자동 기입 항목</SectionTitle>
           <BulkActions>
-            <SelectedCount>{memberFields.size} / {MEMBER_FIELD_ORDER.length} 선택</SelectedCount>
+            <SelectedCount $all={memberFields.size === MEMBER_FIELD_ORDER.length}>
+              <CountNum>{memberFields.size}</CountNum> / {MEMBER_FIELD_ORDER.length} 선택
+            </SelectedCount>
             {!locked && (
               <>
                 <TextButton type="button" onClick={() => setMemberFields(new Set(MEMBER_FIELD_ORDER))}>전체 선택</TextButton>
@@ -682,7 +876,9 @@ const OpinionSettingsPage: React.FC = () => {
         <SectionHeader>
           <SectionTitle>작성자 직접 입력 항목</SectionTitle>
           <BulkActions>
-            <SelectedCount>{inputFields.size} / {INPUT_FIELD_ORDER.length} 선택</SelectedCount>
+            <SelectedCount $all={inputFields.size === INPUT_FIELD_ORDER.length}>
+              <CountNum>{inputFields.size}</CountNum> / {INPUT_FIELD_ORDER.length} 선택
+            </SelectedCount>
             {!locked && (
               <>
                 <TextButton type="button" onClick={() => setInputFields(new Set(INPUT_FIELD_ORDER))}>전체 선택</TextButton>
@@ -722,63 +918,69 @@ const OpinionSettingsPage: React.FC = () => {
           팀장·그룹장은 소속 팀·그룹을 기준으로 대상자가 자동 산출되므로 등록할 필요가 없습니다.
           조직 구조가 매년 달라지는 임원단만 여기에서 작성자와 대상자를 직접 지정합니다.
         </SectionHint>
-        <TableScroll>
-          <MapTable>
-            <thead>
-              <tr>
-                <th style={{ width: 200 }}>작성자</th>
-                <th>소견서 대상</th>
-                <th style={{ width: 60 }} />
-              </tr>
-            </thead>
-            <tbody>
-              {mappings.length === 0 ? (
+        <TableCard>
+          <TableScroll>
+            <MapTable>
+              <thead>
                 <tr>
-                  <td colSpan={3} style={{ padding: 0 }}>
-                    <EmptyHint>
-                      {locked ? '등록된 매핑이 없습니다.' : '등록된 매핑이 없습니다. 아래 버튼으로 추가하세요.'}
-                    </EmptyHint>
-                  </td>
+                  <th style={{ width: 200 }}>작성자</th>
+                  <th>소견서 대상</th>
+                  <th style={{ width: 80 }}>대상 수</th>
+                  {!locked && <th style={{ width: 64 }} />}
                 </tr>
-              ) : mappings.map((g) => (
-                <tr key={g.writer.member_id}>
-                  <td>
-                    <WriterCell>
-                      <WriterName>{g.writer.name}</WriterName>
-                      <SubText>{affiliation(g.writer) || '—'}</SubText>
-                    </WriterCell>
-                  </td>
-                  <td>
-                    <TargetChips>
-                      {g.targets.map((t) => (
-                        <TargetChip key={t.member_id}>
-                          {t.name}
-                          {!locked && (
-                            <ChipRemove
-                              type="button"
-                              aria-label={`${t.name} 제외`}
-                              onClick={() => removeTarget(g.writer.member_id, t.member_id)}
-                            >
-                              ×
-                            </ChipRemove>
-                          )}
-                        </TargetChip>
-                      ))}
-                    </TargetChips>
-                    <SubText>{g.targets.length}명</SubText>
-                  </td>
-                  <td>
+              </thead>
+              <tbody>
+                {mappings.length === 0 ? (
+                  <tr>
+                    <td colSpan={locked ? 3 : 4} style={{ padding: 0 }}>
+                      <EmptyHint>
+                        {locked ? '등록된 매핑이 없습니다.' : '등록된 매핑이 없습니다. 아래 버튼으로 추가하세요.'}
+                      </EmptyHint>
+                    </td>
+                  </tr>
+                ) : mappings.map((g) => (
+                  <tr key={g.writer.member_id}>
+                    <td>
+                      <WriterCell>
+                        <WriterName>{g.writer.name}</WriterName>
+                        <SubText>{affiliation(g.writer) || '—'}</SubText>
+                      </WriterCell>
+                    </td>
+                    <td>
+                      <TargetChips>
+                        {g.targets.map((t) => (
+                          <TargetChip key={t.member_id}>
+                            {t.name}
+                            {!locked && (
+                              <ChipRemove
+                                type="button"
+                                aria-label={`${t.name} 제외`}
+                                onClick={() => removeTarget(g.writer.member_id, t.member_id)}
+                              >
+                                ×
+                              </ChipRemove>
+                            )}
+                          </TargetChip>
+                        ))}
+                      </TargetChips>
+                    </td>
+                    <td><CountText>{g.targets.length}명</CountText></td>
                     {!locked && (
-                      <DeleteIconButton onClick={() => removeMapping(g.writer.member_id)}>
-                        <DeleteIcon />
-                      </DeleteIconButton>
+                      <td>
+                        <DeleteIconButton
+                          aria-label={`${g.writer.name} 매핑 삭제`}
+                          onClick={() => removeMapping(g.writer.member_id)}
+                        >
+                          <DeleteIcon />
+                        </DeleteIconButton>
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </MapTable>
-        </TableScroll>
+                  </tr>
+                ))}
+              </tbody>
+            </MapTable>
+          </TableScroll>
+        </TableCard>
         {!locked && (
           <AddRow>
             <Button variant="elevated" onClick={openMapModal} showIcon icon={<AddIcon />}>
@@ -786,6 +988,35 @@ const OpinionSettingsPage: React.FC = () => {
             </Button>
           </AddRow>
         )}
+      </FormSection>
+
+      {/* 사용자 페이지 공개 설정 — 수련회 설정 수정 화면과 같은 방식 */}
+      <FormSection>
+        <SectionTitle>사용자 페이지 공개 설정</SectionTitle>
+        <SectionHint>
+          닫으면 작성자가 소견서 작성 화면에 들어와도 「소견서 기간이 아닙니다」만 표시됩니다.
+          팀배치 작업에서 소견서 완료 처리를 하면 자동으로 닫힙니다.
+        </SectionHint>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isOpen}
+                onChange={(e) => setIsOpen(e.target.checked)}
+                disabled={locked}
+                color="primary"
+              />
+            }
+            label={
+              <span style={{ fontSize: 14 }}>
+                소견서 작성&nbsp;
+                <span style={{ color: isOpen ? '#1677ff' : '#8c8c8c', fontWeight: 600 }}>
+                  {isOpen ? '열림' : '닫힘'}
+                </span>
+              </span>
+            }
+          />
+        </div>
       </FormSection>
 
       {/* 요약 */}
@@ -799,6 +1030,7 @@ const OpinionSettingsPage: React.FC = () => {
           <SummaryItem><SummaryLabel>작성자 직접 입력 항목</SummaryLabel><SummaryValue>{summary.inputFields}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>임원단 매핑</SummaryLabel><SummaryValue>{summary.mappings}</SummaryValue></SummaryItem>
           <SummaryItem><SummaryLabel>작성자 안내 문구</SummaryLabel><SummaryValue>{summary.guideText}</SummaryValue></SummaryItem>
+          <SummaryItem><SummaryLabel>사용자 작성 페이지</SummaryLabel><SummaryValue>{summary.userPage}</SummaryValue></SummaryItem>
         </SummaryCard>
       </FormSection>
 
@@ -826,7 +1058,7 @@ const OpinionSettingsPage: React.FC = () => {
           </ModalActions>
         }
       >
-        <ModalBody>
+        <ModalGrid>
           {mapError && <span style={{ color: '#ff4d4f', fontSize: 13 }}>{mapError}</span>}
 
           <PickerBlock>
@@ -834,12 +1066,12 @@ const OpinionSettingsPage: React.FC = () => {
               작성자
               <SubText>
                 {writerSel
-                  ? `${candidates.find((m) => m.member_id === writerSel)?.name ?? ''} 선택됨`
+                  ? `${executiveCandidates.find((m) => m.member_id === writerSel)?.name ?? ''} 선택됨`
                   : '1명을 선택하세요'}
               </SubText>
             </PickerTitle>
             <MemberPicker
-              members={candidates}
+              members={executiveCandidates}
               selected={writerSel ? new Set([writerSel]) : new Set()}
               onToggle={toggleWriter}
               multiple={false}
@@ -852,14 +1084,15 @@ const OpinionSettingsPage: React.FC = () => {
               <SubText>{targetSel.size}명 선택됨</SubText>
             </PickerTitle>
             <MemberPicker
-              members={candidates}
+              members={executiveCandidates}
               selected={targetSel}
               onToggle={toggleTarget}
               multiple
+              onReplace={(ids) => setTargetSel(new Set(ids))}
               excludeId={writerSel}
             />
           </PickerBlock>
-        </ModalBody>
+        </ModalGrid>
       </BaseModal>
 
       <Snackbar open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={hideSnackbar} />

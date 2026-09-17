@@ -20,9 +20,15 @@ import {
 // 사용자는 인쇄 대화상자에서 "PDF로 저장"을 선택해 파일로 받는다.
 //
 // ★ 1인 = 정확히 1페이지
-//   페이지 높이를 A4 본문 높이로 고정하고, 전체소견·특별소견 박스가 남는 공간을
-//   전부 차지하도록 flex 로 늘린다. 그래도 내용이 넘치면 인쇄 직전에 폰트 배율
-//   (--op-scale)을 단계적으로 낮춰 한 장에 맞춘다. 자세한 내용은 fitToOnePage() 참고.
+//   페이지 높이를 A4 본문 높이로 고정하고, 소견 내용을 2단으로 나눈다.
+//     좌 — 현재상태 ~ 다음년도 계획 기타설명 (단답)
+//     우 — 전체소견 · 특별소견            (본문 높이를 통째로 씀)
+//   단답을 왼쪽으로 몰아야 긴 소견 박스가 세로 공간을 최대로 확보한다.
+//
+//   그래도 내용이 넘치면 인쇄 직전에 두 단계로 줄인다.
+//     1) 페이지 골격이 넘침 → 페이지 전체 배율 --op-scale
+//     2) 긴 소견 박스가 넘침 → 그 박스만 --op-box-scale
+//   자세한 내용은 fitToOnePage() / fitBox() 참고.
 
 // ── 페이지 규격 ───────────────────────────────────────────────────────────────
 
@@ -31,8 +37,17 @@ const PAGE_WIDTH_MM = 182;
 /** A4 297mm − 상하 여백 14mm×2, 반올림 오차로 2페이지가 되지 않게 2mm 여유 */
 const PAGE_HEIGHT_MM = 267;
 
+/** 페이지 전체 배율 — 교적 항목이 많아 골격만으로 넘칠 때만 쓴다 */
 const MIN_SCALE = 0.55;
 const SCALE_STEP = 0.05;
+
+/**
+ * 긴 소견 박스의 개별 글자 배율.
+ * 페이지 배율보다 더 내려갈 수 있게 둔다 — 소견 한 건이 길다고 페이지 전체가
+ * 작아지는 것보다, 그 박스만 작아지는 편이 낫기 때문이다.
+ */
+const MIN_BOX_SCALE = 0.45;
+const BOX_STEP = 0.05;
 
 // ── 값 포맷 ───────────────────────────────────────────────────────────────────
 
@@ -168,15 +183,33 @@ const PRINT_CSS = `
 .op-row-label { color: #555; font-size: 0.91em; margin-bottom: 0.1em; }
 .op-row-value { white-space: pre-wrap; word-break: break-word; }
 
-/* 전체소견·특별소견 — 남는 공간을 전부 나눠 가진다 */
-.op-longs {
+/* 소견 내용 2단 — 좌: 단답 항목(현재상태~다음년도 계획), 우: 전체소견·특별소견.
+   단답을 왼쪽으로 몰아야 긴 소견 박스가 본문 높이를 통째로 쓸 수 있다. */
+.op-body {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-  margin-top: 0.6em;
+  gap: 0.9em;
+  margin-top: 0.15em;
 }
+.op-body-left {
+  flex: 0 0 38%;
+  min-width: 0; min-height: 0;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  border-top: 1px solid #ddd;
+  /* 기타설명이 길어 단이 넘치면 이 단만 통째로 줄인다 — 긴 소견 박스와 같은 방식 */
+  font-size: calc(1em * var(--op-box-scale, 1));
+}
+.op-body-right {
+  flex: 1 1 auto;
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  gap: 0.5em;
+}
+/* 한쪽만 있을 때는 단을 나누지 않고 폭을 전부 쓴다 */
+.op-body-left.op-solo { flex: 1 1 auto; }
+
 .op-long-item {
   flex: 1 1 0;
   min-height: 0;
@@ -190,6 +223,9 @@ const PRINT_CSS = `
   padding: 0.5em;
   border: 1px solid #ddd; border-radius: 3px;
   white-space: pre-wrap; word-break: break-word;
+  /* 칸 크기에 맞춰 이 박스만 따로 글자를 줄인다 (fitBox 참고) */
+  font-size: calc(1em * var(--op-box-scale, 1));
+  line-height: 1.5;
 }
 
 .op-writers { flex: 0 0 auto; border-top: 1px solid #ddd; }
@@ -262,33 +298,50 @@ const OpinionPage: React.FC<PageProps> = ({ row, memberFields, inputFields, them
 
       {inputFields.length > 0 && <div className="op-section-title">소견 내용</div>}
 
-      {shortInputs.map((key) => {
-        const value = formatInputField(row, key);
-        return (
-          <div className="op-row" key={key}>
-            <div className="op-row-label">{INPUT_FIELD_LABELS[key]}</div>
-            <div className={`op-row-value${value === DASH ? ' op-empty' : ''}`}>{value}</div>
-          </div>
-        );
-      })}
-
-      {/* 남는 세로 공간을 전부 차지 — 내용이 짧아도 칸이 크게 유지된다 */}
-      <div className="op-longs">
-        {longInputs.map((key) => {
-          const value = formatInputField(row, key);
-          return (
-            <div className="op-long-item" key={key}>
-              <div className="op-row-label">{INPUT_FIELD_LABELS[key]}</div>
-              <div className={`op-longbox${value === DASH ? ' op-empty' : ''}`}>{value}</div>
+      {/*
+        좌: 단답 항목 / 우: 전체소견·특별소견.
+        긴 소견 박스가 본문 높이를 통째로 쓰도록 단답을 왼쪽으로 몰아둔다.
+      */}
+      {inputFields.length > 0 && (
+        <div className="op-body">
+          {shortInputs.length > 0 && (
+            <div className={`op-body-left${longInputs.length === 0 ? ' op-solo' : ''}`}>
+              {shortInputs.map((key) => {
+                const value = formatInputField(row, key);
+                return (
+                  <div className="op-row" key={key}>
+                    <div className="op-row-label">{INPUT_FIELD_LABELS[key]}</div>
+                    <div className={`op-row-value${value === DASH ? ' op-empty' : ''}`}>{value}</div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* 작성자 — 소속 · 역할 · 이름 · 전화번호 */}
+          {longInputs.length > 0 && (
+            <div className="op-body-right">
+              {longInputs.map((key) => {
+                const value = formatInputField(row, key);
+                return (
+                  <div className="op-long-item" key={key}>
+                    <div className="op-row-label">{INPUT_FIELD_LABELS[key]}</div>
+                    <div className={`op-longbox${value === DASH ? ' op-empty' : ''}`}>{value}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/*
+        작성자 — 소속 · 역할 · 이름 · 전화번호.
+        **실제로 저장한 사람만** 넣는다. 예정 작성자(`expected_writers`)는
+        아직 쓰지 않은 사람이므로 출력물에 이름이 오르면 안 된다.
+      */}
       <div className="op-section-title">작성자</div>
       {row.writers.length === 0 ? (
-        <div className="op-row op-empty">지정된 작성자가 없습니다.</div>
+        <div className="op-row op-empty">작성 전입니다.</div>
       ) : (
         <div className="op-writers">
           {row.writers.map((w) => (
@@ -331,32 +384,62 @@ const OpinionPage: React.FC<PageProps> = ({ row, memberFields, inputFields, them
 
 // ── 1페이지 맞춤 ──────────────────────────────────────────────────────────────
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /**
- * 페이지가 넘치면 폰트 배율을 한 단계씩 낮춰 A4 한 장에 맞춘다.
+ * 긴 소견 박스 하나를 칸 크기에 맞춘다 — **그 박스의 글자만** 줄인다.
  *
- * 넘침 판정은 두 가지다.
- *   1) 페이지 자체가 넘침       — 교적 항목이 많아 고정 영역만으로 꽉 찬 경우
- *   2) 긴 소견 박스가 넘침      — flex 로 눌린 박스 안에서 텍스트가 잘리는 경우
+ * 페이지 전체를 줄이면 머리말·교적 정보까지 같이 작아진다. 전체소견이 길다고
+ * 나머지가 읽기 힘들어질 이유는 없으므로 넘치는 박스만 따로 손본다.
+ *
+ * 글자는 가로·세로 두 방향으로 흐르므로, 넘친 비율의 제곱근이 필요한 배율의
+ * 근사치다. 거기서 시작해 한 단계씩 좁히면 1.0부터 훑는 것보다 훨씬 빨리 끝난다
+ * (일괄 출력 시 수백 페이지를 재계산해야 하므로 반복 횟수가 곧 체감 속도다).
+ */
+const fitBox = (box: HTMLElement): void => {
+  const fits = () => box.scrollHeight <= box.clientHeight + 1;
+
+  box.style.setProperty('--op-box-scale', '1');
+  if (fits()) return;
+
+  const limit = box.clientHeight / box.scrollHeight;
+  // 근사치를 한 단계 올려 잡는다 — 너무 작게 시작해 글자가 과하게 쪼그라드는 걸 막는다
+  let scale = Math.min(1, round2(Math.sqrt(limit) + BOX_STEP));
+
+  box.style.setProperty('--op-box-scale', String(scale));
+  while (scale > MIN_BOX_SCALE && !fits()) {
+    scale = round2(scale - BOX_STEP);
+    box.style.setProperty('--op-box-scale', String(scale));
+  }
+};
+
+/**
+ * A4 한 장에 맞춘다. 두 단계로 나눠 처리한다.
+ *
+ *   1) 페이지 골격이 넘치면  → 페이지 전체 배율(--op-scale)을 낮춘다.
+ *      교적 항목을 많이 켜서 고정 영역만으로 꽉 찬 경우다.
+ *   2) 긴 소견 박스가 넘치면 → 그 박스의 글자만(--op-box-scale) 줄인다.
  *
  * scrollHeight 를 읽는 시점에 강제로 리플로우가 일어나므로 별도 처리는 필요 없다.
  */
 const fitToOnePage = (page: HTMLElement): void => {
-  const overflows = (): boolean => {
-    if (page.scrollHeight > page.clientHeight + 1) return true;
-    const boxes = page.querySelectorAll<HTMLElement>('.op-longbox');
-    for (let i = 0; i < boxes.length; i++) {
-      if (boxes[i].scrollHeight > boxes[i].clientHeight + 1) return true;
-    }
-    return false;
-  };
+  // 긴 소견 박스 + 좌측 단답 단. 셋 다 칸 크기가 정해져 있어 같은 방식으로 맞춘다.
+  const boxes = Array.from(
+    page.querySelectorAll<HTMLElement>('.op-longbox, .op-body-left'),
+  );
 
-  let scale = 1;
   page.style.setProperty('--op-scale', '1');
+  boxes.forEach((b) => b.style.setProperty('--op-box-scale', '1'));
 
-  while (scale > MIN_SCALE && overflows()) {
-    scale = Math.round((scale - SCALE_STEP) * 100) / 100;
+  // 1단계 — 박스 넘침은 여기서 보지 않는다. 그건 2단계에서 박스별로 해결한다.
+  let scale = 1;
+  while (scale > MIN_SCALE && page.scrollHeight > page.clientHeight + 1) {
+    scale = round2(scale - SCALE_STEP);
     page.style.setProperty('--op-scale', String(scale));
   }
+
+  // 2단계 — 페이지 배율이 확정된 뒤라야 박스의 실제 높이가 정해진다
+  boxes.forEach(fitBox);
 };
 
 // ── 인쇄 포털 ─────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ MENU_KEYS: List[str] = [
     "admin.retreat.patient_room",
     "admin.opinion.settings",
     "admin.opinion.dashboard",
+    "admin.opinion.pre_assignment",
     "admin.opinion.team_assignment",
     "user.research",
     "user.vehicle",
@@ -44,6 +45,7 @@ MENU_LABELS: Dict[str, str] = {
     "admin.retreat.patient_room":          "환자방 명단",
     "admin.opinion.settings":              "소견서 설정",
     "admin.opinion.dashboard":             "소견서 현황 대시보드",
+    "admin.opinion.pre_assignment":        "팀배치 사전 설정",
     "admin.opinion.team_assignment":       "팀배치 작업",
     "user.research":                       "인원조사",
     "user.vehicle":                        "차량조사",
@@ -73,6 +75,7 @@ MENU_GROUPS: Dict[str, List[str]] = {
     "소견서": [
         "admin.opinion.settings",
         "admin.opinion.dashboard",
+        "admin.opinion.pre_assignment",
         "admin.opinion.team_assignment",
     ],
     "사용자": ["user.research", "user.vehicle", "user.suspended_meal", "user.patient_room", "user.opinion"],
