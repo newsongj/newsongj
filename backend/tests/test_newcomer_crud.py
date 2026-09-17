@@ -33,6 +33,7 @@ def test_create_newcomer_does_not_set_enrolled_at(client, db):
     nid = r.json()["member_id"]
 
     from app.models import Member
+    db.rollback()
     m = db.query(Member).filter(Member.member_id == nid).first()
     assert m.enrolled_at is None  # 등반 전이라 NULL
 
@@ -90,7 +91,7 @@ def test_delete_newcomer_saves_deleted_reason(client, seed_members, db):
     assert r.status_code == 200
 
     from app.models import Member
-    db.expire_all()
+    db.rollback()
     member = db.query(Member).filter(Member.member_id == newcomer_id).first()
     assert member.deleted_reason == "연락 두절"
 
@@ -126,6 +127,7 @@ def test_enroll_newcomer_promotes_to_regular(client, seed_members, db):
 
     # enrolled_at 세팅됨
     from app.models import Member
+    db.rollback()
     m = db.query(Member).filter(Member.member_id == newcomer_id).first()
     assert m.enrolled_at is not None
 
@@ -146,6 +148,7 @@ def test_enroll_newcomer_normalizes_blank_profile_enums(client, seed_members, db
     )
     assert r.status_code == 200
 
+    db.rollback()
     latest = (
         db.query(MemberProfile)
         .filter(MemberProfile.member_id == newcomer_id)

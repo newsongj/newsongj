@@ -56,6 +56,7 @@ def test_newcomer_attendance_batch_saves_unenrolled_newcomer(client, db):
     assert response.status_code == 200
     assert response.json() == {"saved_count": 1}
 
+    db.rollback()
     record = (
         db.query(models.AttendanceRecord)
         .filter(
@@ -82,6 +83,7 @@ def test_newcomer_attendance_batch_rejects_regular_member(client, db):
 
     assert response.status_code == 400
     assert "미등반 새가족이 아닌 멤버" in response.json()["detail"]
+    db.rollback()
     assert db.query(models.AttendanceRecord).count() == 0
 
 

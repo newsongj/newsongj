@@ -1,20 +1,29 @@
-"""테스트 공용 fixture — SQLite in-memory + FastAPI TestClient.
+"""Isolated test DB and real JWT authentication; never use backend/.env values.
 
-production 코드(`app.core.database`)의 engine/SessionLocal을 import 시점에 SQLite로
-교체하므로, app.main이 로드될 때 `Base.metadata.create_all`이 SQLite에 적용된다.
+Default SQLite is in-memory. The verification launcher can select a disposable
+MariaDB on the internal Docker network; arbitrary database URLs are not accepted.
 """
 import os
 import datetime
 import pytest
 
-# config.py의 BaseSettings가 .env 못 찾아도 통과하도록 더미 환경변수
-os.environ.setdefault("DB_USER", "test")
-os.environ.setdefault("DB_PASSWORD", "test")
-os.environ.setdefault("DB_HOST", "localhost")
-os.environ.setdefault("DB_PORT", "3306")
-os.environ.setdefault("DB_NAME", "test")
+# Override inherited values as well as .env defaults before importing settings.
+os.environ.update({
+    "APP_ENV": "test",
+    "DB_USER": "test",
+    "DB_PASSWORD": "isolated-test-only",
+    "DB_HOST": "127.0.0.1",
+    "DB_PORT": "1",
+    "DB_NAME": "newsongj_test",
+    "FRONTEND_URL": "http://testserver",
+    "BACKEND_URL": "http://testserver",
+    "JWT_SECRET_KEY": "newsongj-tests-only-never-production",
+    "JWT_ALGORITHM": "HS256",
+    "JWT_EXPIRE_HOURS": "1",
+})
 
-from sqlalchemy import create_engine, BigInteger
+from sqlalchemy import create_engine, BigInteger, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -27,12 +36,28 @@ def _bigint_to_integer(element, compiler, **kw):
 
 import app.core.database as _db
 
-_test_engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,  # in-memory DB가 connection 별로 분리되지 않게 단일 connection 강제
-)
+_database = os.environ.get("NEWSONGJ_TEST_DATABASE", "sqlite")
+if _database == "sqlite":
+    _test_engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+elif _database == "mariadb":
+    _test_engine = create_engine(
+        "mysql+pymysql://root:isolated-test-only@test-db:3306/newsongj_test",
+        pool_pre_ping=True,
+    )
+else:
+    raise RuntimeError("Unsupported test database; use the isolated verification launcher.")
 _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+
+
+@event.listens_for(Engine, "do_connect")
+def _reject_other_engines(dialect, connection_record, connection_args, connection_params):
+    # do_connect runs before opening a DBAPI connection (engine_connect is later).
+    if dialect is not _test_engine.dialect:
+        raise RuntimeError("Tests may connect only to the isolated test engine.")
 
 # 모듈 속성 교체 — 이후 import되는 코드가 이 engine/SessionLocal을 본다
 _db.engine = _test_engine
@@ -40,24 +65,26 @@ _db.SessionLocal = _TestSession
 
 from app.main import app  # noqa: E402  — 위 monkey-patch 이후여야 함
 import app.models as models  # noqa: E402, F401  — Base 등록
-from app.core.security import verify_token  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-
-# 테스트는 인증 우회 (JWT 발급/검증은 별도 auth 테스트에서 다룬다)
-app.dependency_overrides[verify_token] = lambda: {"sub": "test"}
+from jose import jwt  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_schema():
-    """전체 테스트 세션 1회 — SQLite에 스키마 생성."""
+    """전체 테스트 세션 1회 — 격리 DB에 스키마 생성."""
     _db.Base.metadata.create_all(bind=_test_engine)
     yield
     _db.Base.metadata.drop_all(bind=_test_engine)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def db():
-    """함수별 세션 — 각 테스트가 끝나면 모든 테이블 비움."""
+    """함수별 세션 — 각 테스트가 끝나면 모든 테이블 비움.
+
+    API는 별도 세션에서 commit한다. API 호출 후 DB를 검증할 때 db.rollback()으로
+    이 세션의 기존 읽기 트랜잭션을 끝내야 MariaDB REPEATABLE READ에서도 새 값을 본다.
+    """
     session = _TestSession()
     try:
         yield session
@@ -67,12 +94,39 @@ def db():
         with _test_engine.begin() as conn:
             for tbl in reversed(_db.Base.metadata.sorted_tables):
                 conn.execute(tbl.delete())
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client():
-    """FastAPI TestClient — get_db는 production SessionLocal(=교체된 SQLite) 사용."""
-    return TestClient(app)
+def auth_headers():
+    """Sign a real JWT with only the menu/scope claims requested by each test."""
+    def build(menus=(), **claims):
+        payload = {
+            "sub": "1", "menus": list(menus), "data_scope": "all",
+            "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1),
+            **claims,
+        }
+        token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        return {"Authorization": f"Bearer {token}"}
+    return build
+
+
+@pytest.fixture
+def anonymous_client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def client(auth_headers):
+    """Existing gyojeok tests have explicit gyojeok permissions, not an auth bypass."""
+    headers = auth_headers([
+        "admin.gyojeok.members", "admin.gyojeok.deleted_members",
+        "admin.gyojeok.newcomers", "admin.gyojeok.attendance",
+        "admin.gyojeok.attendance_dashboard",
+    ])
+    with TestClient(app, headers=headers) as test_client:
+        yield test_client
 
 
 @pytest.fixture

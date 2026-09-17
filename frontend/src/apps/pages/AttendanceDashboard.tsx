@@ -17,13 +17,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Users, CalendarCheck, UserPlus } from 'lucide-react';
-import { fetchAttendanceDashboard } from '@/api/attendance';
+import { Users, CalendarCheck, UserPlus, Download } from 'lucide-react';
+import { fetchAttendanceDashboard, fetchSundayReport } from '@/api/attendance';
 import { DashboardQuery, DashboardResponse } from '@/models/attendance.types';
 import StatCard from '@components/common/StatCard';
 import ChartWithSelect from '@components/common/ChartWithSelect';
 import ChartContainer from '@components/common/ChartContainer';
 import { Select } from '@components/common/Select';
+import { Button } from '@components/common/Button';
+import { Snackbar } from '@components/common/Snackbar';
+import { useSnackbar } from '@/hooks/common/useSnackbar';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -331,6 +334,8 @@ const AttendanceDashboard: React.FC = () => {
 
   // ── 대시보드 데이터 ───────────────────────────────────────────────────
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+  const [reportDownloading, setReportDownloading] = useState(false);
+  const { snackbar, showSnackbar, hideSnackbar } = useSnackbar();
 
   // ── 세부 필터 상태 ────────────────────────────────────────────────────
   const [gyogu, setGyogu] = useState('');
@@ -371,6 +376,29 @@ const AttendanceDashboard: React.FC = () => {
 
     return { period_unit: periodUnit, date, ...base };
   }, [periodUnit, weekSaturday, selectedYear, selectedMonth, selectedYearOnly, customStart, customEnd, gyogu, team]);
+
+  const handleReportDownload = async () => {
+    if (reportDownloading || dashboardQuery?.period_unit !== 'weekly' || !dashboardQuery.date) return;
+    const { date, gyogu_no, team_no } = dashboardQuery;
+    setReportDownloading(true);
+    try {
+      const blob = await fetchSundayReport({ date, gyogu_no, team_no });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `주일보고_연동테스트_${date}.xlsx`;
+      document.body.appendChild(link);
+      try { link.click(); } finally {
+        link.remove();
+        // Give the browser time to start reading the download before releasing it.
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      showSnackbar(error instanceof Error ? error.message : '주일보고 다운로드에 실패했습니다.', 'error');
+    } finally {
+      setReportDownloading(false);
+    }
+  };
 
   // ── 단일 API 호출 ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -540,6 +568,19 @@ const AttendanceDashboard: React.FC = () => {
             width={100}
           />
         </FilterField>
+        <Button
+          type="button"
+          variant="outlined"
+          size="small"
+          showIcon
+          icon={<Download size={16} aria-hidden="true" />}
+          onClick={handleReportDownload}
+          disabled={periodUnit !== 'weekly' || reportDownloading}
+          title={periodUnit !== 'weekly' ? '주간을 선택하면 다운로드할 수 있습니다.' : '연동 테스트: 첫 장 맨 아래 출석 수만 실제 데이터입니다.'}
+          sx={{ marginLeft: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}
+        >
+          {reportDownloading ? '다운로드 준비 중…' : '주일보고 다운로드'}
+        </Button>
       </FilterPanel>
 
       {/* ── KPI 카드 ── */}
@@ -748,6 +789,12 @@ const AttendanceDashboard: React.FC = () => {
           </ResponsiveContainer>
         </ChartContainer></WeeklyOnlyWrap>
       </ChartsGrid>
+      <Snackbar
+        open={snackbar.open}
+        message={snackbar.message}
+        severity={snackbar.severity}
+        onClose={hideSnackbar}
+      />
     </PageWrapper>
   );
 };
