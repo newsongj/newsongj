@@ -49,7 +49,7 @@
 |---|------|------|------|
 | 1 | **연도 스냅샷 조회** | `member_profile` 에서 `updated_at <= '{report_year}-12-31'` 중 최신, 동일 날짜면 `profile_id` 큰 것 | §2-1 |
 | 2 | **낙관적 잠금** | 조건을 UPDATE 문에 넣고 `affected_rows = 0` 이면 **409**. 응답에 `current_updated_at` · `last_writer` · `is_self` 포함 | §0-4 |
-| 3 | **`updated_at` 정밀도** | `DATETIME(3)`. **미적용 — 누가 먼저 하든 한 번만** ALTER | §0-4-2 |
+| 3 | **`updated_at` 정밀도** | `DATETIME(3)` — **적용 완료**. 응답에 밀리초가 실리므로 그대로 왕복시킬 것 | §0-4-2 |
 | 4 | **삭제 멤버** | `member.deleted_at` 은 명단에 **표시하되 집계에서 제외**. 배치 대상에서도 제외 | §2-1 · §4-2 |
 | 5 | **항목 키 목록** | 교적 15개 / 입력 9개. 이 목록이 유일한 기준이며 §2 는 이 키를 그대로 렌더·검증한다 | §1-1 |
 | 6 | **단답 7개 길이** | **각 20자** (DB 는 `VARCHAR(100)`/`(255)` 지만 더 좁게 막는다). 선택지 문구도 동일 | §2-2 · §1-2 |
@@ -379,20 +379,20 @@ UPDATE member_opinion_report
 - 작성자 기록(`member_opinion_report_writer`)은 같은 트랜잭션 안에서 UPSERT 한다.
   `UNIQUE (opinion_report_id, writer_member_id)` 라 재시도해도 안전하다
 
-#### 0-4-2. ⚠️ `updated_at` 정밀도 — **DATETIME(3) 필요**
+#### 0-4-2. `updated_at` 정밀도 — **DATETIME(3) 적용 완료**
 
-`DATETIME` 은 **초 단위**다. 두 사람이 같은 초에 저장하면 `base_updated_at` 비교가
-통과해 버려 낙관적 잠금이 그대로 뚫린다. 동시 편집이 잦은 화면이라 실제로 일어날 수 있다.
+`DATETIME` 은 **초 단위**라 두 사람이 같은 초에 저장하면 `base_updated_at` 비교가
+통과해 버려 낙관적 잠금이 그대로 뚫린다. 동시 편집이 잦은 화면이라 실제로 일어난다.
+그래서 `member_opinion_report` 의 두 시각 컬럼을 밀리초까지 보관한다.
 
-```sql
-ALTER TABLE member_opinion_report
-  MODIFY updated_at DATETIME(3) NOT NULL
-    DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '수정 시각',
-  MODIFY created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '생성 시각';
+```
+created_at   datetime(3)
+updated_at   datetime(3)   on update current_timestamp(3)
 ```
 
-응답의 `updated_at` 은 밀리초까지 내려간다 (`2026-11-05T14:20:31.482`).
-프론트는 이 값을 **그대로 되돌려 보내기만** 하므로 파싱 규칙을 바꿀 필요는 없다.
+**응답의 `updated_at` 에 밀리초가 실린다** (`2026-11-05T14:20:31.482`).
+클라이언트는 이 값을 **자르거나 반올림하지 말고 그대로 되돌려 보내야** 한다 —
+초 단위로 잘라 보내면 비교가 어긋나 정상 저장이 409 로 거절된다.
 
 > 더 엄격하게 가려면 `row_version INT` 를 두고 저장할 때마다 +1 하는 방법도 있다.
 > 시간 값에 의존하지 않아 이론적으로 완전하지만, 작성자가 2명 안팎이고 사람이
@@ -1075,8 +1075,8 @@ PDF 소견 내용이 2단이고 좌측 단이 본문 폭의 약 1/3이라, 항�
   프론트는 `is_self` 로 「○○ 님이 방금 저장했습니다」와 「다른 탭에서 저장된 내용입니다」를 가른다
 - **모달을 닫지 않고** 최신 내용만 재조회한다 — 닫으면 방금 쓴 내용을 전부 잃는다
 
-> **`updated_at` 은 `DATETIME(3)` 이어야 한다.** 초 단위면 같은 초에 저장한 두 사람이
-> 검사를 통과해 잠금이 뚫린다 (§0-4-2).
+> **`updated_at` 은 `DATETIME(3)` 이다.** 응답의 밀리초를 자르지 말고 그대로
+> 되돌려 보내야 한다 — 초 단위로 잘라 보내면 정상 저장이 409 로 거절된다 (§0-4-2).
 
 > 관리자 대시보드의 상세 모달과 사용자 작성 페이지 **양쪽 모두** 이 규칙을 따른다.
 > 다만 **관리자 저장은 `member_opinion_report_writer` 를 건드리지 않는다** (§0-2) —
