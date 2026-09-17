@@ -19,7 +19,7 @@ const DATA_SCOPE_LABEL: Record<string, string> = {
 };
 
 const Header: React.FC<HeaderProps> = ({
-  title = 'Admin Page',
+  title = '관리자 페이지',
   userName,
   userImage
 }) => {

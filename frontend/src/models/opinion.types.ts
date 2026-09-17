@@ -97,22 +97,38 @@ export const INPUT_FIELD_PARENT: Partial<Record<InputFieldKey, InputFieldKey>> =
 export const INPUT_FIELD_MULTILINE: InputFieldKey[] = ['general_opinion', 'special_opinion'];
 
 /**
- * 입력 최대 길이 — `member_opinion_report` 컬럼 정의에 맞춘 값.
+ * 단답 항목(현재상태 ~ 다음년도 계획 기타설명) 7개의 입력 한도.
  *
- * VARCHAR(N)은 문자 수 기준이라 그대로 쓴다.
+ * DB 한도(VARCHAR 100/255)가 아니라 **PDF 지면**이 기준이다.
+ * 이 7개는 A4 좌측 단에 함께 들어가야 하는데, 좌측 단은 본문 폭의 약 1/3이라
+ * 11pt 기준 한 줄에 17자 안팎밖에 못 넣는다. 항목마다 한 줄을 넘기지 않아야
+ * 7개가 모두 잘리지 않고 들어간다.
+ *
+ * **선택지 목록에도 그대로 걸린다.** `opinion_report_custom.status_options` /
+ * `plan_options` 에 등록하는 보기 문구도 이 길이를 넘으면 안 된다 —
+ * 작성자가 고른 값이 그대로 이 칸에 찍히기 때문이다.
+ */
+export const SHORT_INPUT_MAX_LENGTH = 20;
+
+/**
+ * 입력 최대 길이.
+ *
+ * 단답 7개는 지면 제약(`SHORT_INPUT_MAX_LENGTH`)을 따르고,
+ * 전체소견·특별소견만 DB 컬럼 한도를 쓴다.
+ *
  * TEXT는 65,535 **바이트**이고 utf8mb4 한글이 글자당 3바이트라 약 21,845자가 한계이므로,
- * 여유를 둬 20,000자로 제한한다.
- *
- * 컬럼 길이를 바꿀 때 이 값도 함께 고쳐야 한다.
+ * 여유를 둬 20,000자로 제한한다. 컬럼 길이를 바꿀 때 이 값도 함께 고쳐야 한다.
  */
 export const INPUT_FIELD_MAX_LENGTH: Record<InputFieldKey, number> = {
-  current_status:                   100,    // VARCHAR(100)
-  current_status_etc:               255,    // VARCHAR(255)
-  group_meeting_attendance_status:  255,    // VARCHAR(255)
-  sunday_morning_attendance_status: 255,    // VARCHAR(255)
-  sunday_evening_attendance_status: 255,    // VARCHAR(255)
-  next_year_plan:                   255,    // VARCHAR(255)
-  next_year_plan_etc:               255,    // VARCHAR(255)
+  // 단답 7개 — DB 한도보다 지면 제약이 훨씬 빡빡하다 (아래 SHORT_INPUT_MAX_LENGTH 주석 참고)
+  current_status:                   SHORT_INPUT_MAX_LENGTH,  // VARCHAR(100)
+  current_status_etc:               SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+  group_meeting_attendance_status:  SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+  sunday_morning_attendance_status: SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+  sunday_evening_attendance_status: SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+  next_year_plan:                   SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+  next_year_plan_etc:               SHORT_INPUT_MAX_LENGTH,  // VARCHAR(255)
+
   general_opinion:                  20000,  // TEXT
   special_opinion:                  20000,  // TEXT
 };
@@ -136,8 +152,16 @@ export interface OpinionSettings {
    * 소견서 설정 화면은 이 값을 읽어 잠그기만 하고 직접 바꾸지 않는다.
    */
   is_active: boolean;
-  /** 소견서 주제(표어) — PDF 머리말에 표시 */
+  /** 소견서 주제(표어) — PDF 머리말 + 사용자 작성 화면 상단 */
   theme: string | null;
+  /**
+   * 사용자 소견서 작성 페이지 공개 여부.
+   *
+   * 수련회의 `is_research_open` 계열과 같은 역할이다. 관리자가 설정 화면에서 직접 끄거나,
+   * 팀배치에서 소견서 완료 처리를 하면 서버가 0으로 내린다.
+   * 닫히면 사용자 화면은 「소견서 기간이 아닙니다」만 표시한다.
+   */
+  is_open: boolean;
   start_date: string | null;
   end_date: string | null;
   /**
@@ -188,6 +212,15 @@ export interface OpinionMemberCandidate {
 
 /** 이 대상자를 작성하게 된 근거 */
 export type OpinionWriterRole = '임원단' | '팀장' | '그룹장';
+
+/**
+ * 임원단 직분명 — `leader` 테이블의 직분 이름과 일치해야 한다.
+ *
+ * 소견서에서 작성자 경로를 가르는 기준이다. 이 직분을 가진 사람은
+ * `opinion_report_mapping` 으로만 작성자가 되고, 없는 사람은 소속(data_scope)으로
+ * 작성자가 된다 — **둘은 배타**다. 상세는 `OPINION_ADMINPAGE_APISPEC.md` §2-1.
+ */
+export const EXECUTIVE_LEADER_NAME = '임원단';
 
 /**
  * 소견서 작성자.
@@ -276,8 +309,25 @@ export interface OpinionReportRow {
 
   // 작성 현황
   is_written: boolean;
-  /** 이 소견서를 작성·수정할 수 있는 사람들 (임원단 매핑 ∪ 그룹장 ∪ 팀장) */
+  /**
+   * **실제로 작성한 사람들** — 사용자 페이지에서 저장할 때마다 기록된다
+   * (`member_opinion_report_writer`). 로그인 토큰의 `member_id` 를 그대로 쓴다.
+   *
+   * 한 소견서를 팀장과 그룹장이 나눠 쓰므로 여러 명이 쌓인다.
+   * **관리자가 대시보드에서 대리 수정한 것은 포함하지 않는다** — 대리 수정이지
+   * 작성이 아니기 때문이다.
+   *
+   * 아무도 쓰지 않았으면 빈 배열이고, 그때는 `expected_writers` 를 대신 보여준다.
+   */
   writers: OpinionWriter[];
+  /**
+   * **예정 작성자** — 아직 아무도 쓰지 않았을 때 「누구한테 독촉해야 하는가」를
+   * 보여주기 위해 서버가 파생해 내려준다 (임원단 매핑 / 소속, 배타 규칙).
+   *
+   * `is_written = true` 면 빈 배열이다. PDF 에는 넣지 않는다 — 실제로 쓴 사람이
+   * 아니기 때문이다. 대시보드에서만 회색으로 구분해 표시한다.
+   */
+  expected_writers: OpinionWriter[];
   /** 동반배치 묶음의 다른 인원 — 관리자 상세·PDF 전용, 작성자 페이지 미노출 */
   companions: OpinionCompanion[];
   updated_at: string | null;
