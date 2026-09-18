@@ -56,6 +56,7 @@ def test_newcomer_attendance_batch_saves_unenrolled_newcomer(client, db):
     assert response.status_code == 200
     assert response.json() == {"saved_count": 1}
 
+    db.rollback()
     record = (
         db.query(models.AttendanceRecord)
         .filter(
@@ -82,6 +83,7 @@ def test_newcomer_attendance_batch_rejects_regular_member(client, db):
 
     assert response.status_code == 400
     assert "미등반 새가족이 아닌 멤버" in response.json()["detail"]
+    db.rollback()
     assert db.query(models.AttendanceRecord).count() == 0
 
 
@@ -108,10 +110,10 @@ def test_newcomer_attendance_batch_uses_worship_date_before_enrolled_at(client, 
     assert "미등반 새가족이 아닌 멤버" in after_enroll.json()["detail"]
 
 
-def test_newcomer_attendance_does_not_enter_regular_attendance_or_dashboard(client, db):
+def test_newcomer_attendance_is_separate_from_regular_list_but_included_in_dashboard(client, db):
     newcomer = _add_member(
         db,
-        name="집계제외새가족",
+        name="집계포함새가족",
         member_type="새가족",
         enrolled_at=None,
     )
@@ -138,4 +140,6 @@ def test_newcomer_attendance_does_not_enter_regular_attendance_or_dashboard(clie
         params={"period_unit": "weekly", "date": "2026-05-02"},
     )
     assert dashboard_response.status_code == 200
-    assert dashboard_response.json()["kpi"]["all"] == {"present": 0.0, "total": 0.0}
+    kpi = dashboard_response.json()["kpi"]
+    assert kpi["all"] == {"present": 1.0, "total": 1.0}
+    assert kpi["newcomer"] == {"present": 1.0, "total": 1.0}

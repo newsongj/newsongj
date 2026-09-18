@@ -3,15 +3,17 @@ import calendar
 import datetime
 from enum import Enum
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.date_utils import is_saturday
 from app.core.database import get_db
-from app.core.security import require_menu
+from app.core.security import require_menu, verify_token
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard import build_dashboard_response
+from app.services.sunday_report import build_sunday_report, XLSX_MEDIA_TYPE
 
 
 class PeriodUnit(str, Enum):
@@ -138,4 +140,40 @@ def get_dashboard(
         trend_end=trend_range[1],
         gyogu_no=gyogu_no,
         team_no=team_no,
+    )
+
+
+@router.get("/sunday-report", response_class=Response, summary="주일보고 엑셀 연동 테스트 다운로드")
+def download_sunday_report(
+    date: datetime.date = Query(..., description="선택한 주 토요일 (YYYY-MM-DD)"),
+    gyogu_no: Optional[int] = Query(None, ge=1),
+    team_no: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(verify_token),
+):
+    if not is_saturday(date):
+        raise HTTPException(422, "주일보고 기준일은 토요일이어야 합니다.")
+    if team_no is not None and gyogu_no is None:
+        raise HTTPException(422, "team_no는 gyogu_no와 함께 지정해야 합니다.")
+    scope = payload.get("data_scope")
+    if scope != "all":
+        # A filtered export must never widen a restricted account's data scope.
+        allowed = (
+            scope in ("gyogu", "team")
+            and payload.get("gyogu") is not None
+            and gyogu_no == payload["gyogu"]
+            and (scope == "gyogu" or (
+                payload.get("team") is not None and team_no == payload["team"]
+            ))
+        )
+        if not allowed:
+            raise HTTPException(403, "다운로드할 수 있는 교구·팀 범위를 확인해 주세요.")
+    filename = f"주일보고_연동테스트_{date.isoformat()}.xlsx"
+    return Response(
+        content=build_sunday_report(db, date, gyogu_no, team_no),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Cache-Control": "no-store",
+        },
     )

@@ -33,6 +33,7 @@ def test_create_member_accepts_and_persists_attendance_grade_e(client, db):
     assert response.status_code == 201
     member_id = response.json()["member_id"]
 
+    db.rollback()
     profile = (
         db.query(MemberProfile)
         .filter(MemberProfile.member_id == member_id)
@@ -53,6 +54,7 @@ def test_update_member_accepts_and_persists_attendance_grade_e(client, seed_memb
 
     assert response.status_code == 200
 
+    db.rollback()
     profile = (
         db.query(MemberProfile)
         .filter(MemberProfile.member_id == member_id)
