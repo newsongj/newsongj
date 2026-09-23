@@ -22,9 +22,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.warning(
             f"{request.method} {request.url.path} -> {exc.status_code}: {exc.detail}"
         )
+        content = {"detail": exc.detail}
+        if exc.extra:
+            content.update(exc.extra)
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": exc.detail},
+            content=content,
         )
 
     @app.exception_handler(StarletteHTTPException)

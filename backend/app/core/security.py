@@ -72,6 +72,19 @@ def require_menu(menu_key: str):
     return _dep
 
 
+def require_any_menu(*menu_keys: str):
+    """주어진 메뉴 키 중 하나라도 보유 시 통과 — 두 화면이 함께 쓰는 조회 엔드포인트용."""
+    def _dep(payload: Dict[str, Any] = Depends(verify_token)) -> Dict[str, Any]:
+        menus = payload.get("menus", [])
+        if not any(key in menus for key in menu_keys):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="접근 권한이 없습니다.",
+            )
+        return payload
+    return _dep
+
+
 def require_any_admin():
     """admin.* 메뉴 중 하나 이상 보유 시 통과 — 여러 페이지에서 공유하는 조회 엔드포인트에 사용."""
     def _dep(payload: Dict[str, Any] = Depends(verify_token)) -> Dict[str, Any]:

@@ -15,6 +15,7 @@ os.environ.setdefault("DB_PORT", "3306")
 os.environ.setdefault("DB_NAME", "test")
 
 from sqlalchemy import create_engine, BigInteger
+from sqlalchemy.dialects.mysql import YEAR
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -22,6 +23,12 @@ from sqlalchemy.pool import StaticPool
 # SQLite는 BIGINT autoincrement를 지원하지 않으므로 INTEGER로 컴파일
 @compiles(BigInteger, "sqlite")
 def _bigint_to_integer(element, compiler, **kw):
+    return "INTEGER"
+
+
+# SQLite는 MySQL 전용 YEAR 타입을 모르므로 INTEGER로 컴파일
+@compiles(YEAR, "sqlite")
+def _year_to_integer(element, compiler, **kw):
     return "INTEGER"
 
 
