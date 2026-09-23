@@ -1,79 +1,66 @@
-# 백엔드 구조 설명서
+# 백엔드
 
-> "이 파일이 뭐하는 건지 모르겠다" 싶을 때 여기를 읽으세요.
-> 레이어 규칙 상세: [`MDs/reference/layer-rules.md`](../MDs/reference/layer-rules.md)
+FastAPI / SQLAlchemy / MariaDB 기반 교적·출석·새가족·수련회 관리 API다.
 
----
+| 위치 | 역할 |
+|---|---|
+| `app/main.py` | 앱 생성과 라우터 등록 |
+| `app/api/v1/` | 교적·출석·메타·권한·수련회 HTTP API |
+| `app/core/` | 설정, DB 세션, JWT, 시간 처리 |
+| `app/models/`, `app/schemas/` | 저장 모델과 요청·응답 계약 |
+| `app/services/`, `app/crud/` | 업무 처리와 DB 조회·저장 |
+| `tests/` | 업무·인증·권한 회귀 검사 |
+| `tools/verify_backend.py` | 로컬·CI 공통 격리 테스트 실행기 |
 
-## 전체 구조 한눈에 보기
+기존 URL prefix는 도메인마다 다르므로 `app/main.py`와 라우터 선언을 확인한다.
+HTTP `/docs`, `/redoc`, `/openapi.json`은 현재 비활성이다.
 
-```
-backend/
-├── app/                    ← 실제 서버 코드가 다 여기에 있음
-│   ├── main.py             ← 서버 시작점 (여기서 FastAPI 앱이 켜짐)
-│   │
-│   ├── api/                ← 클라이언트(프론트)와 통신하는 창구
-│   │   ├── deps.py         ← 공통으로 쓰는 의존성 모음 (DB 세션 등)
-│   │   └── v1/             ← API 버전 1 (URL: /api/v1/...)
-│   │       ├── gyojeok/    ← 교적 관련 API 엔드포인트
-│   │       ├── attendance/ ← 출석 관련 API 엔드포인트
-│   │       └── meta/       ← 공통 메타 API (직분 목록 등)
-│   │
-│   ├── core/               ← 서버 전체에서 공통으로 쓰는 핵심 설정
-│   │   ├── config.py       ← 환경변수, 앱 설정값 (JWT 키, 앱 이름 등)
-│   │   ├── database.py     ← DB 연결 설정 (MariaDB 접속 주소, 세션 생성)
-│   │   ├── security.py     ← 보안 관련 (비밀번호 암호화, JWT 토큰 처리)
-│   │   ├── middleware.py   ← 모든 요청에 공통 적용되는 처리 (CORS 등)
-│   │   └── timezone.py     ← KST 시간 유틸 (now_kst, today_kst)
-│   │
-│   ├── models/             ← DB 테이블 구조 정의
-│   ├── schemas/            ← API 요청/응답 데이터 형식 정의
-│   ├── crud/               ← DB에서 데이터를 꺼내고 넣는 함수 모음
-│   ├── services/           ← 복잡한 비즈니스 로직 (여러 crud를 조합하는 곳)
-│   └── tests/              ← 자동화 테스트 코드
-│
-├── Dockerfile              ← 서버를 도커 컨테이너로 만드는 설계도
-└── requirements.txt        ← 이 서버가 필요로 하는 파이썬 패키지 목록
-```
+## 주일보고 다운로드 시제품
 
----
+출석 대시보드에서 주간·교구·팀을 선택하고 **주일보고 다운로드**를 누른다.
+첫 시트 맨 아래 `E64`만 대시보드와 동일한 실제 출석 수이며, 나머지는 디자인용 가상 데이터다.
+양식은 `app/assets/reports/sunday_report_v1.xlsx`에 있으며 생성 파일은 메모리에서 반환한다.
+대시보드 메뉴 권한이 필요하다. 교구·팀 제한 계정은 자신의 범위와 일치하는 필터만
+다운로드할 수 있고 구역·개인 범위는 아직 지원하지 않는다. 추가 라이브러리·Excel 설치는 필요 없다.
 
-## 요청 처리 흐름
+## 테스트
 
-```
-프론트에서 API 요청
-       ↓
-  api/v1/{도메인}/   ← 파라미터 파싱 + service 호출만
-       ↓
-  services/          ← 비즈니스 로직, ORM → 스키마 변환
-       ↓
-  crud/              ← DB 읽기/쓰기
-       ↓
-  schemas/           ← 응답 데이터 형식으로 포장
-       ↓
-  프론트로 응답 반환
-```
-
-> 레이어 경계 규칙 상세(호출 방향, 금지 패턴, API 체크리스트): [`MDs/reference/layer-rules.md`](../MDs/reference/layer-rules.md)
-
----
-
-## 새 API 만들 때 체크리스트
-
-1. **`models/`** — DB 테이블이 없으면 추가
-2. **`schemas/`** — 요청/응답 형식 정의
-3. **`crud/`** — DB 조회/저장 함수 작성 (`query_builders.py` 체이너 재사용)
-4. **`services/`** — 로직이 복잡하면 여기에 묶기 (`build_*` 함수)
-5. **`api/v1/해당폴더/`** — 엔드포인트 추가 (crud 직접 import 금지)
-6. **`main.py`** — 새 라우터 등록
-7. **`/docker-verify`** — openapi.json 확인 + 실제 호출
-
----
-
-## 로컬 실행
+저장소 루트에서 실행한다. Python 3.10 이상으로 실행기를 시작할 수 있으며,
+테스트 환경은 Python 3.11과 `requirements-dev.txt`를 사용한다.
 
 ```bash
-docker compose up -d backend     # 백엔드만 시작 (--build 없이)
-docker compose logs -f backend   # 로그 확인
-# API 문서: http://localhost:8000/docs
+python3 backend/tools/verify_backend.py
+python3 backend/tools/verify_backend.py tests/test_member_bulk.py
+python3 backend/tools/verify_backend.py -k newcomer
+python3 backend/tools/verify_backend.py --runtime docker --database mariadb
 ```
+
+기본 `auto`는 실행 중인 Docker에서 네트워크 없는 SQLite 테스트를 실행한다.
+Docker를 사용할 수 없으면 macOS의 `sandbox-exec`와 `uv`로 임시 환경을 만들고
+네트워크 접근을 차단한다. 런타임을 지정하려면 `--runtime docker` 또는 `--runtime sandbox`를 쓴다.
+Docker 데몬이나 기존 Compose 서비스를 자동으로 시작하지 않는다.
+테스트 컨테이너는 임시 소스 폴더 소유자의 UID/GID로 실행한다. 폴더의 `0700` 권한과
+읽기 전용 마운트·Linux capability 제거를 유지하면서 CI에서도 소스를 읽을 수 있다.
+
+앱·테스트·의존성 파일만 임시 복사하며 `.env`와 기존 DB 파일은 제외한다.
+의존성 설치에는 네트워크가 필요할 수 있지만 앱 import는 격리 이후에만 수행한다.
+fixture는 DB/JWT 설정을 테스트 값으로 덮고 테스트 엔진을 연결한 뒤 앱을 불러온다.
+인증 우회 없이 실제 JWT를 검증하며, 필요한 메뉴와 소속 범위를 각 테스트에서 지정한다.
+
+MariaDB 모드는 내부 전용 Docker 네트워크와 임시 DB를 사용한다. 호스트 포트나 기존 볼륨을
+연결하지 않으며 종료 시 테스트 컨테이너·DB·네트워크를 정리한다. 의존성 이미지 캐시는 남을 수 있다.
+SQLite 결과는 MariaDB의 ENUM·JSON·잠금·동시성 검증을 대신하지 않는다.
+
+pytest 종료 코드를 그대로 전달하므로 테스트 실패나 빈 선택은 CI 실패가 된다.
+환경 준비 실패는 미실행(종료 코드 2)로 표시하며, 격리 없는 실행으로 우회하지 않는다.
+`xfail`/`skip`은 출력에서 별도로 확인한다. 수련회 소속 밖 저장 3건은 알려진 결함으로
+strict xfail 처리되어 있다. 실제 무단 저장만 xfail로 인정하며, 다른 오류는 실패한다.
+권한을 수정하면 해당 표시를 제거해야 한다.
+
+## 서비스 실행 맥락
+
+기존 루트 `docker-compose.yml`의 backend는 `backend/.env`로 서버 DB에 연결한다.
+또한 `app.main`은 import 시점에 `create_all()`을 호출한다. 단순 테스트 목적으로 기존
+Compose를 켜거나 앱을 직접 import하지 말고 위 실행기를 사용한다.
+실제 개발 서버 실행에는 대상 DB가 개발용인지 먼저 확인해야 한다.
+운영 배포 Compose는 `.github/workflows/deploy.yml`에서 생성한다.

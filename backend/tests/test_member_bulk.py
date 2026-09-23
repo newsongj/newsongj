@@ -40,6 +40,7 @@ def test_bulk_delete_members_succeeds_atomically(client, db):
     assert r.status_code == 200
     assert r.json() == {"member_ids": [first_id, second_id], "count": 2}
 
+    db.rollback()
     rows = db.query(models.Member).filter(models.Member.member_id.in_([first_id, second_id])).all()
     assert {row.deleted_reason for row in rows} == {"일괄 삭제"}
     assert all(row.deleted_at is not None for row in rows)
@@ -58,7 +59,7 @@ def test_bulk_delete_members_rolls_back_when_any_id_invalid(client, db):
     )
     assert r.status_code == 404
 
-    db.expire_all()
+    db.rollback()
     regular = db.query(models.Member).filter(models.Member.member_id == regular_id).first()
     assert regular.deleted_at is None
     assert regular.deleted_reason is None
@@ -74,6 +75,7 @@ def test_bulk_restore_members_succeeds_atomically(client, db):
     assert r.status_code == 200
     assert r.json() == {"member_ids": [first_id, second_id], "count": 2}
 
+    db.rollback()
     rows = db.query(models.Member).filter(models.Member.member_id.in_([first_id, second_id])).all()
     assert all(row.deleted_at is None for row in rows)
     assert all(row.deleted_reason is None for row in rows)
@@ -88,7 +90,7 @@ def test_bulk_restore_members_rolls_back_when_any_member_is_active(client, db):
     r = client.post("/api/v1/gyojeok/members/restore/bulk", json={"member_ids": [deleted_id, active_id]})
     assert r.status_code == 400
 
-    db.expire_all()
+    db.rollback()
     deleted = db.query(models.Member).filter(models.Member.member_id == deleted_id).first()
     assert deleted.deleted_at is not None
     assert deleted.deleted_reason == "기존 삭제"
@@ -108,6 +110,7 @@ def test_bulk_delete_newcomers_succeeds_atomically(client, db):
     assert r.status_code == 200
     assert r.json() == {"member_ids": [first_id, second_id], "count": 2}
 
+    db.rollback()
     rows = db.query(models.Member).filter(models.Member.member_id.in_([first_id, second_id])).all()
     assert {row.deleted_reason for row in rows} == {"새가족 일괄 삭제"}
     assert all(row.deleted_at is not None for row in rows)
@@ -126,7 +129,7 @@ def test_bulk_delete_newcomers_rolls_back_when_any_member_is_not_newcomer(client
     )
     assert r.status_code == 404
 
-    db.expire_all()
+    db.rollback()
     newcomer = db.query(models.Member).filter(models.Member.member_id == newcomer_id).first()
     assert newcomer.deleted_at is None
     assert newcomer.deleted_reason is None
@@ -149,6 +152,7 @@ def test_bulk_enroll_newcomers_succeeds_atomically(client, db):
     assert r.status_code == 200
     assert r.json() == {"member_ids": [first_id, second_id], "count": 2}
 
+    db.rollback()
     members = db.query(models.Member).filter(models.Member.member_id.in_([first_id, second_id])).all()
     assert all(member.enrolled_at is not None for member in members)
 
@@ -180,7 +184,7 @@ def test_bulk_enroll_newcomers_rolls_back_when_any_member_is_not_newcomer(client
     )
     assert r.status_code == 404
 
-    db.expire_all()
+    db.rollback()
     newcomer = db.query(models.Member).filter(models.Member.member_id == newcomer_id).first()
     assert newcomer.enrolled_at is None
     latest = (

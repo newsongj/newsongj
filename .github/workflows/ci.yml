@@ -29,6 +29,7 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '.github/workflows/ci.yml'
             frontend:
               - 'frontend/**'
             client_frontend:
@@ -47,12 +48,9 @@ jobs:
         if: needs.changes.outputs.backend == 'true'
         with:
           python-version: '3.11'
-      - name: Install dependencies
+      - name: Run isolated backend tests
         if: needs.changes.outputs.backend == 'true'
-        run: pip install -r backend/requirements.txt pytest
-      - name: Run tests
-        if: needs.changes.outputs.backend == 'true'
-        run: cd backend && pytest || echo "No tests found"
+        run: python backend/tools/verify_backend.py --runtime docker
 
   # ──────────────────────────────────────────
   # frontend(관리자) 변경 시 빌드 성공 여부 확인

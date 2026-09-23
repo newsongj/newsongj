@@ -29,6 +29,7 @@ client/frontend/.env.*.local
 # --- Docs ---
 mds/
 MDs/
+주일보고엑셀/
 
 # --- Claude Code Harness (개인 전용) ---
 /CLAUDE.md
