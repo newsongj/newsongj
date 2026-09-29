@@ -10,8 +10,9 @@ class AppError(Exception):
     status_code: int = 500
     default_detail: str = "서버 오류가 발생했습니다."
 
-    def __init__(self, detail: str | None = None):
+    def __init__(self, detail: str | None = None, extra: dict | None = None):
         self.detail = detail or self.default_detail
+        self.extra = extra
         super().__init__(self.detail)
 
 
@@ -57,3 +58,21 @@ class InvalidNewcomerAttendanceIdsError(ConflictError):
     def __init__(self, ids: list[int]):
         self.ids = ids
         super().__init__(f"미등반 새가족이 아닌 멤버입니다: {ids}")
+
+
+class TeamAssignmentCommittedError(AppError):
+    """이미 교적 이관까지 끝난(committed) 회차에 대한 변경 요청 (§3)."""
+    status_code = 409
+    default_detail = "이미 완료된 회차입니다. 더 이상 변경할 수 없습니다."
+
+
+class OpinionReportConflictError(AppError):
+    """소견서 낙관적 잠금 충돌 — 조회 시점 이후 다른 사람이 먼저 저장함 (§0-4)."""
+    status_code = 409
+
+    def __init__(self, current_updated_at, last_writer: dict | None, is_self: bool):
+        super().__init__("conflict", extra={
+            "current_updated_at": current_updated_at,
+            "last_writer": last_writer,
+            "is_self": is_self,
+        })
