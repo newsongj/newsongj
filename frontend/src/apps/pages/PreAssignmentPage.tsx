@@ -3,14 +3,14 @@
 // 이 둘은 **팀배치를 실행하기 전에** 산정되는 입력값이라 팀배치 작업 화면과 분리했다.
 // 화면을 벗어나도 유지되어야 하므로 변경 즉시 서버에 저장한다.
 //
-//   제외 명단 : 랜덤배치에서 빼고 교구·팀을 수기로 사전 지정 (임원단 사전 매치, 팀장·그룹장 사전 배치)
+//   제외 명단 : 랜덤배치에서 빼고 교구·팀을 수기로 사전 지정 (임원단·교구리더·특관지 사전 배치)
 //   동반배치  : 같은 팀에 들어가야 하는 인원을 묶음으로 등록
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { IconButton, Skeleton, Tooltip } from '@mui/material';
+import { IconButton, Skeleton } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { Info, Link2, UserMinus, Users, UserCheck } from 'lucide-react';
+import { Link2, UserMinus, Users, UserCheck } from 'lucide-react';
 import { TextField } from '@components/common/TextField';
 import { Select } from '@components/common/Select';
 import { Button } from '@components/common/Button';
@@ -47,8 +47,8 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = [CURRENT_YEAR + 2, CURRENT_YEAR + 1, CURRENT_YEAR]
   .map((y) => ({ value: String(y), label: `${y}년` }));
 
-/** 자주 쓰는 제외 사유 — 직접 입력도 가능하다 */
-const REASON_PRESETS = ['임원단 사전배치', '팀장 사전배치', '그룹장 사전배치'];
+/** 자주 쓰는 제외 사유 — 칩은 거들 뿐이고 자유 입력도 된다 */
+const REASON_PRESETS = ['임원단 사전배치', '교구리더 사전배치', '특관지 사전배치'];
 
 const STATUS_STYLE: Record<TeamAssignmentStatus, { color: string; bg: string; border: string }> = {
   draft:     { color: '#595959', bg: '#f5f5f5', border: '#d9d9d9' },
@@ -255,7 +255,7 @@ const InlineSelectWrap = styled('div')({
 // ── 모달 ──────────────────────────────────────────────────────────────────────
 //
 // 멤버 선택 테이블은 「권한관리 > 일괄 계정 생성」 팝업 디자인을 따른다.
-// 전체 교적이 후보이므로 직분 필터가 실제로 동작한다.
+// 후보가 삭제 제외 전체 교적이라 직분으로 좁힐 이유가 없어 이름 검색만 둔다.
 
 const ModalGrid = styled('div')({
   display: 'flex', flexDirection: 'column', gap: 14,
@@ -269,12 +269,6 @@ const ModalActions = styled('div')({
 });
 
 const PickerCount = styled('div')({ fontSize: 12, color: '#555' });
-
-const FilterLabelRow = styled('div')({
-  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
-});
-
-const FilterLabelText = styled('span')({ fontSize: 12, color: '#595959', fontWeight: 600 });
 
 const ChipRow = styled('div')({ display: 'flex', flexWrap: 'wrap', gap: 6 });
 
@@ -343,7 +337,6 @@ const PreAssignmentPage: React.FC = () => {
   const [modalMode, setModalMode] = useState<PickerMode | null>(null);
   const [modalSel, setModalSel] = useState<Set<number>>(new Set());
   const [modalSearch, setModalSearch] = useState('');
-  const [modalLeaderFilter, setModalLeaderFilter] = useState<Set<string>>(new Set());
   const [modalError, setModalError] = useState('');
   const [modalGyogu, setModalGyogu] = useState('1');
   const [modalTeam, setModalTeam] = useState('1');
@@ -357,14 +350,14 @@ const PreAssignmentPage: React.FC = () => {
   const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
-    fetchOpinionMemberCandidates()
+    fetchOpinionMemberCandidates(targetYear - 1)
       .then(async (members) => {
         if (cancelled) return;
         setCandidates(members);
         const [r, ex, comps, cnt] = await Promise.all([
           fetchTeamAssignmentRun(targetYear),
-          fetchTeamAssignmentExclusions(targetYear, members),
-          fetchTeamAssignmentCompanions(targetYear, members),
+          fetchTeamAssignmentExclusions(targetYear),
+          fetchTeamAssignmentCompanions(targetYear),
           fetchTeamAssignmentCounts(targetYear),
         ]);
         if (cancelled) return;
@@ -398,6 +391,8 @@ const PreAssignmentPage: React.FC = () => {
     [teamPerGyogu],
   );
 
+  const isExclusionModal = modalMode === 'exclusion';
+
   const excludedMemberIds = useMemo(
     () => new Set(exclusions.map((e) => e.member.member_id)),
     [exclusions],
@@ -408,27 +403,22 @@ const PreAssignmentPage: React.FC = () => {
     [companions],
   );
 
-  /** 한 사람이 제외 명단과 동반 묶음에 동시에 들어갈 수는 없다 — 양쪽 후보에서 서로를 뺀다 */
-  const takenMemberIds = useMemo(
-    () => new Set([...excludedMemberIds, ...companionMemberIds]),
-    [excludedMemberIds, companionMemberIds],
-  );
-
-  const modalPool = useMemo(
-    () => candidates.filter((m) => !takenMemberIds.has(m.member_id)),
-    [candidates, takenMemberIds],
-  );
-
-  const modalLeaderNames = useMemo(
-    () => [...new Set(modalPool.flatMap((m) => m.leader_names))].sort(),
-    [modalPool],
-  );
+  /**
+   * 추가 모달의 후보 풀 — **이미 그 목록에 올라 있는 사람만** 뺀다.
+   *
+   * 제외 명단과 동반배치는 **배타가 아니다.** 사전 배치된 사람을 동반 묶음에
+   * 넣을 수 있고 그 반대도 된다. 겹치면 **묶음 전원이 사전 배치 자리를 따라간다** —
+   * 「이 사람을 여기 앉히고 묶인 사람도 같이 보내라」가 둘을 함께 쓰는 이유다.
+   */
+  const modalPool = useMemo(() => {
+    const already = isExclusionModal ? excludedMemberIds : companionMemberIds;
+    return candidates.filter((m) => !already.has(m.member_id));
+  }, [candidates, isExclusionModal, excludedMemberIds, companionMemberIds]);
 
   const modalCandidates = useMemo(() => modalPool.filter((m) => {
     if (modalSearch.trim() && !m.name.includes(modalSearch.trim())) return false;
-    if (modalLeaderFilter.size > 0 && !m.leader_names.some((n) => modalLeaderFilter.has(n))) return false;
     return true;
-  }), [modalPool, modalSearch, modalLeaderFilter]);
+  }), [modalPool, modalSearch]);
 
   const allModalSelected = modalCandidates.length > 0
     && modalCandidates.every((m) => modalSel.has(m.member_id));
@@ -439,7 +429,6 @@ const PreAssignmentPage: React.FC = () => {
     setModalMode(mode);
     setModalSel(new Set());
     setModalSearch('');
-    setModalLeaderFilter(new Set());
     setModalError('');
     setModalGyogu('1');
     setModalTeam('1');
@@ -460,12 +449,6 @@ const PreAssignmentPage: React.FC = () => {
     const next = new Set(prev);
     if (allModalSelected) ids.forEach((id) => next.delete(id));
     else ids.forEach((id) => next.add(id));
-    return next;
-  });
-
-  const toggleModalLeaderFilter = (name: string) => setModalLeaderFilter((prev) => {
-    const next = new Set(prev);
-    if (next.has(name)) next.delete(name); else next.add(name);
     return next;
   });
 
@@ -554,7 +537,6 @@ const PreAssignmentPage: React.FC = () => {
     );
   }
 
-  const isExclusionModal = modalMode === 'exclusion';
 
   return (
     <PageWrapper>
@@ -611,9 +593,10 @@ const PreAssignmentPage: React.FC = () => {
         <SectionTitle>제외 명단 (사전 배치)</SectionTitle>
         <SectionHint>
           랜덤배치에서 빼고 <strong>교구·팀을 직접 지정</strong>하는 인원입니다.
-          임원단을 미리 매치하거나 팀장·그룹장을 사전 팀배치할 때 사용합니다.
+          임원단을 미리 매치하거나 교구리더·특관지를 사전 팀배치할 때 사용합니다.
           지정한 자리는 <strong>팀 정원에 포함</strong>되므로, 랜덤배치는 남은 자리만 채웁니다.
           배치 실행 후에도 「팀배치 작업」 화면에서 팀을 다시 옮길 수 있습니다.
+          동반배치 묶음에도 함께 넣으면 <strong>묶인 인원 전체가 이 자리를 따라옵니다.</strong>
         </SectionHint>
         <TableCard>
           <TableScroll>
@@ -788,7 +771,9 @@ const PreAssignmentPage: React.FC = () => {
             {isExclusionModal
               ? '랜덤배치에서 제외하고 아래 지정한 교구·팀에 그대로 배치합니다.'
               : '같은 팀에 배치할 인원을 2명 이상 선택하세요.'}
-            {' '}제외 명단이나 다른 묶음에 이미 속한 인원은 목록에 나오지 않습니다.
+            {' '}{isExclusionModal
+              ? '이미 제외 명단에 있는 인원만 목록에서 빠집니다 — 동반배치 묶음에 속해 있어도 추가할 수 있습니다.'
+              : '이미 다른 묶음에 속한 인원만 목록에서 빠집니다 — 제외 명단에 있어도 묶을 수 있습니다.'}
           </SectionHint>
 
           {isExclusionModal && (
@@ -847,31 +832,6 @@ const PreAssignmentPage: React.FC = () => {
             onChange={(e) => setModalSearch(e.target.value)}
             fullWidth
           />
-
-          {modalLeaderNames.length > 0 && (
-            <div>
-              <FilterLabelRow>
-                <FilterLabelText>직분 필터</FilterLabelText>
-                <Tooltip title="직분을 선택하면 해당 직분을 가진 멤버만 표시됩니다." arrow placement="right">
-                  <span style={{ display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                    <Info size={13} color="#aaa" />
-                  </span>
-                </Tooltip>
-              </FilterLabelRow>
-              <ChipRow>
-                {modalLeaderNames.map((name) => (
-                  <LeaderChip
-                    key={name}
-                    type="button"
-                    $active={modalLeaderFilter.has(name)}
-                    onClick={() => toggleModalLeaderFilter(name)}
-                  >
-                    {name}
-                  </LeaderChip>
-                ))}
-              </ChipRow>
-            </div>
-          )}
 
           {modalCandidates.length === 0 ? (
             <EmptyHint>선택할 수 있는 인원이 없습니다.</EmptyHint>

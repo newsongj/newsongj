@@ -9,6 +9,7 @@ import ResearchPage from './pages/ResearchPage/ResearchPage';
 import VehiclePage from './pages/VehiclePage/VehiclePage';
 import SuspendedMealPage from './pages/SuspendedMealPage/SuspendedMealPage';
 import PatientRoomPage from './pages/PatientRoomPage/PatientRoomPage';
+import OpinionPage from './pages/OpinionPage/OpinionPage';
 
 const router = createBrowserRouter([
     { path: '/login',         element: <LoginPage /> },
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
     { path: '/vehicle',       element: <MemberPrivateRoute><AppLayout title="수련회 차량 신청"><VehiclePage /></AppLayout></MemberPrivateRoute> },
     { path: '/suspendedmeal', element: <PrivateRoute><AppLayout title="서스펜디드밀 신청"><SuspendedMealPage /></AppLayout></PrivateRoute> },
     { path: '/patient',       element: <PrivateRoute><AppLayout title="환자방 신청"><PatientRoomPage /></AppLayout></PrivateRoute> },
+    { path: '/opinion',       element: <PrivateRoute><AppLayout title="소견서 작성"><OpinionPage /></AppLayout></PrivateRoute> },
     { path: '/',              element: <Navigate to="/research" replace /> },
     { path: '*',              element: <Navigate to="/research" replace /> },
 ]);

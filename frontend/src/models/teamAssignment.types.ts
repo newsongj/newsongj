@@ -7,8 +7,6 @@
 // 배치 알고리즘은 기존 `팀배치_1번모듈.py`를 그대로 옮긴 것이다:
 //   (성별 × 출석등급) 조합별 groupby → 총 팀 수만큼 라운드로빈 분배
 
-import { OpinionMemberCandidate } from '@/models/opinion.types';
-
 /** 회차 진행 상태 */
 export type TeamAssignmentStatus = 'draft' | 'assigned' | 'committed';
 
@@ -40,12 +38,28 @@ export interface TeamAssignmentBasicsBody {
 }
 
 /**
+ * 제외 명단·동반배치 조회 응답에 함께 내려오는 멤버 정보.
+ *
+ * 화면이 join 없이 그리도록 서버가 실어 보낸다 (`TeamAssignmentMemberInfo`).
+ * 멤버 **선택 모달**에서 쓰는 `OpinionMemberCandidate` 와 달리 기수·전화번호가 없다 —
+ * 표에 그 두 칸이 없어 서버가 보내지 않는다.
+ */
+export interface TeamAssignmentMemberInfo {
+  member_id: number;
+  name: string;
+  gyogu: number | null;
+  team: number | null;
+  group_no: number | null;
+  leader_names: string[];
+}
+
+/**
  * 동반배치 묶음 — 같은 `companion_no` 는 같은 팀에 배치된다.
  * 랜덤배치 **전에** 등록해야 배치가 이 제약을 지킬 수 있다.
  */
 export interface TeamAssignmentCompanion {
   companion_no: number;
-  members: OpinionMemberCandidate[];
+  members: TeamAssignmentMemberInfo[];
 }
 
 /** 동반배치 저장 단위 — (묶음번호, 멤버) 1쌍 = 테이블 1행 */
@@ -64,10 +78,10 @@ export interface TeamAssignmentCompanionPair {
  * 사전 배치라도 팀배치 실행 뒤 결과 화면에서 팀을 다시 옮길 수 있다.
  */
 export interface TeamAssignmentExclusion {
-  member: OpinionMemberCandidate;
+  member: TeamAssignmentMemberInfo;
   gyogu: number;
   team: number;
-  /** 제외 사유 — 임원단 사전배치 / 팀장 사전배치 등 */
+  /** 제외 사유 — 임원단 / 교구리더 / 특관지 사전배치 등 */
   reason: string | null;
 }
 
@@ -161,6 +175,12 @@ export interface TeamAssignmentResultResponse {
   run: TeamAssignmentRun;
   counts: TeamAssignmentCounts;
   rows: TeamAssignmentRow[];
+}
+
+/** 교적 이관(commit) 결과 — 생성된 member_profile 행 수를 돌려준다 */
+export interface TeamAssignmentCommitResult {
+  run: TeamAssignmentRun;
+  profile_rows_created: number;
 }
 
 /** 팀 이동 요청 */

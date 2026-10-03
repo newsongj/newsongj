@@ -125,6 +125,73 @@ def test_run_keeps_companion_bundle_in_same_team(client, db):
     assert rows[b]["companion_no"] == 1
 
 
+def test_run_companion_bundle_follows_pre_assigned_seat(client, db):
+    """사전 배치자가 묶음에 끼어 있으면 **묶음 전원이 그 자리를 따라간다**.
+
+    제외 명단과 동반배치는 배타가 아니다 — 「이 사람을 여기 앉히고 묶인 사람도
+    같이 보내라」가 둘을 함께 쓰는 이유다.
+    """
+    ids = _seed_population(db, 8)
+    anchor_id, mate_id = ids[0], ids[1]
+    client.put(
+        "/api/opinion/team-assignment/basics",
+        json={"target_year": TARGET_YEAR, "total_team_count": 4, "gyogu_count": 1},
+    )
+    client.put(
+        "/api/opinion/team-assignment/companions",
+        json={"target_year": TARGET_YEAR, "pairs": [
+            {"companion_no": 1, "member_id": anchor_id},
+            {"companion_no": 1, "member_id": mate_id},
+        ]},
+    )
+    # 묶음의 한 명만 3팀에 사전 배치한다
+    client.put(
+        "/api/opinion/team-assignment/exclusions",
+        json={"target_year": TARGET_YEAR, "items": [
+            {"member_id": anchor_id, "gyogu": 1, "team": 3, "reason": "팀장 사전배치"},
+        ]},
+    )
+
+    response = client.post("/api/opinion/team-assignment/run", json={"target_year": TARGET_YEAR})
+    rows = {r["member_id"]: r for r in response.json()["rows"]}
+
+    # 사전 배치자는 지정 자리에, 묶인 사람도 같은 자리로 따라온다
+    assert (rows[anchor_id]["gyogu"], rows[anchor_id]["team"]) == (1, 3)
+    assert (rows[mate_id]["gyogu"], rows[mate_id]["team"]) == (1, 3)
+
+    # 묶음 번호는 양쪽 모두 남는다 (화면·PDF 가 동반배치자를 보여줘야 한다)
+    assert rows[anchor_id]["companion_no"] == 1
+    assert rows[mate_id]["companion_no"] == 1
+
+    # 사전배치 배지는 실제로 제외 명단에 오른 사람에게만 붙는다
+    assert rows[anchor_id]["is_excluded"] is True
+    assert rows[mate_id]["is_excluded"] is False
+
+
+def test_counts_do_not_double_count_overlap(client, db):
+    """겹친 인원은 제외로만 센다 — total = random + companion + excluded 가 유지된다."""
+    ids = _seed_population(db, 8)
+    a, b = ids[0], ids[1]
+    client.put(
+        "/api/opinion/team-assignment/companions",
+        json={"target_year": TARGET_YEAR, "pairs": [
+            {"companion_no": 1, "member_id": a}, {"companion_no": 1, "member_id": b},
+        ]},
+    )
+    client.put(
+        "/api/opinion/team-assignment/exclusions",
+        json={"target_year": TARGET_YEAR, "items": [
+            {"member_id": a, "gyogu": 1, "team": 1, "reason": None},
+        ]},
+    )
+
+    c = client.get(
+        "/api/opinion/team-assignment/counts", params={"target_year": TARGET_YEAR}).json()
+    assert c["excluded"] == 1            # a
+    assert c["companion"] == 1           # b 만 (a 는 제외로 셌다)
+    assert c["random"] + c["companion"] + c["excluded"] == c["total"]
+
+
 def test_run_excludes_deleted_members(client, db):
     ids = _seed_population(db, 3)
     deleted_id = _seed_member(db, "탈퇴자", deleted=True)
