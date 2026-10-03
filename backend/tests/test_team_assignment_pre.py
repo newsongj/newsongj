@@ -109,7 +109,8 @@ def test_companions_round_trip(client, db):
     assert {m["member_id"] for m in groups[0]["members"]} == {a, b}
 
 
-def test_exclusion_rejects_member_already_in_companion(client, db):
+def test_exclusion_allows_member_already_in_companion(client, db):
+    """제외 명단과 동반배치는 배타가 아니다 — 한 사람이 양쪽에 들어갈 수 있다."""
     a = _seed_member(db, "겹침A")
     b = _seed_member(db, "겹침B")
     client.put(
@@ -123,10 +124,19 @@ def test_exclusion_rejects_member_already_in_companion(client, db):
         "/api/opinion/team-assignment/exclusions",
         json={"target_year": TARGET_YEAR, "items": [{"member_id": a, "gyogu": 1, "team": 1, "reason": None}]},
     )
-    assert response.status_code == 400
+    assert response.status_code == 200
+
+    # 양쪽에 그대로 남는다
+    exclusions = client.get(
+        "/api/opinion/team-assignment/exclusions", params={"target_year": TARGET_YEAR}).json()
+    companions = client.get(
+        "/api/opinion/team-assignment/companions", params={"target_year": TARGET_YEAR}).json()
+    assert [e["member"]["member_id"] for e in exclusions] == [a]
+    assert sorted(m["member_id"] for m in companions[0]["members"]) == sorted([a, b])
 
 
-def test_companion_rejects_member_already_excluded(client, db):
+def test_companion_allows_member_already_excluded(client, db):
+    """반대 방향도 마찬가지 — 사전 배치된 사람을 동반 묶음에 넣을 수 있다."""
     a = _seed_member(db, "제외A")
     client.put(
         "/api/opinion/team-assignment/exclusions",
@@ -139,7 +149,7 @@ def test_companion_rejects_member_already_excluded(client, db):
             {"companion_no": 1, "member_id": a}, {"companion_no": 1, "member_id": _seed_member(db, "짝")},
         ]},
     )
-    assert response.status_code == 400
+    assert response.status_code == 200
 
 
 def test_duplicate_member_in_exclusion_payload_rejected(client, db):
