@@ -17,6 +17,7 @@ const LoginPage: React.FC = () => {
         '/research':     'NEWSONGJ 인원조사',
         '/suspendedmeal': 'NEWSONGJ 서스펜디드밀',
         '/patient':      'NEWSONGJ 환자방',
+        '/opinion':      'NEWSONGJ 소견서',
     };
     const pageTitle = PAGE_TITLES[redirectTo] ?? 'NEWSONGJ 대학부';
 

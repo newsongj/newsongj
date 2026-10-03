@@ -332,7 +332,7 @@ const OpinionDashboardPage: React.FC = () => {
   // 설정 + 필터 옵션용 전체 멤버 (필터를 걸어도 옵션 목록이 좁아지지 않도록 별도 조회)
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchOpinionSettings(reportYear), fetchOpinionMemberCandidates()])
+    Promise.all([fetchOpinionSettings(reportYear), fetchOpinionMemberCandidates(reportYear)])
       .then(([s, members]) => {
         if (cancelled) return;
         setSettings(s);

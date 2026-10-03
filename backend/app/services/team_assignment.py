@@ -129,11 +129,6 @@ def svc_save_exclusions(
     if len(member_ids) != len(set(member_ids)):
         raise ConflictError("제외 명단에 같은 인원이 중복으로 들어 있습니다.")
 
-    companion_ids = {r.member_id for r in crud_get_companions(db, target_year)}
-    overlap = set(member_ids) & companion_ids
-    if overlap:
-        raise ConflictError(f"동반배치 묶음에 이미 속한 인원입니다: {sorted(overlap)}")
-
     payload = [
         {"member_id": it.member_id, "gyogu": it.gyogu, "team": it.team, "reason": it.reason}
         for it in items
@@ -170,11 +165,6 @@ def svc_save_companions(
     member_ids = [p.member_id for p in pairs]
     if len(member_ids) != len(set(member_ids)):
         raise ConflictError("동반배치 묶음에 같은 인원이 중복으로 들어 있습니다.")
-
-    exclusion_ids = {r.member_id for r in crud_get_exclusions(db, target_year)}
-    overlap = set(member_ids) & exclusion_ids
-    if overlap:
-        raise ConflictError(f"제외 명단에 이미 속한 인원입니다: {sorted(overlap)}")
 
     payload = [{"companion_no": p.companion_no, "member_id": p.member_id} for p in pairs]
     crud_replace_companions(db, target_year, payload)
@@ -264,6 +254,16 @@ def _run_assignment_algorithm(
 
     rows: Dict[int, dict] = {}
 
+    # 사전 배치자가 동반 묶음에도 속해 있으면 **묶음 전원이 그 자리를 따라간다**.
+    # 제외 명단과 동반배치는 배타가 아니다 — 「이 사람을 여기 앉히고 묶인 사람도
+    # 같이 보내라」가 둘을 함께 쓰는 이유다.
+    # 한 묶음에 사전 배치자가 둘 이상이면 member_id 가 작은 쪽 자리를 따른다 (결정적).
+    anchored_seat: Dict[int, object] = {}
+    for mid in sorted(excluded_ids):
+        companion_no = companion_no_by_member.get(mid)
+        if companion_no is not None and companion_no not in anchored_seat:
+            anchored_seat[companion_no] = excluded_by_member[mid]
+
     # ① 제외 명단 — 지정된 (gyogu, team) 에 그대로 앉히고 preCount 누적
     for mid in excluded_ids:
         exclusion = excluded_by_member[mid]
@@ -272,7 +272,10 @@ def _run_assignment_algorithm(
             occupied[idx] += 1
         rows[mid] = {
             "member_id": mid, "gyogu": exclusion.gyogu, "team": exclusion.team,
-            "group_no": 0, "companion_no": None, "is_excluded": 1, "is_manual": 0,
+            "group_no": 0,
+            # 묶음에 속해 있으면 번호를 남겨 화면·PDF 가 동반배치자를 함께 보여준다
+            "companion_no": companion_no_by_member.get(mid),
+            "is_excluded": 1, "is_manual": 0,
         }
 
     # ② 동반배치 묶음을 하나의 단위로 압축
@@ -286,6 +289,23 @@ def _run_assignment_algorithm(
             units.append((key, None, [mid]))
         else:
             bundles.setdefault(companion_no, []).append(mid)
+
+    # ②-1 사전 배치자가 끼어 있는 묶음은 라운드로빈에 넣지 않고 그 자리에 바로 앉힌다
+    for companion_no in list(bundles):
+        seat = anchored_seat.get(companion_no)
+        if seat is None:
+            continue
+        member_ids = bundles.pop(companion_no)
+        idx = idx_of(seat.gyogu, seat.team)
+        if 0 <= idx < total_team_count:
+            occupied[idx] += len(member_ids)
+        for mid in member_ids:
+            rows[mid] = {
+                "member_id": mid, "gyogu": seat.gyogu, "team": seat.team,
+                "group_no": 0, "companion_no": companion_no,
+                # 본인이 제외 명단에 오른 건 아니므로 사전배치 배지는 붙이지 않는다
+                "is_excluded": 0, "is_manual": 0,
+            }
 
     for companion_no, member_ids in bundles.items():
         rep_id = min(member_ids)  # 대표 — 성별·등급 층화 기준

@@ -87,13 +87,17 @@ def _build_expected_writer_resolver(
     def is_any_leader(profile: MemberProfile) -> bool:
         return len(_leader_id_set(profile)) > 0
 
-    # 팀 안의 모든 리더는 팀장이 쓴다 — 단, 임원단은 배타이므로 후보에서 제외한다.
+    # 임원단 매핑에 **작성자로 등록된** 사람. 판정 기준은 직분이 아니라 매핑 유무다 —
+    # 임원단 직분이어도 매핑이 없으면 일반 리더처럼 소속 기준으로 동작한다.
+    mapped_writers: set = {w for ws in mapping_by_target.values() for w in ws}
+
+    # 팀 안의 모든 리더는 팀장이 쓴다 — 단, 매핑된 작성자는 배타이므로 후보에서 제외한다.
     team_leaders: Dict[Tuple[Optional[int], Optional[int]], List[int]] = {}
     group_leaders: Dict[Tuple[Optional[int], Optional[int], Optional[int]], List[int]] = {}
     for m, p in snapshot_rows:
-        if is_team_leader(p) and not is_exec(p):
+        if is_team_leader(p) and m.member_id not in mapped_writers:
             team_leaders.setdefault((p.gyogu, p.team), []).append(m.member_id)
-        if is_group_leader(p) and not is_exec(p):
+        if is_group_leader(p) and m.member_id not in mapped_writers:
             group_leaders.setdefault((p.gyogu, p.team, p.group_no), []).append(m.member_id)
 
     def expected_writers_for(member: Member, profile: MemberProfile) -> List[_ExpectedWriterEntry]:
@@ -111,9 +115,12 @@ def _build_expected_writer_resolver(
             seen.add(writer_id)
             out.append(_ExpectedWriterEntry(wm_wp[0], wm_wp[1], role))
 
-        # ① 임원단 — 매핑이 유일한 경로. 소속으로는 작성자를 붙이지 않는다.
-        if is_exec(profile):
-            for writer_id in mapping_by_target.get(member.member_id, []):
+        # ① 매핑이 걸려 있으면 그것이 유일한 경로 — 소속으로는 작성자를 붙이지 않는다.
+        #    직분이 아니라 **매핑 유무**가 기준이다. 임원단 직분이어도 매핑이 없으면
+        #    아래 소속 경로를 탄다 (빈 화면을 만들지 않기 위해서다).
+        mapped = mapping_by_target.get(member.member_id, [])
+        if mapped:
+            for writer_id in mapped:
                 push(writer_id, '임원단')
             return out
 

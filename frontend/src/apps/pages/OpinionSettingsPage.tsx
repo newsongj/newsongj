@@ -554,7 +554,7 @@ const OpinionSettingsPage: React.FC = () => {
     Promise.all([
       fetchOpinionSettings(reportYear),
       fetchOpinionMappings(reportYear),
-      fetchOpinionMemberCandidates(),
+      fetchOpinionMemberCandidates(reportYear),
     ])
       .then(([settings, maps, members]) => {
         if (cancelled) return;

@@ -370,8 +370,26 @@ export type OpinionReportUpdateBody = Partial<Record<InputFieldKey, string | nul
 
 /** 낙관적 잠금 충돌 — 다른 작성자가 먼저 저장한 경우 */
 export class OpinionConflictError extends Error {
-  constructor(message = '다른 작성자가 먼저 수정했습니다. 최신 내용을 불러온 뒤 다시 작성해 주세요.') {
-    super(message);
+  /** 서버가 들고 있는 최신 값 — 재조회 없이 다음 저장의 기준으로 쓸 수 있다 */
+  readonly currentUpdatedAt: string | null;
+  /** 마지막으로 저장한 사람. 서버가 모르면 null */
+  readonly lastWriter: OpinionWriter | null;
+  /** 같은 계정의 다른 탭이 저장한 경우 */
+  readonly isSelf: boolean;
+
+  constructor(
+    currentUpdatedAt: string | null = null,
+    lastWriter: OpinionWriter | null = null,
+    isSelf = false,
+  ) {
+    super(isSelf
+      ? '다른 탭에서 저장된 내용입니다. 최신 내용을 불러왔습니다.'
+      : lastWriter
+        ? `${lastWriter.name} 님이 방금 저장했습니다. 최신 내용을 불러왔습니다.`
+        : '다른 작성자가 먼저 수정했습니다. 최신 내용을 불러온 뒤 다시 작성해 주세요.');
     this.name = 'OpinionConflictError';
+    this.currentUpdatedAt = currentUpdatedAt;
+    this.lastWriter = lastWriter;
+    this.isSelf = isSelf;
   }
 }
