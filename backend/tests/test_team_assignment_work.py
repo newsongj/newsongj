@@ -266,6 +266,7 @@ def test_commit_creates_profiles_and_closes_run(client, db):
     assert body["run"]["status"] == "committed"
     assert body["profile_rows_created"] == 3
 
+    db.rollback()
     new_profile = (
         db.query(models.MemberProfile)
         .filter(
@@ -300,6 +301,7 @@ def test_commit_closes_opinion_report_custom(client, db):
     response = client.post("/api/opinion/team-assignment/commit", json={"target_year": TARGET_YEAR})
     assert response.status_code == 200
 
+    db.rollback()
     custom = (
         db.query(models.OpinionReportCustom)
         .filter(models.OpinionReportCustom.report_year == TARGET_YEAR - 1)

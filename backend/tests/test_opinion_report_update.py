@@ -47,6 +47,7 @@ def test_create_report_when_none_exists(client, db):
     assert body["general_opinion"] == "잘함"
     assert body["updated_at"] is not None
 
+    db.rollback()
     report = db.query(models.MemberOpinionReport).filter(
         models.MemberOpinionReport.member_id == member_id,
     ).first()

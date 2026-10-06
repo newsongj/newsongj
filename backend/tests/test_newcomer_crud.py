@@ -2,6 +2,7 @@
 import datetime
 
 import pytest
+from sqlalchemy import text
 
 from app.core.timezone import today_kst
 
@@ -167,6 +168,12 @@ def test_enroll_newcomer_normalizes_blank_profile_enums(client, seed_members, db
     profile = db.query(MemberProfile).filter(MemberProfile.member_id == newcomer_id).first()
     profile.attendance_grade = ""
     profile.plt_status = ""
+    if db.bind.dialect.name in ("mysql", "mariadb"):
+        # strict 모드가 아닐 때 저장된 레거시 빈 ENUM 행을 재현한다. 풀로 돌아갈 연결은 원래 모드로 복구.
+        sql_mode = db.execute(text("SELECT @@SESSION.sql_mode")).scalar()
+        db.execute(text("SET SESSION sql_mode = ''"))
+        db.flush()
+        db.execute(text("SET SESSION sql_mode = :mode"), {"mode": sql_mode})
     db.commit()
 
     r = client.put(
