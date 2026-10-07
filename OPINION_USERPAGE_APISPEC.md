@@ -24,9 +24,9 @@
 | | 상태 |
 |---|------|
 | 화면 (`client/frontend/src/pages/OpinionPage`) | ✅ 완료 — **목데이터로 동작** |
-| `GET /api/opinion/my-targets` | ❌ **미구현** |
-| `GET /api/opinion/my-reports/:memberId` | ❌ **미구현** |
-| `PUT /api/opinion/my-reports/:memberId` | ❌ **미구현** |
+| `GET /api/opinion/my-targets` | ✅ 완료 (`backend/app/services/opinion.py` `svc_get_my_targets`) |
+| `GET /api/opinion/my-reports/:memberId` | ✅ 완료 (`backend/app/services/opinion.py` `svc_get_my_report`) |
+| `PUT /api/opinion/my-reports/:memberId` | ✅ 완료 (`backend/app/services/opinion.py` `svc_save_my_report`) |
 | 테이블 | ✅ 전부 생성 완료 (새로 만들 것 없음) |
 
 프론트는 `client/frontend/src/api/opinion.ts` 에서 목을 반환한다.

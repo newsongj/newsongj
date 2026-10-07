@@ -66,6 +66,18 @@ class TeamAssignmentCommittedError(AppError):
     default_detail = "이미 완료된 회차입니다. 더 이상 변경할 수 없습니다."
 
 
+class OpinionClosedError(AppError):
+    """소견서 회차가 닫혀 있음 — exists && is_active && is_open 중 하나라도 false (사용자 §2-5)."""
+    status_code = 403
+    default_detail = "소견서 기간이 아닙니다."
+
+
+class OpinionNotAssignedError(AppError):
+    """요청한 대상자가 로그인 사용자의 담당이 아님 (사용자 §3-1 산출 결과에 없음)."""
+    status_code = 403
+    default_detail = "담당 대상자가 아닙니다."
+
+
 class OpinionReportConflictError(AppError):
     """소견서 낙관적 잠금 충돌 — 조회 시점 이후 다른 사람이 먼저 저장함 (§0-4)."""
     status_code = 409

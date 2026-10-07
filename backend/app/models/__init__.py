@@ -315,6 +315,12 @@ class OpinionReportCustom(Base):
 
     opinion_custom_id = Column(BigInteger, primary_key=True, autoincrement=True)
     report_year       = Column(YEAR, nullable=False)
+    theme             = Column(String(200), nullable=True)
+    start_date        = Column(Date, nullable=True)
+    end_date          = Column(Date, nullable=True)
+    guide_text        = Column(String(500), nullable=True)
+    member_fields     = Column(Text, nullable=True)   # JSON 문자열 배열 (bus_custom 방식)
+    input_fields      = Column(Text, nullable=True)   # JSON 문자열 배열
     is_active         = Column(SmallInteger, nullable=False, default=1)
     is_open           = Column(SmallInteger, nullable=False, default=1)
     created_at        = Column(DateTime, nullable=False, default=now_kst)
