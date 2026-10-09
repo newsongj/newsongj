@@ -43,7 +43,7 @@ def snapshot(destination: Path) -> None:
         if source.is_symlink() or any(p.is_symlink() for p in source.rglob("*")):
             raise RuntimeError(f"Symlinks are not allowed in the test snapshot: {name}")
         shutil.copytree(source, destination / name, ignore=shutil.ignore_patterns(
-            ".env*", "__pycache__", "*.pyc", ".pytest_cache", "*.db", "*.sqlite*"
+            ".env*", "__pycache__", "*.pyc", ".pytest_cache", "*.db", "*.sqlite*", "~$*"
         ))
     for name in ("requirements.txt", "requirements-dev.txt", "pytest.ini"):
         source = BACKEND / name
