@@ -76,3 +76,9 @@ class OpinionReportConflictError(AppError):
             "last_writer": last_writer,
             "is_self": is_self,
         })
+
+
+class OpinionSettingsClosedError(AppError):
+    """완료(is_active=0)된 소견서 회차의 설정 저장 요청 (§1-2)."""
+    status_code = 409
+    default_detail = "완료된 소견서 회차입니다. 설정을 변경할 수 없습니다."
