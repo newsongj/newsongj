@@ -68,7 +68,7 @@ def put_team_assignment_companions(
     svc_save_companions(db, body.target_year, body.pairs)
 
 
-@router.get("/team-assignment/counts", response_model=TeamAssignmentCountsResponse, tags=["팀배치"], summary="배치 인원 집계 — 사전 설정·배치 작업 화면 공용", dependencies=[_run_read])
+@router.get("/team-assignment/counts", response_model=TeamAssignmentCountsResponse, tags=["팀배치 사전 설정"], summary="배치 인원 집계 — 사전 설정·배치 작업 화면 공용", dependencies=[_run_read])
 def get_team_assignment_counts(
     target_year: int = Query(...),
     db: Session = Depends(get_db),

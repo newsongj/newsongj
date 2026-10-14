@@ -2,6 +2,7 @@
 
 api 계층은 이 파일의 build_* / svc_* 함수만 호출한다 (crud 직접 import 금지).
 """
+import datetime
 import json
 from typing import Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -9,7 +10,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, MemberNotFoundError, OpinionReportConflictError
+from app.core.exceptions import (
+    ConflictError, MemberNotFoundError, OpinionClosedError, OpinionNotAssignedError,
+    OpinionReportConflictError,
+)
 from app.core.timezone import now_kst
 from app.crud.leaders import get_leader_map
 from app.crud.query_builders import get_leader_id
@@ -24,13 +28,16 @@ from app.crud.opinion import (
     get_last_writer as crud_get_last_writer,
     create_report as crud_create_report,
     update_report_conditional as crud_update_report_conditional,
+    upsert_writer as crud_upsert_writer,
 )
+from app.crud.team_assignment import get_opinion_custom as crud_get_opinion_custom
 from app.services.members import resolve_leader_names
-from app.models import Member, MemberProfile, MemberOpinionReport
+from app.models import Member, MemberProfile, MemberOpinionReport, OpinionReportCustom
 from app.schemas.opinion import (
-    OpinionCompanion, OpinionListResponse, OpinionReportRow,
+    OpinionCompanion, OpinionListResponse, OpinionMemberInfo,
+    OpinionMyReportResponse, OpinionMyTargetsResponse, OpinionReportRow,
     OpinionReportUpdateRequest, OpinionReportUpdateResponse,
-    OpinionWriter, OpinionWriterRole,
+    OpinionTarget, OpinionWriter, OpinionWriterRole,
 )
 
 EXECUTIVE_LEADER_NAME = "임원단"
@@ -377,6 +384,85 @@ def _build_conflict_error(
     return OpinionReportConflictError(current_updated_at, last_writer, is_self)
 
 
+def _now_ms() -> datetime.datetime:
+    """updated_at 은 DATETIME(3) — 밀리초로 잘라 둬야 응답값과 DB 값이 같아진다.
+
+    마이크로초를 그대로 응답하면 클라이언트가 그 값을 base_updated_at 으로 되돌려 보낼 때
+    DB(밀리초)와 어긋나 정상 저장이 409 가 된다 (§0-4-2).
+    """
+    now = now_kst()
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
+
+
+def _normalize_base_updated_at(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """클라이언트가 타임존 포함 ISO 문자열을 보내도 DB의 naive datetime과 비교 가능하게 맞춘다."""
+    if value is not None and value.tzinfo is not None:
+        return value.astimezone(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    return value
+
+
+def _save_report(
+    db: Session,
+    member_id: int,
+    report_year: int,
+    base_updated_at: Optional[datetime.datetime],
+    fields: Dict[str, Optional[str]],
+    login_member_id: Optional[int],
+    record_writer: bool,
+) -> OpinionReportUpdateResponse:
+    """낙관적 잠금 저장 (§0-4) — 관리자 대리 수정과 사용자 작성이 공유한다.
+
+    record_writer=True(사용자 작성)면 같은 트랜잭션에서 member_opinion_report_writer 를 UPSERT 한다.
+    """
+    existing = crud_get_report_by_member_year(db, member_id, report_year)
+
+    if existing is not None:
+        if base_updated_at != existing.updated_at:
+            raise _build_conflict_error(db, existing, login_member_id)
+
+        new_updated_at = _now_ms()
+        affected = crud_update_report_conditional(
+            db, existing.opinion_report_id, existing.updated_at, fields, new_updated_at,
+        )
+        if affected == 0:
+            db.rollback()
+            raise _build_conflict_error(
+                db, crud_get_report_by_member_year(db, member_id, report_year), login_member_id,
+            )
+        if record_writer:
+            crud_upsert_writer(db, existing.opinion_report_id, login_member_id)
+        db.commit()
+
+        final_values = {k: getattr(existing, k) for k in REPORT_CONTENT_FIELDS}
+        final_values.update(fields)
+        return OpinionReportUpdateResponse(
+            opinion_report_id=existing.opinion_report_id,
+            member_id=member_id,
+            report_year=report_year,
+            updated_at=new_updated_at,
+            **final_values,
+        )
+
+    try:
+        report = crud_create_report(db, member_id, report_year, {**fields, "updated_at": _now_ms()})
+        if record_writer:
+            crud_upsert_writer(db, report.opinion_report_id, login_member_id)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise _build_conflict_error(
+            db, crud_get_report_by_member_year(db, member_id, report_year), login_member_id,
+        )
+
+    return OpinionReportUpdateResponse(
+        opinion_report_id=report.opinion_report_id,
+        member_id=member_id,
+        report_year=report_year,
+        updated_at=report.updated_at,
+        **{k: getattr(report, k) for k in REPORT_CONTENT_FIELDS},
+    )
+
+
 def svc_update_opinion_report(
     db: Session,
     member_id: int,
@@ -396,51 +482,194 @@ def svc_update_opinion_report(
     fields = body.model_dump(exclude={"base_updated_at"}, exclude_unset=True)
     _validate_report_fields(fields)
 
-    # 클라이언트가 타임존 포함 ISO 문자열을 보내도 DB의 naive datetime과 비교 가능하게 맞춘다
-    base_updated_at = body.base_updated_at
-    if base_updated_at is not None and base_updated_at.tzinfo is not None:
-        base_updated_at = base_updated_at.astimezone(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    return _save_report(
+        db, member_id, report_year, _normalize_base_updated_at(body.base_updated_at),
+        fields, login_member_id, record_writer=False,
+    )
 
-    existing = crud_get_report_by_member_year(db, member_id, report_year)
 
-    if existing is not None:
-        if base_updated_at != existing.updated_at:
-            raise _build_conflict_error(db, existing, login_member_id)
+# ── 사용자 페이지 — OPINION_USERPAGE_APISPEC.md §3 ─────────────────────────────
 
-        new_updated_at = now_kst()
-        affected = crud_update_report_conditional(
-            db, existing.opinion_report_id, existing.updated_at, fields, new_updated_at,
-        )
-        if affected == 0:
-            db.rollback()
-            raise _build_conflict_error(
-                db, crud_get_report_by_member_year(db, member_id, report_year), login_member_id,
-            )
-        db.commit()
+# 설정값이 비어 있을 때의 기본값 — 관리자 설정 화면 기본값(frontend/src/api/opinion.ts)과 같다
+DEFAULT_MEMBER_FIELDS = [
+    "name", "gender", "generation", "gyogu", "team", "group_no",
+    "member_type", "leader_names", "attendance_grade",
+]
+DEFAULT_INPUT_FIELDS = REPORT_CONTENT_FIELDS
 
-        final_values = {k: getattr(existing, k) for k in REPORT_CONTENT_FIELDS}
-        final_values.update(fields)
-        return OpinionReportUpdateResponse(
-            opinion_report_id=existing.opinion_report_id,
-            member_id=member_id,
-            report_year=report_year,
-            updated_at=new_updated_at,
-            **final_values,
-        )
 
+def _parse_field_list(raw: Optional[str], default: List[str]) -> List[str]:
+    """member_fields / input_fields TEXT(JSON 문자열 배열) 파싱. 비었거나 깨졌으면 기본값."""
+    if not raw:
+        return list(default)
     try:
-        report = crud_create_report(db, member_id, report_year, fields)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise _build_conflict_error(
-            db, crud_get_report_by_member_year(db, member_id, report_year), login_member_id,
-        )
+        value = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return list(default)
+    if not isinstance(value, list):
+        return list(default)
+    return [str(v) for v in value]
 
-    return OpinionReportUpdateResponse(
-        opinion_report_id=report.opinion_report_id,
+
+def _get_open_custom(db: Session, report_year: int) -> OpinionReportCustom:
+    """§2-5 — exists && is_active && is_open 이 아니면 403."""
+    custom = crud_get_opinion_custom(db, report_year)
+    if custom is None or not custom.is_active or not custom.is_open:
+        raise OpinionClosedError()
+    return custom
+
+
+def _resolve_my_targets(
+    db: Session, report_year: int, login_member_id: Optional[int],
+) -> List[Tuple[Member, MemberProfile]]:
+    """§3-1 — 로그인 사용자가 담당하는 대상자 (report_year 시점 스냅샷).
+
+    관리자 명단의 expected_writers 와 **같은 resolver** 를 뒤집어 쓴다 — 매핑 배타,
+    팀장=팀 전원 / 그룹장=직분 없는 팀원, 본인 제외 규칙이 두 화면에서 어긋나지 않게 하기 위함이다.
+    """
+    if login_member_id is None:
+        return []
+
+    snapshot_rows = crud_get_report_year_snapshot(db, report_year)
+    member_index: Dict[int, Tuple[Member, MemberProfile]] = {
+        m.member_id: (m, p) for m, p in snapshot_rows
+    }
+    if login_member_id not in member_index:
+        return []
+
+    expected_writers_for, _ = _build_expected_writer_resolver(
+        snapshot_rows, member_index,
+        crud_get_mapping_by_target(db, report_year),
+        get_leader_id(db, EXECUTIVE_LEADER_NAME),
+        get_leader_id(db, TEAM_LEADER_NAME),
+        get_leader_id(db, GROUP_LEADER_NAME),
+    )
+
+    return [
+        (member, profile) for member, profile in snapshot_rows
+        if member.deleted_at is None
+        and member.member_id != login_member_id
+        and any(e.member.member_id == login_member_id for e in expected_writers_for(member, profile))
+    ]
+
+
+def svc_get_my_targets(
+    db: Session, report_year: int, login_member_id: Optional[int],
+) -> OpinionMyTargetsResponse:
+    """GET /api/opinion/my-targets — 담당 대상자 + 회차 정보. 0명이어도 200."""
+    custom = _get_open_custom(db, report_year)
+
+    pairs = _resolve_my_targets(db, report_year, login_member_id)
+    reports_by_member = crud_get_opinion_reports_by_year(db, report_year)
+
+    pairs.sort(key=lambda mp: (
+        mp[1].gyogu if mp[1].gyogu is not None else 0,
+        mp[1].team if mp[1].team is not None else 0,
+        mp[1].group_no if mp[1].group_no is not None else 0,
+        mp[0].name,
+    ))
+
+    targets: List[OpinionTarget] = []
+    for member, profile in pairs:
+        report = reports_by_member.get(member.member_id)
+        targets.append(OpinionTarget(
+            member_id=member.member_id,
+            name=member.name,
+            gender=member.gender,
+            generation=member.generation,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
+            member_type=profile.member_type,
+            is_written=report is not None,
+            updated_at=report.updated_at if report else None,
+        ))
+
+    return OpinionMyTargetsResponse(
+        report_year=report_year,
+        theme=custom.theme or None,
+        end_date=custom.end_date,
+        guide_text=custom.guide_text or None,
+        input_fields=_parse_field_list(custom.input_fields, DEFAULT_INPUT_FIELDS),
+        member_fields=_parse_field_list(custom.member_fields, DEFAULT_MEMBER_FIELDS),
+        targets=targets,
+    )
+
+
+def svc_get_my_report(
+    db: Session, member_id: int, report_year: int, login_member_id: Optional[int],
+) -> OpinionMyReportResponse:
+    """GET /api/opinion/my-reports/:memberId — 기존 내용을 이어서 수정하기 위한 단건 조회.
+
+    목록과 같은 산출 규칙으로 담당 여부를 다시 확인한다 — memberId 를 직접 바꿔 호출하는 것을 막기 위함이다.
+    """
+    _get_open_custom(db, report_year)
+
+    pair = next(
+        (mp for mp in _resolve_my_targets(db, report_year, login_member_id) if mp[0].member_id == member_id),
+        None,
+    )
+    if pair is None:
+        raise OpinionNotAssignedError()
+    member, profile = pair
+
+    report = crud_get_report_by_member_year(db, member_id, report_year)
+
+    return OpinionMyReportResponse(
         member_id=member_id,
         report_year=report_year,
-        updated_at=report.updated_at,
-        **{k: getattr(report, k) for k in REPORT_CONTENT_FIELDS},
+        updated_at=report.updated_at if report else None,
+        member=OpinionMemberInfo(
+            name=member.name,
+            gender=member.gender,
+            generation=member.generation,
+            birthdate=str(member.birthdate) if member.birthdate is not None else None,
+            phone_number=member.phone_number,
+            gyogu=profile.gyogu,
+            team=profile.team,
+            group_no=profile.group_no,
+            member_type=profile.member_type,
+            attendance_grade=profile.attendance_grade,
+            attendance_rate=float(profile.attendance_rate) if profile.attendance_rate is not None else None,
+            plt_status=profile.plt_status,
+            leader_names=resolve_leader_names(profile.leader_ids, get_leader_map(db)),
+            school_work=member.school_work,
+            major=member.major,
+        ),
+        **{k: (getattr(report, k) if report else None) for k in REPORT_CONTENT_FIELDS},
+    )
+
+
+def svc_save_my_report(
+    db: Session,
+    member_id: int,
+    report_year: int,
+    body: OpinionReportUpdateRequest,
+    login_member_id: Optional[int],
+) -> OpinionReportUpdateResponse:
+    """PUT /api/opinion/my-reports/:memberId — 사용자 작성 (§3-3).
+
+    검증 순서: 회차 열림·배정(403) → 낙관적 잠금(409) → 항목 화이트리스트(400) → 길이(400).
+    저장 성공 시 같은 트랜잭션에서 작성자를 기록한다 — 관리자 명단 「작성자」 칸의 출처다.
+    """
+    custom = _get_open_custom(db, report_year)
+    if not any(m.member_id == member_id for m, _ in _resolve_my_targets(db, report_year, login_member_id)):
+        raise OpinionNotAssignedError()
+
+    base_updated_at = _normalize_base_updated_at(body.base_updated_at)
+    existing = crud_get_report_by_member_year(db, member_id, report_year)
+    # 신규 작성인데 base 가 있으면 화면이 본 레코드가 사라진 것 — 역시 충돌이다
+    current = existing.updated_at if existing is not None else None
+    if base_updated_at != current:
+        raise _build_conflict_error(db, existing, login_member_id)
+
+    fields = body.model_dump(exclude={"base_updated_at"}, exclude_unset=True)
+    allowed = set(_parse_field_list(custom.input_fields, DEFAULT_INPUT_FIELDS))
+    disallowed = sorted(k for k in fields if k not in allowed)
+    if disallowed:
+        raise ConflictError(f"입력할 수 없는 항목입니다: {', '.join(disallowed)}")
+    _validate_report_fields(fields)
+
+    return _save_report(
+        db, member_id, report_year, base_updated_at, fields, login_member_id, record_writer=True,
     )
