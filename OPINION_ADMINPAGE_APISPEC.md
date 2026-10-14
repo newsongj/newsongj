@@ -65,8 +65,8 @@
 
 | 페이지 | 라우트 | 사용 API |
 |--------|--------|---------|
-| 소견서 설정 | `/opinion/settings` (관리자) | `GET/PUT /api/opinion/settings`, `GET /api/opinion/mappings`, `GET /api/opinion/members` |
-| 소견서 현황 대시보드 | `/opinion/dashboard` (관리자) | `GET /api/opinion/settings`, `GET /api/opinion/members`, `GET /api/opinion/reports`, `PUT /api/opinion/reports/:memberId` |
+| 소견서 설정 | `/opinion/settings` (관리자) | `GET/PUT /api/opinion/settings`, `GET /api/opinion/mappings`, `GET /api/opinion/reports`(후보 목록 §1-4) |
+| 소견서 현황 대시보드 | `/opinion/dashboard` (관리자) | `GET /api/opinion/settings`, `GET /api/opinion/reports`, `PUT /api/opinion/reports/:memberId` |
 | 팀배치 사전 설정 | `/opinion/pre-assignment` (관리자) | `§3` 참고 |
 | 팀배치 작업 | `/opinion/team-assignment` (관리자) | `§4` 참고 |
 | 소견서 작성 (사용자) | `/opinion` (미구현) | **`OPINION_USERPAGE_APISPEC.md`** 참고 |
@@ -673,28 +673,33 @@ exists && is_active && is_open
 
 `leader_names`는 내려주지 않아도 된다 — 후보가 임원단으로 한정되어 있어 항상 「임원단」이다.
 
-### 1-4. 멤버 후보 목록
+### 1-4. 멤버 후보 목록 — **전용 API 없음 (`GET /reports` 재사용)**
 
-`GET /api/opinion/members`
+매핑 모달의 작성자/대상자 선택기, 팀배치 사전 설정의 제외/동반 추가 모달,
+대시보드 필터 드롭다운 옵션에 **삭제 제외 교적 + 미등반 새가족 전체**가 필요하다.
 
-매핑 모달의 작성자/대상자 선택기와 **대시보드 필터 드롭다운 옵션**에 함께 쓰인다.
-필터가 걸려도 옵션 목록이 좁아지지 않도록, 이 API는 **항상 전체 재적 멤버**를 반환해야 한다.
+**`GET /api/opinion/members` 를 따로 만들지 않는다.** §2-1 의 `GET /api/opinion/reports`
+응답이 이미 같은 모집단이므로 그것을 재사용하고, 화면에서 필요한 필드만 추려 쓴다.
 
-```json
-[
-  {
-    "member_id": 1,
-    "name": "김민준",
-    "gyogu": 1,
-    "team": 1,
-    "group_no": 1,
-    "generation": 15,
-    "leader_names": ["그룹장", "팀장", "임원단"]
-  }
-]
+```ts
+// frontend/src/api/opinion.ts — fetchOpinionMemberCandidates()
+const res = await get<OpinionListResponse>('/api/opinion/reports', { report_year });
+return res.items
+  .filter((r) => !r.is_deleted)
+  .map((r) => ({ member_id, name, gyogu, team, group_no, generation, phone_number, leader_names }));
 ```
 
-- `member_profile.group_no != 0` 인 재적 멤버만 (삭제자 `member.deleted_at IS NOT NULL` 제외)
+**왜 재사용인가**
+
+- 권한키가 `admin.opinion.*` 라 **소견서만 담당하는 계정이 그대로 쓸 수 있다.**
+  기존 교적 API(`GET /api/members`)를 쓰면 `admin.gyojeok.members` 가 필요해 403 이 난다
+- 같은 모집단을 두 엔드포인트가 각자 정의하면 어긋난다 — 삭제자 처리, 새가족 포함 여부,
+  연도 스냅샷 기준이 갈리는 순간 화면마다 다른 명단이 뜬다
+- 응답에 소견 내용까지 실려 와 다소 무겁지만, 대시보드가 어차피 같은 연도 명단을
+  들고 있어야 하므로 실제 추가 비용은 거의 없다
+
+> 전용 API 가 필요해지는 시점은 **대시보드 없이 모달만 쓰는 화면이 생길 때**다.
+> 그때 `GET /api/opinion/members` 를 추가하고 이 절을 되살리면 된다.
 
 ---
 

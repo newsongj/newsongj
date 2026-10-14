@@ -224,11 +224,22 @@ const Centered = styled('div')({
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+/**
+ * 서버가 보낸 `detail` 문구를 그대로 쓴다.
+ *
+ * 403 이 세 종류(권한 없음 / 기간 아님 / 담당 아님)이고 400 도 어느 항목이
+ * 몇 자를 넘겼는지까지 알려주는데, 화면이 뭉뚱그리면 그 정보가 사라진다.
+ */
+const errorDetail = (e: any, fallback: string): string => {
+    const detail = e?.response?.data?.detail;
+    return typeof detail === 'string' && detail ? detail : fallback;
+};
+
 const OpinionPage: React.FC = () => {
     const [info, setInfo] = useState<OpinionMyTargetsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [closed, setClosed] = useState(false);
+    const [closed, setClosed] = useState<string | null>(null);
 
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -252,8 +263,8 @@ const OpinionPage: React.FC = () => {
         try {
             setInfo(await fetchMyTargets(CURRENT_YEAR));
         } catch (e: any) {
-            // 회차가 닫혀 있으면 서버가 403 — 「소견서 기간이 아닙니다」만 보여준다
-            if (e?.response?.status === 403) setClosed(true);
+            // 403 이면 작성 화면 대신 안내만 — 회차가 닫혔거나(§2-5) 권한이 없는 경우다
+            if (e?.response?.status === 403) setClosed(errorDetail(e, '소견서 기간이 아닙니다.'));
             else setLoadError('소견서 정보를 불러오지 못했습니다.');
         } finally {
             setLoading(false);
@@ -325,8 +336,8 @@ const OpinionPage: React.FC = () => {
             setBaseUpdatedAt(updated_at);
             setMemberInfo(member);
             setIsDirty(false);
-        } catch {
-            setSnackbar({ open: true, message: '소견서를 불러오지 못했습니다.', severity: 'error' });
+        } catch (e) {
+            setSnackbar({ open: true, message: errorDetail(e, '소견서를 불러오지 못했습니다.'), severity: 'error' });
             setEditing(null);
         } finally {
             setFormLoading(false);
@@ -369,7 +380,8 @@ const OpinionPage: React.FC = () => {
                 setFields(rest as OpinionFields);
                 setBaseUpdatedAt(updated_at);
             } else {
-                setSnackbar({ open: true, message: '저장 중 오류가 발생했습니다.', severity: 'error' });
+                // 400 이면 어느 항목이 왜 걸렸는지 서버가 알려준다
+                setSnackbar({ open: true, message: errorDetail(e, '저장 중 오류가 발생했습니다.'), severity: 'error' });
             }
         } finally {
             setIsSaving(false);
@@ -383,7 +395,7 @@ const OpinionPage: React.FC = () => {
     }
 
     // exists / is_active / is_open 중 하나라도 false 면 서버가 403 을 준다
-    if (closed) return <Centered>소견서 기간이 아닙니다.</Centered>;
+    if (closed) return <Centered>{closed}</Centered>;
 
     if (loadError || !info) return <Alert severity="error" sx={{ mt: 2 }}>{loadError ?? '데이터를 불러오지 못했습니다.'}</Alert>;
 
