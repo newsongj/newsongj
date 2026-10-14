@@ -110,3 +110,66 @@ class OpinionListResponse(BaseModel):
     target: int
     written: int
     items: List[OpinionReportRow]
+
+
+# ── 사용자 페이지 (OPINION_USERPAGE_APISPEC.md §3) ─────────────────────────────
+
+class OpinionTarget(BaseModel):
+    """담당 대상자 한 명 — 동반배치자·작성자는 관리자 전용이라 싣지 않는다 (§2-4)."""
+    member_id: int
+    name: str
+    gender: Optional[str] = None
+    generation: Optional[int] = None
+    gyogu: Optional[int] = None
+    team: Optional[int] = None
+    group_no: Optional[int] = None
+    member_type: Optional[str] = None
+    is_written: bool
+    updated_at: Optional[datetime.datetime] = None
+
+
+class OpinionMyTargetsResponse(BaseModel):
+    report_year: int
+    theme: Optional[str] = None
+    end_date: Optional[datetime.date] = None
+    guide_text: Optional[str] = None
+    input_fields: List[str]
+    member_fields: List[str]
+    targets: List[OpinionTarget]
+
+
+class OpinionMemberInfo(BaseModel):
+    """교적 항목 15개 — 화면이 member_fields 에 켜진 것만 골라 보여준다 (§3-2)."""
+    name: str
+    gender: Optional[str] = None
+    generation: Optional[int] = None
+    birthdate: Optional[str] = None
+    phone_number: Optional[str] = None
+    gyogu: Optional[int] = None
+    team: Optional[int] = None
+    group_no: Optional[int] = None
+    member_type: Optional[str] = None
+    attendance_grade: Optional[str] = None
+    attendance_rate: Optional[float] = None
+    plt_status: Optional[str] = None
+    leader_names: List[str] = []
+    school_work: Optional[str] = None
+    major: Optional[str] = None
+
+
+class OpinionMyReportResponse(BaseModel):
+    """동반배치자·작성자는 관리자 전용이라 싣지 않는다 (§2-4)."""
+    member_id: int
+    report_year: int
+    updated_at: Optional[datetime.datetime] = None
+    member: OpinionMemberInfo
+
+    current_status: Optional[str] = None
+    current_status_etc: Optional[str] = None
+    group_meeting_attendance_status: Optional[str] = None
+    sunday_morning_attendance_status: Optional[str] = None
+    sunday_evening_attendance_status: Optional[str] = None
+    next_year_plan: Optional[str] = None
+    next_year_plan_etc: Optional[str] = None
+    general_opinion: Optional[str] = None
+    special_opinion: Optional[str] = None

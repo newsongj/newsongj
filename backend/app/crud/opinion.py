@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.timezone import now_kst
+
 from app.models import (
     Member, MemberProfile,
     MemberOpinionReport, MemberOpinionReportWriter,
@@ -168,3 +170,22 @@ def update_report_conditional(
         )
         .update({**fields, "updated_at": new_updated_at}, synchronize_session=False)
     )
+
+
+def upsert_writer(db: Session, opinion_report_id: int, writer_member_id: int) -> None:
+    """§3-3 작성자 기록 — 있으면 last_written_at 만 갱신, 없으면 추가. 커밋은 호출자가 한다."""
+    row = (
+        db.query(MemberOpinionReportWriter)
+        .filter(
+            MemberOpinionReportWriter.opinion_report_id == opinion_report_id,
+            MemberOpinionReportWriter.writer_member_id == writer_member_id,
+        )
+        .first()
+    )
+    if row is None:
+        db.add(MemberOpinionReportWriter(
+            opinion_report_id=opinion_report_id, writer_member_id=writer_member_id,
+        ))
+    else:
+        row.last_written_at = now_kst()
+    db.flush()
